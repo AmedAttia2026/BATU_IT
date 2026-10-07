@@ -519,7 +519,7 @@
         }
 
         /* ==========================================================
-           ✅ MOBILE HEADER — BATU في المنتصف بالظبط
+           ✅ MOBILE HEADER — BATU في المنتصف + زرار ☰ على اليمين
            ========================================================== */
         .mobile-header {
             display: none;
@@ -531,8 +531,6 @@
             border-radius: 16px;
             margin-bottom: 18px;
             border: 1px solid var(--nx-line-strong);
-            justify-content: space-between;
-            align-items: center;
             position: relative;
         }
 
@@ -579,6 +577,7 @@
             align-items: center;
         }
 
+        /* ✅ زرار المنيو — اتنقل على اليمين */
         .menu-toggle {
             background: rgba(255,179,0,0.1);
             border: 1px solid rgba(255,179,0,0.35);
@@ -593,13 +592,19 @@
             justify-content: center;
             transition: all .25s ease;
             flex-shrink: 0;
-            position: relative;
+
+            /* ✅ التثبيت على اليمين */
+            position: absolute !important;
+            right: 14px !important;
+            top: 50% !important;
+            transform: translateY(-50%) !important;
             z-index: 2;
         }
-        .menu-toggle:hover {
+        .menu-toggle:hover,
+        .menu-toggle:active {
             background: var(--nx-gold);
             color: #000;
-            transform: scale(1.05);
+            transform: translateY(-50%) scale(1.05) !important;
         }
 
         /* ==========================================================
@@ -1520,7 +1525,7 @@
                 width: 100%;
                 padding: 16px 16px 50px;
             }
-            .mobile-header { display: flex; }
+            .mobile-header { display: block; }
         }
 
         /* ==========================================================
@@ -1690,6 +1695,7 @@
                 width: 38px;
                 height: 38px;
                 font-size: 16px;
+                right: 12px !important;
             }
         }
 
@@ -1751,6 +1757,12 @@
             }
             .mobile-header .logo i {
                 font-size: 17px;
+            }
+            .menu-toggle {
+                width: 36px;
+                height: 36px;
+                font-size: 15px;
+                right: 10px !important;
             }
         }
 

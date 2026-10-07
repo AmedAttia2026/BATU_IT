@@ -1,1809 +1,529 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nexus Core · Admin Panel</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <link rel="stylesheet" href="/static/style.css">
-    <style>
-        /* ==========================================================
-           NEXUS ADMIN · PREMIUM UI  ·  2026
-           ========================================================== */
-        :root {
-            --nx-gold: #FFB300;
-            --nx-gold-2: #FFD54F;
-            --nx-purple: #7C3AED;
-            --nx-cyan: #06B6D4;
-            --nx-emerald: #10B981;
-            --nx-ink: #05070f;
-            --nx-line: rgba(255, 255, 255, 0.08);
-            --nx-line-strong: rgba(255, 255, 255, 0.14);
-            --sidebar-width: 260px;
-        }
+import os
+import sys
+import time
+import hmac
+import hashlib
+import io
+import csv
+import urllib.parse
+from datetime import datetime, timedelta
+import pytz
+from flask import Flask, render_template, request, jsonify, session, Response, redirect
+from pymongo import MongoClient
+from werkzeug.security import generate_password_hash, check_password_hash
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
-        html, body {
-            background: var(--nx-ink) !important;
-            color: #e6eaf2;
-            overflow-x: hidden;
-        }
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+PARENT_DIR = os.path.abspath(os.path.join(BASE_DIR, '..'))
 
-        body::before {
-            content: "";
-            position: fixed;
-            inset: 0;
-            pointer-events: none;
-            z-index: 1;
-            background-image: radial-gradient(rgba(255,255,255,0.035) 1px, transparent 1px);
-            background-size: 24px 24px;
-            mask-image: radial-gradient(ellipse at center, #000 25%, transparent 75%);
-            -webkit-mask-image: radial-gradient(ellipse at center, #000 25%, transparent 75%);
-        }
+TEMPLATE_DIR = os.path.join(PARENT_DIR, 'templates') if os.path.exists(os.path.join(PARENT_DIR, 'templates')) else os.path.join(BASE_DIR, 'templates')
+STATIC_DIR = os.path.join(PARENT_DIR, 'static') if os.path.exists(os.path.join(PARENT_DIR, 'static')) else os.path.join(BASE_DIR, 'static')
 
-        /* ---------- AURORA ---------- */
-        .nx-aurora {
-            position: fixed;
-            inset: 0;
-            z-index: 0;
-            overflow: hidden;
-            pointer-events: none;
-        }
-        .nx-aurora .blob {
-            position: absolute;
-            border-radius: 50%;
-            filter: blur(130px);
-            opacity: 0.5;
-            will-change: transform;
-        }
-        .nx-aurora .b1 {
-            width: 560px; height: 560px;
-            background: radial-gradient(circle, #FFB300, transparent 70%);
-            top: -200px; right: -140px;
-            animation: nxFloat1 24s ease-in-out infinite;
-        }
-        .nx-aurora .b2 {
-            width: 480px; height: 480px;
-            background: radial-gradient(circle, #7C3AED, transparent 70%);
-            bottom: -180px; left: -140px;
-            animation: nxFloat2 28s ease-in-out infinite;
-        }
-        .nx-aurora .b3 {
-            width: 400px; height: 400px;
-            background: radial-gradient(circle, #06B6D4, transparent 70%);
-            top: 45%; left: 45%;
-            animation: nxFloat3 32s ease-in-out infinite;
-            opacity: 0.28;
-        }
-        @keyframes nxFloat1 {
-            0%,100% { transform: translate(0,0) scale(1); }
-            50%     { transform: translate(-80px, 70px) scale(1.15); }
-        }
-        @keyframes nxFloat2 {
-            0%,100% { transform: translate(0,0) scale(1); }
-            50%     { transform: translate(70px, -60px) scale(1.12); }
-        }
-        @keyframes nxFloat3 {
-            0%,100% { transform: translate(-50%,-50%) scale(1); }
-            50%     { transform: translate(-55%,-45%) scale(1.18); }
-        }
+app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR, static_url_path='/static')
+app.secret_key = os.environ.get("SECRET_KEY", "Nexus_Attendance_Super_Key_2026_Fixed")
+app.permanent_session_lifetime = timedelta(days=7)
 
-        /* ---------- PARTICLES ---------- */
-        .nx-particles {
-            position: fixed;
-            inset: 0;
-            z-index: 1;
-            pointer-events: none;
-            overflow: hidden;
-        }
-        .nx-particle {
-            position: absolute;
-            width: 3px;
-            height: 3px;
-            background: var(--nx-gold);
-            border-radius: 50%;
-            box-shadow: 0 0 10px var(--nx-gold), 0 0 20px rgba(255,179,0,0.5);
-            opacity: 0;
-            animation: nxRise linear infinite;
-        }
-        @keyframes nxRise {
-            0%   { transform: translateY(100vh) scale(0.6); opacity: 0; }
-            10%  { opacity: 0.9; }
-            90%  { opacity: 0.9; }
-            100% { transform: translateY(-20vh) scale(1); opacity: 0; }
-        }
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["3000 per day", "800 per hour"],
+    storage_uri="memory://"
+)
 
-        @keyframes nxSpin { to { transform: rotate(360deg); } }
+# ----------------- الاتصال بقاعدة بيانات MongoDB Atlas الجديدة -----------------
+username = urllib.parse.quote_plus('ahmedattia20041120_db_user')
+password = urllib.parse.quote_plus('wjXYBO8Pbj5GijfS')
+DEFAULT_MONGO_URI = f"mongodb+srv://{username}:{password}@cluster0.yimrrnh.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 
-        /* ---------- LOADING ---------- */
-        #loading-screen {
-            position: fixed;
-            inset: 0;
-            background: radial-gradient(circle at center, #0d1220 0%, #05070f 100%) !important;
-            backdrop-filter: blur(12px);
-            z-index: 99999;
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 22px;
-        }
-        .nx-load-logo {
-            position: relative;
-            width: 100px; height: 100px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .nx-load-ring {
-            position: absolute;
-            inset: 0;
-            border-radius: 50%;
-            border: 2px solid transparent;
-            border-top-color: var(--nx-gold);
-            border-right-color: var(--nx-gold-2);
-            animation: nxSpin 1.2s cubic-bezier(.5,.1,.5,.9) infinite;
-            filter: drop-shadow(0 0 12px rgba(255,179,0,0.6));
-        }
-        .nx-load-ring.ring-2 {
-            inset: 14px;
-            border-top-color: var(--nx-purple);
-            border-right-color: var(--nx-cyan);
-            animation: nxSpin 1.8s cubic-bezier(.5,.1,.5,.9) infinite reverse;
-        }
-        .nx-load-core {
-            width: 56px; height: 56px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: radial-gradient(circle at 30% 25%, #1a2136, #0a0e18);
-            border: 1px solid rgba(255,179,0,0.4);
-            box-shadow: 0 0 40px rgba(255,179,0,0.4);
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            font-weight: 900;
-            font-size: 15px;
-            letter-spacing: 1px;
-            color: var(--nx-gold);
-            animation: nxPulse 1.6s ease-in-out infinite;
-        }
-        @keyframes nxPulse {
-            0%,100% { transform: scale(1); box-shadow: 0 0 40px rgba(255,179,0,0.4); }
-            50%     { transform: scale(1.06); box-shadow: 0 0 60px rgba(255,179,0,0.6); }
-        }
-        #loading-screen h3 {
-            font-family: 'Plus Jakarta Sans', sans-serif !important;
-            font-size: 13px !important;
-            font-weight: 800 !important;
-            letter-spacing: 3px;
-            color: #8b93a7 !important;
-            text-transform: uppercase;
-        }
+MONGO_URI = os.environ.get("MONGO_URI", DEFAULT_MONGO_URI)
+client = MongoClient(MONGO_URI)
+db = client['nexus_attendance_system']
 
-        /* ==========================================================
-           LOGIN SCREEN
-           ========================================================== */
-        #login-screen {
-            position: fixed;
-            inset: 0;
-            z-index: 10000;
-            background: transparent !important;
-            display: none;
-            justify-content: center;
-            align-items: center;
-            padding: 24px;
-        }
+users_col = db['users']
+subjects_col = db['subjects']
+sessions_col = db['sessions']
+attendance_col = db['attendance']
+students_col = db['students']
 
-        .login-card {
-            position: relative;
-            background: linear-gradient(165deg, rgba(24,30,48,0.82), rgba(11,15,26,0.94));
-            backdrop-filter: blur(30px) saturate(160%);
-            -webkit-backdrop-filter: blur(30px) saturate(160%);
-            border: 1px solid var(--nx-line-strong) !important;
-            border-radius: 28px !important;
-            padding: 44px 34px 34px !important;
-            max-width: 440px !important;
-            width: 100%;
-            box-shadow:
-                0 35px 90px rgba(0,0,0,0.8),
-                inset 0 1px 0 rgba(255,255,255,0.06),
-                0 0 0 1px rgba(255,179,0,0.07) !important;
-            animation: nxCardIn 0.8s cubic-bezier(.2,.8,.2,1) both;
-        }
-        @keyframes nxCardIn {
-            from { opacity: 0; transform: translateY(35px) scale(0.94); }
-            to   { opacity: 1; transform: translateY(0)   scale(1); }
-        }
-        .login-card::before {
-            content: "";
-            position: absolute;
-            inset: -1px;
-            border-radius: 29px;
-            padding: 1px;
-            background: linear-gradient(140deg, rgba(255,179,0,0.55), transparent 30%, transparent 70%, rgba(124,58,237,0.45));
-            -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-            -webkit-mask-composite: xor;
-                    mask-composite: exclude;
-            pointer-events: none;
-        }
+try:
+    users_col.create_index("username", unique=True)
+    students_col.create_index("student_id", unique=True)
+    attendance_col.create_index([("student_id", 1), ("session_id", 1)], unique=True)
+    sessions_col.create_index("session_id", unique=True)
+except Exception:
+    pass
 
-        .nx-logo-wrap {
-            position: relative;
-            width: 100px;
-            height: 100px;
-            margin: 0 auto 24px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .nx-logo-ring {
-            position: absolute;
-            inset: 0;
-            border-radius: 50%;
-            background: conic-gradient(from 0deg, transparent 0deg, var(--nx-gold) 120deg, var(--nx-purple) 240deg, transparent 360deg);
-            animation: nxSpin 6s linear infinite;
-            filter: blur(0.5px);
-        }
-        .nx-logo-ring::after {
-            content: "";
-            position: absolute;
-            inset: 4px;
-            border-radius: 50%;
-            background: #0b0f1a;
-        }
-        .nx-logo-core {
-            position: relative;
-            z-index: 2;
-            width: 84px; height: 84px;
-            border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            background: radial-gradient(circle at 30% 25%, #1a2136, #0a0e18);
-            border: 1px solid rgba(255,179,0,0.35);
-            box-shadow:
-                0 0 45px rgba(255,179,0,0.3),
-                inset 0 0 22px rgba(255,179,0,0.15);
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            font-size: 18px;
-            font-weight: 900;
-            color: var(--nx-gold);
-            letter-spacing: 1.5px;
-        }
+# تثبيت حساب الآدمن الرئيسي وتحديثه في قاعدة البيانات الجديدة
+users_col.update_one(
+    {"username": "Nexus_Admin_Core#2026"},
+    {"$set": {
+        "username": "Nexus_Admin_Core#2026",
+        "role": "super_admin",
+        "name": "الآدمن الرئيسي",
+        "password": generate_password_hash("Nx!99@bATU#xK82_Secured")
+    }},
+    upsert=True
+)
 
-        .login-title {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            font-size: 26px !important;
-            font-weight: 900 !important;
-            letter-spacing: 0.5px;
-            background: linear-gradient(180deg, #fff 30%, #b8c0d4 100%);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent !important;
-            margin-bottom: 4px !important;
-            text-align: center;
-        }
-        .login-subtitle {
-            font-family: 'Cairo', sans-serif;
-            font-size: 13px !important;
-            font-weight: 700 !important;
-            text-align: center;
-            color: #8b93a7 !important;
-            margin-bottom: 26px !important;
-        }
+SECRET_SALT = b"NEXUS_ATTENDANCE_CORE_SECRET_2026_PROD"
+BASE32_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+STEP_INTERVAL = 15  # كود الحضور يتغير كل 15 ثانية
 
-        /* ==========================================================
-           BASE INPUTS / BUTTONS
-           ========================================================== */
-        .login-input, .auth-input, .input-dark {
-            width: 100%;
-            padding: 15px 18px;
-            margin-bottom: 14px;
-            border-radius: 14px;
-            border: 1px solid var(--nx-line-strong);
-            background: rgba(0,0,0,0.45);
-            color: #fff;
-            font-size: 14.5px;
-            font-family: 'Cairo', sans-serif;
-            font-weight: 600;
-            outline: none;
-            transition: all .25s ease;
-        }
-        .login-input:focus, .auth-input:focus, .input-dark:focus {
-            border-color: var(--nx-gold);
-            background: rgba(0,0,0,0.62);
-            box-shadow: 0 0 0 4px rgba(255,179,0,0.1), 0 0 28px rgba(255,179,0,0.14);
-            transform: translateY(-1px);
-        }
-        .login-input::placeholder, .auth-input::placeholder {
-            color: #6b7385;
-            font-weight: 500;
-        }
-        .ltr-input {
-            direction: ltr !important;
-            text-align: left !important;
-            font-family: 'Plus Jakarta Sans', monospace !important;
-            font-size: 15.5px !important;
-            letter-spacing: 2px !important;
-            font-weight: 700 !important;
-            color: var(--nx-gold) !important;
-        }
-        .ltr-input::placeholder {
-            color: #6b7385 !important;
-            letter-spacing: 1px !important;
-            font-weight: 500 !important;
-        }
+def get_step_code(step: int, session_id: str) -> str:
+    key = SECRET_SALT + session_id.encode('utf-8')
+    digest = hmac.new(key, str(step).encode('utf-8'), hashlib.sha256).digest()
+    num = int.from_bytes(digest[:5], 'big')
+    code = ""
+    for _ in range(6):
+        code += BASE32_CHARS[num % len(BASE32_CHARS)]
+        num //= len(BASE32_CHARS)
+    return code
 
-        .btn-primary {
-            background: linear-gradient(135deg, #FFB300 0%, #FFD54F 50%, #FFB300 100%) !important;
-            background-size: 200% 100% !important;
-            color: #0a0e17 !important;
-            font-family: 'Cairo', sans-serif !important;
-            font-weight: 900 !important;
-            border-radius: 14px !important;
-            padding: 15px 20px !important;
-            font-size: 15.5px !important;
-            box-shadow:
-                0 12px 28px rgba(255,179,0,0.32),
-                inset 0 1px 0 rgba(255,255,255,0.5) !important;
-            position: relative;
-            overflow: hidden;
-            transition: all .3s ease;
-            cursor: pointer;
-            border: none;
-            width: 100%;
-        }
-        .btn-primary::after {
-            content: "";
-            position: absolute;
-            top: 0; left: -60%;
-            width: 60%; height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent);
-            transform: skewX(-25deg);
-            transition: left .75s ease;
-        }
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 18px 40px rgba(255,179,0,0.5), inset 0 1px 0 rgba(255,255,255,0.6) !important;
-        }
-        .btn-primary:hover::after { left: 130%; }
-        .btn-primary:active { transform: translateY(0); }
+def verify_totp(user_code: str, session_id: str) -> bool:
+    clean = user_code.strip().upper()
+    current_step = int(time.time() // STEP_INTERVAL)
+    return any(clean == get_step_code(s, session_id) for s in [current_step, current_step - 1])
 
-        /* ==========================================================
-           MAIN APP LAYOUT
-           ========================================================== */
-        #main-app {
-            position: relative;
-            z-index: 2;
-            display: none;
-            width: 100%;
-            min-height: 100vh;
-        }
+@app.after_request
+def set_security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    return response
 
-        .overlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.7);
-            z-index: 999;
-            backdrop-filter: blur(4px);
-        }
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    return jsonify({"status": "error", "message": "تم تجاوز عدد المحاولات! انتظر قليلاً."}), 429
 
-        /* ---------- SIDEBAR ---------- */
-        .sidebar {
-            width: var(--sidebar-width);
-            background: linear-gradient(180deg, rgba(20,26,40,0.98), rgba(11,15,26,0.99));
-            backdrop-filter: blur(20px);
-            height: 100vh;
-            position: fixed;
-            right: 0;
-            top: 0;
-            border-left: 1px solid var(--nx-line);
-            padding: 24px 0;
-            overflow-y: auto;
-            z-index: 1000;
-            transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: -10px 0 40px rgba(0,0,0,0.5);
-        }
-        .sidebar::-webkit-scrollbar { width: 4px; }
-        .sidebar::-webkit-scrollbar-thumb { background: rgba(255,179,0,0.3); border-radius: 4px; }
+# ----------------- مسارات الواجهات -----------------
+@app.route('/')
+def student_ui():
+    return render_template('index.html')
 
-        .sidebar .logo {
-            text-align: center;
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            font-size: 19px;
-            font-weight: 900;
-            color: #fff;
-            letter-spacing: 2px;
-            margin-bottom: 26px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            padding: 0 20px;
-        }
-        .sidebar .logo i {
-            color: var(--nx-gold);
-            font-size: 22px;
-            filter: drop-shadow(0 0 14px rgba(255,179,0,0.7));
-            animation: nxPulseIcon 3s ease-in-out infinite;
-        }
-        @keyframes nxPulseIcon {
-            0%,100% { filter: drop-shadow(0 0 10px rgba(255,179,0,0.5)); }
-            50%     { filter: drop-shadow(0 0 22px rgba(255,179,0,1)); }
-        }
+@app.route('/secure-auth-gateway-2026-x9v2-pl7q-a84m')
+def admin_ui():
+    return render_template('admin.html')
 
-        .nav-links {
-            list-style: none;
-            padding: 0 12px;
-        }
-        .nav-links > li {
-            color: #9aa2b5;
-            font-weight: 700;
-            padding: 12px 14px;
-            font-size: 13.5px;
-            border-radius: 12px;
-            cursor: pointer;
-            margin-bottom: 6px;
-            display: flex;
-            gap: 12px;
-            align-items: center;
-            transition: all 0.25s ease;
-            position: relative;
-            overflow: hidden;
-        }
-        .nav-links > li i.icon-main {
-            font-size: 16px;
-            width: 22px;
-            text-align: center;
-        }
-        .nav-links > li::before {
-            content: "";
-            position: absolute;
-            top: 0; right: 0;
-            width: 0;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,179,0,0.1));
-            transition: width 0.35s ease;
-            z-index: -1;
-        }
-        .nav-links > li.active,
-        .nav-links > li:hover {
-            background: rgba(255,179,0,0.1);
-            color: var(--nx-gold);
-            transform: translateX(-3px);
-        }
-        .nav-links > li.active::before,
-        .nav-links > li:hover::before {
-            width: 100%;
-        }
-        .nav-links > li.active {
-            background: rgba(255,179,0,0.14);
-            box-shadow: inset 3px 0 0 var(--nx-gold), 0 0 20px rgba(255,179,0,0.1);
-        }
+@app.route('/logout-gateway-vip-x9v2-pL7q-2026')
+def logout():
+    session.clear()
+    return redirect('/secure-auth-gateway-2026-x9v2-pl7q-a84m')
 
-        .wipe-btn-li {
-            border: 1px dashed rgba(239, 68, 68, 0.4) !important;
-            color: #EF4444 !important;
-            margin-top: 18px !important;
-        }
-        .wipe-btn-li:hover {
-            background: rgba(239, 68, 68, 0.1) !important;
-            border-color: #EF4444 !important;
-            color: #ff6b6b !important;
-        }
+# ----------------- مسارات بوابة الطلاب -----------------
+@app.route('/api/student-login', methods=['POST'])
+@limiter.limit("30 per minute")
+def student_login():
+    data = request.get_json(force=True, silent=True) or {}
+    s_name = str(data.get('student_name', '')).strip()
+    s_id = str(data.get('student_id', '')).strip()
+    year = str(data.get('year', '')).strip()
+    dept = str(data.get('department', 'عام (IT)')).strip()
 
-        /* ---------- MAIN CONTENT ---------- */
-        .main-content {
-            margin-right: var(--sidebar-width);
-            width: calc(100% - var(--sidebar-width));
-            padding: 24px 28px 60px;
-            min-height: 100vh;
-            position: relative;
-            transition: 0.3s;
-        }
+    if len(s_name) < 3:
+        return jsonify({"status": "error", "message": "يرجى كتابة اسم الطالب بشكل صحيح!"}), 400
 
-        .content-section { display: none; }
-        .content-section.active { display: block; animation: nxFadeIn 0.4s ease; }
-        @keyframes nxFadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+    if len(s_id) != 7 or not s_id.isdigit():
+        return jsonify({"status": "error", "message": "كود الطالب يجب أن يتكون من 7 أرقام!"}), 400
 
-        /* ---------- MOBILE HEADER ---------- */
-        .mobile-header {
-            display: none;
-            background: rgba(20,26,40,0.85);
-            backdrop-filter: blur(18px);
-            padding: 14px 18px;
-            border-radius: 16px;
-            margin-bottom: 18px;
-            border: 1px solid var(--nx-line-strong);
-            justify-content: space-between;
-            align-items: center;
-        }
-        .mobile-header .logo {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            font-size: 17px;
-            font-weight: 900;
-            color: #fff;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            letter-spacing: 1.5px;
-        }
-        .mobile-header .logo i {
-            color: var(--nx-gold);
-            font-size: 18px;
-            filter: drop-shadow(0 0 12px rgba(255,179,0,0.6));
-        }
-        .menu-toggle {
-            background: rgba(255,179,0,0.1);
-            border: 1px solid rgba(255,179,0,0.35);
-            color: var(--nx-gold);
-            font-size: 18px;
-            cursor: pointer;
-            width: 42px;
-            height: 42px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all .25s ease;
-        }
-        .menu-toggle:hover {
-            background: var(--nx-gold);
-            color: #000;
-            transform: scale(1.05);
-        }
+    if not year:
+        return jsonify({"status": "error", "message": "يرجى اختيار الفرقة الدراسية!"}), 400
 
-        /* ---------- WELCOME BANNER ---------- */
-        .welcome-container {
-            position: relative;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 16px;
-            padding: 22px 26px;
-            margin-bottom: 24px;
-            border-radius: 22px;
-            overflow: hidden;
-            background:
-                radial-gradient(700px circle at 100% 0%, rgba(255,179,0,0.12), transparent 55%),
-                radial-gradient(600px circle at 0% 100%, rgba(124,58,237,0.10), transparent 55%),
-                linear-gradient(165deg, rgba(28,35,54,0.9), rgba(11,15,26,0.96));
-            backdrop-filter: blur(20px) saturate(150%);
-            border: 1px solid var(--nx-line-strong);
-            box-shadow:
-                0 20px 50px rgba(0,0,0,0.5),
-                inset 0 1px 0 rgba(255,255,255,0.05);
-            animation: nxSlideUp .7s cubic-bezier(.2,.8,.2,1) both;
-        }
-        @keyframes nxSlideUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
-        .welcome-container::before {
-            content: "";
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 2px;
-            background: linear-gradient(90deg, transparent, #FFB300, #7C3AED, #06B6D4, transparent);
-            background-size: 200% 100%;
-            animation: nxShimmerLine 4s linear infinite;
-        }
-        @keyframes nxShimmerLine {
-            0%   { background-position: -200% 0; }
-            100% { background-position:  200% 0; }
-        }
+    students_col.update_one(
+        {"student_id": s_id},
+        {"$set": {
+            "student_id": s_id,
+            "name": s_name,
+            "email": f"{s_id}@batechu.com",
+            "year": year,
+            "department": dept,
+            "last_active": datetime.now(pytz.timezone('Africa/Cairo')).strftime("%Y-%m-%d %I:%M %p")
+        }},
+        upsert=True
+    )
 
-        #welcome-text {
-            font-family: 'Cairo', sans-serif !important;
-            font-size: 19px !important;
-            font-weight: 900 !important;
-            color: #fff;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin: 0;
+    return jsonify({
+        "status": "success",
+        "student": {
+            "student_id": s_id,
+            "name": s_name,
+            "email": f"{s_id}@batechu.com",
+            "year": year,
+            "department": dept
         }
+    })
 
-        /* ---------- TABLES ---------- */
-        .table-container {
-            background: linear-gradient(165deg, rgba(24,30,48,0.85), rgba(11,15,26,0.94));
-            padding: 8px;
-            border-radius: 20px;
-            border: 1px solid var(--nx-line-strong);
-            overflow-x: auto;
-            margin-top: 14px;
-            box-shadow:
-                0 20px 50px rgba(0,0,0,0.45),
-                inset 0 1px 0 rgba(255,255,255,0.04);
-            backdrop-filter: blur(18px);
-        }
-        .table-container::-webkit-scrollbar { height: 6px; }
-        .table-container::-webkit-scrollbar-thumb { background: rgba(255,179,0,0.4); border-radius: 6px; }
+@app.route('/api/student-init')
+def student_init():
+    year = request.args.get('year', '')
+    dept = request.args.get('dept', '')
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            min-width: 780px;
-        }
-        table thead {
-            background: rgba(0,0,0,0.35);
-        }
-        table th {
-            padding: 15px 14px;
-            text-align: center;
-            color: var(--nx-gold);
-            font-size: 13px;
-            font-weight: 900;
-            letter-spacing: 0.3px;
-            border-bottom: 2px solid rgba(255,179,0,0.2);
-            white-space: nowrap;
-        }
-        table td {
-            padding: 14px;
-            text-align: center;
-            font-size: 13px;
-            vertical-align: middle;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-            color: #e6eaf2;
-        }
-        table tbody tr {
-            transition: all .25s ease;
-        }
-        table tbody tr:hover {
-            background: rgba(255,179,0,0.05);
-        }
-        table tbody tr:last-child td { border-bottom: none; }
+    query = {}
+    if year:
+        query["year"] = year
+        if dept:
+            query["department"] = {"$in": [dept, "عام (IT)"]}
 
-        .clickable-row {
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        .clickable-row:hover {
-            background: rgba(255, 179, 0, 0.08) !important;
-        }
+    subs = list(subjects_col.find(query, {"_id": 0}))
+    active_sessions = list(sessions_col.find({"is_open": True}, {"_id": 0}))
+    return jsonify({"status": "success", "subjects": subs, "sessions": active_sessions})
 
-        /* ---------- BUTTONS ---------- */
-        .btn {
-            padding: 8px 14px;
-            border-radius: 10px;
-            cursor: pointer;
-            font-weight: 800;
-            border: none;
-            color: #fff;
-            display: inline-flex;
-            gap: 6px;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            font-family: 'Cairo', sans-serif;
-            transition: all 0.25s ease;
-            white-space: nowrap;
-        }
-        .btn-gold {
-            background: linear-gradient(135deg, #FFB300, #FFD54F);
-            color: #0a0e17;
-            font-weight: 900;
-            box-shadow: 0 4px 14px rgba(255,179,0,0.3);
-        }
-        .btn-gold:hover {
-            filter: brightness(1.1);
-            transform: translateY(-2px);
-            box-shadow: 0 8px 22px rgba(255,179,0,0.45);
-        }
-        .btn-green {
-            background: linear-gradient(135deg, #10B981, #059669);
-            color: #fff;
-            box-shadow: 0 4px 14px rgba(16,185,129,0.3);
-        }
-        .btn-green:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 22px rgba(16,185,129,0.45);
-        }
-        .btn-red {
-            background: rgba(239,68,68,0.12);
-            color: #f87171;
-            border: 1px solid rgba(239,68,68,0.4);
-        }
-        .btn-red:hover {
-            background: #EF4444;
-            color: #fff;
-            transform: translateY(-2px);
-            box-shadow: 0 8px 22px rgba(239,68,68,0.4);
-        }
-        .btn-outline {
-            background: rgba(255,179,0,0.06);
-            border: 1px solid rgba(255,179,0,0.4);
-            color: var(--nx-gold);
-        }
-        .btn-outline:hover {
-            background: var(--nx-gold);
-            color: #0a0e17;
-            transform: translateY(-2px);
-        }
-        .btn-change-pw {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 179, 0, 0.4);
-            color: var(--gold);
-            padding: 8px 16px;
-            border-radius: 10px;
-            font-weight: 800;
-            font-size: 13px;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            cursor: pointer;
-            transition: all 0.25s ease;
-            white-space: nowrap;
-            font-family: 'Cairo', sans-serif;
-        }
-        .btn-change-pw:hover {
-            background: rgba(255, 179, 0, 0.12);
-            border-color: var(--gold);
-            color: #fff;
-            transform: translateY(-1px);
-        }
+@app.route('/api/student-history', methods=['POST'])
+def student_history():
+    data = request.get_json(force=True, silent=True) or {}
+    s_id = str(data.get('student_id', '')).strip()
+    records = list(attendance_col.find({"student_id": s_id}, {"_id": 0}).sort("timestamp", -1))
+    return jsonify({"status": "success", "history": records})
 
-        /* ---------- FILTER TOOLBAR ---------- */
-        .filter-toolbar-box {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 12px;
-            margin-bottom: 18px;
-            background: linear-gradient(165deg, rgba(24,30,48,0.85), rgba(11,15,26,0.94));
-            padding: 14px 18px;
-            border-radius: 18px;
-            border: 1px solid var(--nx-line-strong);
-            backdrop-filter: blur(16px);
-        }
+@app.route('/api/submit-attendance', methods=['POST'])
+@limiter.limit("40 per minute")
+def submit_attendance():
+    data = request.get_json(force=True, silent=True) or {}
+    s_id = str(data.get('student_id', '')).strip()
+    s_name = str(data.get('student_name', '')).strip()
+    session_id = str(data.get('session_id', '')).strip()
+    code = str(data.get('code', '')).strip().upper()
+    device_token = str(data.get('device_token', '')).strip()
 
-        .committee-filters {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            overflow-x: auto;
-            padding: 4px 0;
-            scrollbar-width: none;
-            -webkit-overflow-scrolling: touch;
-            flex-wrap: nowrap;
-        }
-        .committee-filters::-webkit-scrollbar { display: none; }
+    if len(s_id) != 7 or not s_id.isdigit():
+        return jsonify({"status": "error", "message": "رقم الـ ID غير صحيح!"}), 400
 
-        .com-btn {
-            appearance: none;
-            background: rgba(13,17,23,0.9) !important;
-            border: 1px solid var(--nx-line-strong) !important;
-            color: #9aa2b5 !important;
-            padding: 8px 15px !important;
-            border-radius: 11px !important;
-            font-size: 12.5px !important;
-            font-weight: 800 !important;
-            font-family: 'Cairo', sans-serif !important;
-            cursor: pointer;
-            transition: all 0.25s ease;
-            white-space: nowrap;
-            flex-shrink: 0;
-            outline: none;
-        }
-        .com-btn:hover {
-            background: rgba(255,179,0,0.08) !important;
-            border-color: var(--nx-gold) !important;
-            color: #fff !important;
-            transform: translateY(-1px);
-        }
-        .com-btn.active {
-            background: rgba(255,179,0,0.16) !important;
-            border-color: var(--nx-gold) !important;
-            color: var(--nx-gold) !important;
-            box-shadow: 0 0 14px rgba(255,179,0,0.25) !important;
-        }
+    sess = sessions_col.find_one({"session_id": session_id, "is_open": True})
+    if not sess:
+        return jsonify({"status": "error", "message": "عفواً، هذه الجلسة مغلقة حالياً أو انتهت!"}), 400
 
-        /* ==========================================================
-           ✅ ADMIN SUBJECTS GRID — صورة أكبر
-           ========================================================== */
-        .sessions-header-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 14px;
-            margin-bottom: 18px;
-            flex-wrap: wrap;
-        }
+    if not verify_totp(code, session_id):
+        return jsonify({"status": "error", "message": "الرمز السري غير صحيح أو انتهت صلاحيته (انظر للشاشة وأعد المحاولة)!"}), 400
 
-        .admin-subjects-grid {
-            display: grid !important;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)) !important;
-            gap: 22px !important;
-            margin-top: 22px !important;
-        }
+    if device_token:
+        dup_dev = attendance_col.find_one({"session_id": session_id, "device_token": device_token})
+        if dup_dev and dup_dev.get('student_id') != s_id:
+            return jsonify({"status": "error", "message": "ممنوع الغش! تم تسجيل حضور طالب آخر مسبقاً من هذا الجهاز."}), 403
 
-        .admin-subject-card {
-            position: relative;
-            background: linear-gradient(165deg, rgba(28,35,54,0.9), rgba(11,15,26,0.95)) !important;
-            border: 1px solid var(--nx-line-strong) !important;
-            border-radius: 26px !important;
-            padding: 36px 24px 28px !important;
-            cursor: pointer;
-            overflow: hidden;
-            transition: transform .35s cubic-bezier(.2,.8,.2,1), border-color .35s, box-shadow .35s !important;
-            box-shadow:
-                0 12px 36px rgba(0,0,0,0.55),
-                inset 0 1px 0 rgba(255,255,255,0.04) !important;
-            animation: nxCardIn2 .55s cubic-bezier(.2,.8,.2,1) both;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            text-align: center;
-        }
-        @keyframes nxCardIn2 {
-            from { opacity: 0; transform: translateY(15px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
-        .admin-subject-card::before {
-            content: "";
-            position: absolute;
-            top: 16px; right: 16px;
-            width: 8px; height: 8px;
-            border-radius: 50%;
-            background: var(--nx-gold);
-            box-shadow: 0 0 16px var(--nx-gold);
-            opacity: 0.55;
-            transition: all .35s ease;
-            z-index: 2;
-        }
-        .admin-subject-card:hover {
-            transform: translateY(-7px);
-            border-color: rgba(255,179,0,0.55) !important;
-            box-shadow:
-                0 28px 60px rgba(0,0,0,0.7),
-                0 0 0 1px rgba(255,179,0,0.3),
-                0 0 55px rgba(255,179,0,0.16) !important;
-        }
-        .admin-subject-card:hover::before {
-            opacity: 1;
-            transform: scale(1.8);
-            box-shadow: 0 0 24px var(--nx-gold), 0 0 55px rgba(255,179,0,0.6);
-        }
+    if attendance_col.find_one({"student_id": s_id, "session_id": session_id}):
+        return jsonify({"status": "error", "message": "لقد قمت بتسجيل الحضور في هذه الجلسة مسبقاً!"}), 409
 
-        /* ✅ الصورة — أكبر */
-        .admin-subject-card img {
-            width: 180px !important;
-            height: 180px !important;
-            object-fit: contain;
-            margin-bottom: 14px !important;
-            padding: 10px !important;
-            background: radial-gradient(circle at 30% 25%, rgba(255,255,255,0.09), rgba(255,255,255,0.02));
-            border-radius: 50%;
-            border: 1px solid rgba(255,179,0,0.3);
-            box-shadow:
-                0 14px 34px rgba(0,0,0,0.55),
-                inset 0 0 24px rgba(255,179,0,0.1);
-            filter: drop-shadow(0 0 18px rgba(255,179,0,0.25));
-            transition: all .35s ease;
-            flex-shrink: 0;
-        }
-        .admin-subject-card:hover img {
-            transform: scale(1.08) rotate(-4deg);
-            border-color: rgba(255,179,0,0.7);
-            box-shadow:
-                0 18px 44px rgba(0,0,0,0.65),
-                0 0 48px rgba(255,179,0,0.38),
-                inset 0 0 28px rgba(255,179,0,0.18);
-        }
+    st_record = students_col.find_one({"student_id": s_id})
+    year = st_record.get('year', '') if st_record else ''
+    dept = st_record.get('department', '') if st_record else ''
 
-        .admin-subject-card h3 {
-            font-family: 'Cairo', sans-serif !important;
-            font-size: 20px !important;
-            font-weight: 900 !important;
-            background: linear-gradient(120deg, #ffffff 30%, #ffd76a 100%);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent !important;
-            margin: 0 0 8px !important;
-            line-height: 1.4;
-            padding: 0 4px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-        }
+    cairo_now = datetime.now(pytz.timezone('Africa/Cairo')).strftime("%Y-%m-%d %I:%M:%S %p")
+    ip = request.headers.get('x-forwarded-for', request.remote_addr).split(',')[0].strip()
 
-        .admin-subject-card p {
-            font-size: 12.5px !important;
-            color: var(--text-muted) !important;
-            margin: 4px 0 0 !important;
-            font-weight: 700;
-            line-height: 1.3;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            max-width: 100%;
-            display: inline-flex;
-            align-items: center;
-            padding: 5px 12px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 8px;
-        }
+    attendance_col.insert_one({
+        "student_id": s_id,
+        "student_name": s_name,
+        "year": year,
+        "department": dept,
+        "subject_id": sess['subject_id'],
+        "subject_name": sess['subject_name'],
+        "session_id": session_id,
+        "session_title": sess['title'],
+        "session_type": sess['type'],
+        "timestamp": cairo_now,
+        "device_token": device_token,
+        "ip": ip,
+        "is_manual": False
+    })
 
-        .admin-subj-badge,
-        .badge-count,
-        .badge-live,
-        .badge-empty {
-            display: none !important;
-        }
+    return jsonify({"status": "success", "message": f"تم تأكيد حضورك بنجاح في ({sess['subject_name']} - {sess['title']})"})
 
-        /* ---------- LIVE BOX ---------- */
-        .live-box {
-            text-align: center;
-            background:
-                radial-gradient(700px circle at 50% 0%, rgba(255,179,0,0.15), transparent 60%),
-                linear-gradient(165deg, rgba(24,30,48,0.95), rgba(11,15,26,0.98));
-            border: 1px solid var(--nx-gold);
-            border-radius: 24px;
-            padding: 32px;
-            max-width: 520px;
-            margin: 0 auto 25px;
-            box-shadow:
-                0 0 45px rgba(255,179,0,0.15),
-                0 20px 50px rgba(0,0,0,0.5),
-                inset 0 1px 0 rgba(255,255,255,0.05);
-            position: relative;
-            overflow: hidden;
-            animation: nxFadeIn .5s ease;
-        }
-        .live-box::before {
-            content: "";
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 2px;
-            background: linear-gradient(90deg, transparent, #FFB300, #FFD54F, #FFB300, transparent);
-            background-size: 200% 100%;
-            animation: nxShimmerLine 3s linear infinite;
-        }
-        #qr-canvas {
-            background: #fff;
-            padding: 16px;
-            border-radius: 18px;
-            display: inline-block;
-            margin: 16px 0;
-            box-shadow: 0 12px 32px rgba(0,0,0,0.5), 0 0 30px rgba(255,179,0,0.2);
-        }
-        .code-display {
-            font-family: 'Plus Jakarta Sans', monospace;
-            font-size: 52px;
-            font-weight: 900;
-            letter-spacing: 12px;
-            color: var(--nx-gold);
-            text-shadow: 0 0 22px rgba(255,179,0,0.5);
-            margin: 12px 0;
-            direction: ltr;
-        }
-        .timer-track {
-            width: 100%;
-            height: 8px;
-            background: rgba(255,255,255,0.08);
-            border-radius: 4px;
-            overflow: hidden;
-            margin-top: 12px;
-        }
-        .timer-bar {
-            height: 100%;
-            background: linear-gradient(90deg, var(--nx-gold), var(--nx-gold-2));
-            box-shadow: 0 0 12px var(--nx-gold);
-            transition: width 0.2s linear;
-            border-radius: 4px;
-        }
+# ----------------- مسارات لوحة تحكم الإدارة -----------------
+@app.route('/api/admin-login', methods=['POST'])
+def admin_login():
+    data = request.get_json(force=True, silent=True) or {}
+    username = str(data.get('username', '')).strip()
+    password = str(data.get('password', '')).strip()
 
-        /* ==========================================================
-           MODAL (Session Attendance)
-           ========================================================== */
-        .modal-screen {
-            position: fixed;
-            inset: 0;
-            background: rgba(5,7,15,0.85) !important;
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            z-index: 10000;
-            display: none;
-            flex-direction: column;
-            animation: nxFadeInModal .3s ease;
-        }
-        @keyframes nxFadeInModal { from { opacity: 0; } to { opacity: 1; } }
+    if username == 'Nexus_Admin_Core#2026' and password == 'Nx!99@bATU#xK82_Secured':
+        session.permanent = True
+        session['admin'] = {"username": "Nexus_Admin_Core#2026", "name": "الآدمن الرئيسي", "role": "super_admin"}
+        return jsonify({"status": "success", "admin": session['admin']})
 
-        .modal-header {
-            padding: 18px 26px;
-            background: rgba(15, 20, 33, 0.95);
-            backdrop-filter: blur(20px);
-            border-bottom: 1px solid var(--nx-line-strong);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-        }
-        #sess-modal-title {
-            font-family: 'Cairo', sans-serif;
-            color: var(--nx-gold);
-            font-size: 17px;
-            font-weight: 900;
-        }
-        .modal-close {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: rgba(239,68,68,0.1);
-            border: 1px solid rgba(239,68,68,0.3);
-            color: #f87171;
-            font-size: 15px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all .3s ease;
-            flex-shrink: 0;
-        }
-        .modal-close:hover {
-            background: #EF4444;
-            color: #fff;
-            transform: rotate(90deg) scale(1.1);
-            box-shadow: 0 0 28px rgba(239,68,68,0.6);
-        }
-        .modal-body {
-            flex: 1;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            padding: 18px;
-        }
-        .modal-body::-webkit-scrollbar { width: 6px; }
-        .modal-body::-webkit-scrollbar-thumb { background: rgba(255,179,0,0.35); border-radius: 6px; }
-
-        .sess-control-bar {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            margin-bottom: 10px;
-            background: linear-gradient(165deg, rgba(30,41,59,0.8), rgba(15,20,33,0.9));
-            backdrop-filter: blur(14px);
-            padding: 10px;
-            border-radius: 16px;
-            border: 1px solid var(--nx-line-strong);
-            box-shadow: 0 8px 22px rgba(0,0,0,0.3);
-        }
-
-        .sess-bar-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-        }
-
-        .sess-stats {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            flex-shrink: 0;
-        }
-        .sess-stats-icon { font-size: 16px; line-height: 1; }
-        .sess-stats-count {
-            font-size: 20px;
-            font-weight: 900;
-            color: var(--nx-gold);
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            line-height: 1;
-        }
-        .sess-stats-label {
-            font-size: 11px;
-            color: var(--text-muted);
-            font-weight: 700;
-        }
-
-        .sess-actions {
-            display: flex;
-            gap: 6px;
-            flex: 1;
-            justify-content: flex-end;
-        }
-        .sess-actions .btn {
-            padding: 8px 12px !important;
-            font-size: 11.5px !important;
-            border-radius: 10px;
-            flex-shrink: 0;
-        }
-
-        .search-input-glass {
-            background: rgba(0, 0, 0, 0.45);
-            border: 1px solid var(--nx-line-strong);
-            color: #fff;
-            padding: 10px 14px;
-            border-radius: 12px;
-            font-size: 12.5px;
-            font-family: 'Cairo', sans-serif;
-            width: 100%;
-            outline: none;
-            transition: 0.3s;
-        }
-        .search-input-glass:focus {
-            border-color: var(--nx-gold);
-            background: rgba(0,0,0,0.6);
-            box-shadow: 0 0 0 3px rgba(255,179,0,0.1);
-        }
-
-        .glass-student-card {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-            padding: 10px 12px;
-            margin-bottom: 7px;
-            border-radius: 12px;
-            background: linear-gradient(150deg, rgba(30,41,59,0.75), rgba(15,20,33,0.88));
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--nx-line-strong);
-            border-right: 4px solid #10b981;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            transition: all 0.2s ease;
-            font-size: 12.5px;
-            white-space: nowrap;
-            overflow: hidden;
-        }
-        .glass-student-card:hover {
-            background: linear-gradient(150deg, rgba(30,41,59,0.95), rgba(15,20,33,0.98));
-            border-color: rgba(255,179,0,0.35);
-            border-right-color: var(--nx-gold);
-            transform: translateX(-2px);
-        }
-        .glass-student-card.manual-entry { border-right-color: #f59e0b; }
-        .glass-student-card.auto-entry { border-right-color: #10b981; }
-
-        .gsc-main {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            flex: 1;
-            min-width: 0;
-            overflow: hidden;
-        }
-
-        .gsc-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: #10b981;
-            box-shadow: 0 0 8px #10b981;
-            flex-shrink: 0;
-        }
-        .manual-entry .gsc-dot {
-            background: #f59e0b;
-            box-shadow: 0 0 8px #f59e0b;
-        }
-
-        .gsc-name {
-            font-weight: 800;
-            color: #fff;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            font-size: 12.5px;
-            white-space: nowrap;
-        }
-
-        .gsc-sep {
-            color: rgba(255,255,255,0.25);
-            font-weight: 700;
-            flex-shrink: 0;
-        }
-
-        .gsc-id, .gsc-time, .gsc-type {
-            color: #9aa2b5;
-            font-family: 'Plus Jakarta Sans', monospace;
-            font-size: 11.5px;
-            font-weight: 700;
-            flex-shrink: 0;
-        }
-        .gsc-type { font-family: 'Cairo', sans-serif; }
-
-        .gsc-actions {
-            display: flex;
-            gap: 5px;
-            flex-shrink: 0;
-        }
-
-        .gsc-btn {
-            width: 30px;
-            height: 30px;
-            border-radius: 9px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: 1px solid transparent;
-            cursor: pointer;
-            font-size: 11px;
-            transition: all 0.2s ease;
-            background: transparent;
-            padding: 0;
-        }
-        .gsc-btn-edit {
-            background: rgba(255,179,0,0.13);
-            color: var(--nx-gold);
-            border-color: rgba(255,179,0,0.3);
-        }
-        .gsc-btn-edit:hover {
-            background: var(--nx-gold);
-            color: #0a0e17;
-        }
-        .gsc-btn-del {
-            background: rgba(239,68,68,0.12);
-            color: #f87171;
-            border-color: rgba(239,68,68,0.3);
-        }
-        .gsc-btn-del:hover {
-            background: #EF4444;
-            color: #fff;
-        }
-
-        .pass-toggle-wrap {
-            position: relative;
-            margin-bottom: 14px;
-        }
-        .pass-toggle-wrap .login-input {
-            margin-bottom: 0;
-            padding-left: 48px;
-        }
-        #toggle-admin-pass-icon {
-            position: absolute;
-            left: 16px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--text-muted);
-            cursor: pointer;
-            font-size: 16px;
-            transition: 0.3s;
-            z-index: 3;
-            padding: 6px;
-        }
-        #toggle-admin-pass-icon:hover {
-            color: var(--nx-gold);
-        }
-
-        /* ---------- SWEETALERT OVERRIDES ---------- */
-        .swal2-popup {
-            background: linear-gradient(165deg, #1a2136, #0b0f1a) !important;
-            border: 1px solid var(--nx-line-strong) !important;
-            border-radius: 22px !important;
-            box-shadow: 0 35px 90px rgba(0,0,0,0.85) !important;
-            font-family: 'Cairo', sans-serif !important;
-        }
-        .swal2-title { font-family: 'Cairo', sans-serif !important; font-weight: 900 !important; }
-        .swal2-confirm {
-            background: linear-gradient(135deg, var(--nx-gold), var(--nx-gold-2)) !important;
-            color: #0a0e17 !important;
-            font-weight: 900 !important;
-            border-radius: 12px !important;
-            padding: 11px 26px !important;
-            box-shadow: 0 10px 26px rgba(255,179,0,0.35) !important;
-        }
-        .swal2-cancel {
-            background: rgba(255,255,255,0.06) !important;
-            border: 1px solid var(--nx-line-strong) !important;
-            border-radius: 12px !important;
-            font-weight: 700 !important;
-            padding: 11px 22px !important;
-        }
-        .swal2-input, .swal2-select, .swal2-textarea {
-            background: rgba(0,0,0,0.5) !important;
-            color: #fff !important;
-            border: 1px solid var(--nx-line-strong) !important;
-            border-radius: 12px !important;
-        }
-        .swal2-input:focus, .swal2-select:focus {
-            border-color: var(--nx-gold) !important;
-            box-shadow: 0 0 0 3px rgba(255,179,0,0.15) !important;
-        }
-
-        /* ==========================================================
-           RESPONSIVE — TABLET
-           ========================================================== */
-        @media (max-width: 1024px) {
-            .sidebar {
-                transform: translateX(100%);
-                width: 280px;
+    user = users_col.find_one({"username": {"$regex": f"^{username}$", "$options": "i"}})
+    if user:
+        if check_password_hash(user.get('password', ''), password) or user.get('password') == password:
+            session.permanent = True
+            session['admin'] = {
+                "username": user['username'],
+                "name": user.get('name', user['username']),
+                "role": user.get('role', 'doctor')
             }
-            .sidebar.open {
-                transform: translateX(0);
-                box-shadow: -20px 0 60px rgba(0,0,0,0.7);
-            }
-            .main-content {
-                margin-right: 0;
-                width: 100%;
-                padding: 16px 16px 50px;
-            }
-            .mobile-header { display: flex; }
-        }
+            return jsonify({"status": "success", "admin": session['admin']})
 
-        /* ==========================================================
-           RESPONSIVE — MOBILE
-           ========================================================== */
-        @media (max-width: 768px) {
-            .main-content { padding: 14px 12px 40px; }
+    return jsonify({"status": "error", "message": "اسم المستخدم أو كلمة المرور غير صحيحة!"}), 401
 
-            .welcome-container {
-                flex-direction: column;
-                align-items: stretch;
-                padding: 16px 18px;
-                gap: 10px;
-                border-radius: 18px;
-                text-align: center;
-            }
-            #welcome-text {
-                font-size: 15px !important;
-                text-align: center;
-                justify-content: center;
-                flex-wrap: wrap;
-            }
+@app.route('/api/admin-data')
+def get_admin_data():
+    if 'admin' not in session:
+        return jsonify({"status": "unauthorized"}), 401
 
-            .filter-toolbar-box {
-                flex-direction: column;
-                align-items: stretch;
-                gap: 10px;
-                padding: 12px;
-            }
-            .committee-filters { justify-content: flex-start; padding-bottom: 6px; }
-            .filter-toolbar-box .btn {
-                width: 100%;
-                justify-content: center;
-                padding: 11px 14px !important;
-                font-size: 12.5px !important;
-            }
+    role = session['admin']['role']
+    curr_username = session['admin']['username']
+    curr_admin = users_col.find_one({"username": curr_username})
+    allowed_subs = curr_admin.get('allowed_subjects', []) if curr_admin else []
 
-            .table-container { padding: 4px; border-radius: 16px; }
-            table { min-width: 640px; }
-            table th { padding: 11px 9px; font-size: 11.5px; }
-            table td { padding: 10px 8px; font-size: 11.5px; }
-            table td .btn { padding: 6px 10px; font-size: 11px; }
+    if role == 'super_admin':
+        subjects = list(subjects_col.find({}, {"_id": 0}))
+        sessions_list = list(sessions_col.find({}, {"_id": 0}).sort("created_at", -1))
+        staff_list = list(users_col.find({"role": {"$ne": "super_admin"}}, {"_id": 0, "password": 0}))
+    else:
+        subjects = list(subjects_col.find({"id": {"$in": allowed_subs}}, {"_id": 0}))
+        sessions_list = list(sessions_col.find({"subject_id": {"$in": allowed_subs}}, {"_id": 0}).sort("created_at", -1))
+        if role == 'doctor':
+            staff_list = list(users_col.find({"role": "ta"}, {"_id": 0, "password": 0}))
+            for s in staff_list:
+                s['allowed_subjects'] = [sub for sub in s.get('allowed_subjects', []) if sub in allowed_subs]
+        else:
+            staff_list = []
 
-            .live-box {
-                padding: 22px 16px;
-                border-radius: 20px;
-                max-width: 100%;
-            }
-            #live-session-title { font-size: 15px !important; }
-            #live-session-sub { font-size: 12px !important; }
-            .code-display {
-                font-size: 36px;
-                letter-spacing: 6px;
-            }
-            #qr-canvas { padding: 10px; margin: 12px 0; }
-            #qr-canvas img, #qr-canvas canvas {
-                width: 150px !important;
-                height: 150px !important;
-            }
-            .live-box > p { font-size: 10.5px !important; }
+    return jsonify({
+        "status": "success",
+        "currentAdmin": session['admin'],
+        "subjects": subjects,
+        "sessions": sessions_list,
+        "staff": staff_list
+    })
 
-            .modal-header {
-                padding: 10px 14px;
-                gap: 8px;
-            }
-            #sess-modal-title {
-                font-size: 12.5px;
-                line-height: 1.3;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-            }
-            .modal-close {
-                width: 32px;
-                height: 32px;
-                font-size: 12px;
-            }
-            .modal-body { padding: 8px; }
+@app.route('/api/session-attendance')
+def get_session_attendance():
+    if 'admin' not in session:
+        return jsonify({"status": "unauthorized"}), 401
 
-            .sess-control-bar {
-                padding: 8px;
-                gap: 6px;
-                border-radius: 14px;
-                margin-bottom: 8px;
-            }
-            .sess-stats-icon { font-size: 14px; }
-            .sess-stats-count { font-size: 18px; }
-            .sess-stats-label { font-size: 10.5px; }
-            .sess-actions .btn {
-                padding: 7px 10px !important;
-                font-size: 11px !important;
-                gap: 4px;
-            }
-            .search-input-glass {
-                padding: 9px 12px;
-                font-size: 12px;
-            }
+    sess_id = request.args.get('session_id', '')
+    records = list(attendance_col.find({"session_id": sess_id}, {"_id": 0}).sort("timestamp", -1))
+    sess = sessions_col.find_one({"session_id": sess_id}, {"_id": 0})
+    return jsonify({"status": "success", "session": sess, "records": records})
 
-            .glass-student-card {
-                padding: 9px 11px;
-                font-size: 12px;
-                margin-bottom: 6px;
-            }
-            .gsc-name { font-size: 12px; max-width: 120px; }
-            .gsc-id, .gsc-time { font-size: 11px; }
-            .gsc-btn { width: 28px; height: 28px; font-size: 10px; }
+@app.route('/api/live-code')
+def get_live_code():
+    session_id = request.args.get('session_id', '')
+    now = time.time()
+    step = int(now // STEP_INTERVAL)
+    remaining = STEP_INTERVAL - (int(now) % STEP_INTERVAL)
+    code = get_step_code(step, session_id)
+    return jsonify({"code": code, "remaining": remaining, "interval": STEP_INTERVAL})
 
-            .login-card {
-                padding: 32px 22px 26px !important;
-                border-radius: 22px !important;
-            }
-            .login-title { font-size: 21px !important; }
-            .login-subtitle { font-size: 12px !important; margin-bottom: 20px !important; }
-            .nx-logo-wrap { width: 80px; height: 80px; margin-bottom: 16px; }
-            .nx-logo-core { width: 66px; height: 66px; font-size: 15px; }
-            .login-input { padding: 13px 15px; font-size: 13.5px; margin-bottom: 12px; }
-            .btn-primary { padding: 14px 18px !important; font-size: 14.5px !important; }
+@app.route('/api/admin-action', methods=['POST'])
+def admin_action():
+    if 'admin' not in session:
+        return jsonify({"status": "unauthorized"}), 401
 
-            .sessions-header-bar { gap: 10px; }
-            .sessions-header-bar h2 { font-size: 14px !important; }
-            .sessions-header-bar p { font-size: 11px !important; }
-            .sessions-header-bar .btn {
-                width: 100%;
-                justify-content: center;
-                padding: 11px 14px !important;
-                font-size: 12.5px !important;
-            }
+    curr_user = users_col.find_one({"username": session['admin']['username']})
+    role = session['admin']['role']
+    curr = session['admin']
+    data = request.get_json(force=True, silent=True) or {}
+    action = str(data.get('action', ''))
 
-            /* ✅ كروت المواد على الموبايل — صورة أكبر */
-            .admin-subjects-grid {
-                grid-template-columns: repeat(2, 1fr) !important;
-                gap: 12px !important;
-                margin-top: 15px !important;
-            }
-            .admin-subject-card {
-                padding: 22px 12px 18px !important;
-                border-radius: 20px !important;
-            }
-            .admin-subject-card img {
-                width: 140px !important;
-                height: 140px !important;
-                padding: 7px !important;
-                margin-bottom: 10px !important;
-            }
-            .admin-subject-card h3 {
-                font-size: 15px !important;
-                margin-bottom: 4px !important;
-            }
-            .admin-subject-card p {
-                font-size: 11px !important;
-                padding: 4px 10px;
-                margin-top: 4px !important;
-            }
-        }
+    if action == 'change_my_password':
+        new_pw = generate_password_hash(str(data.get('new_password', '')))
+        users_col.update_one({"username": curr['username']}, {"$set": {"password": new_pw}})
+        return jsonify({"status": "success"})
 
-        /* Very small phones */
-        @media (max-width: 480px) {
-            #welcome-text { font-size: 14px !important; }
-            .code-display { font-size: 30px; letter-spacing: 5px; }
-            table { min-width: 580px; }
-            table th { padding: 10px 8px; font-size: 11px; }
-            table td { padding: 9px 6px; font-size: 11px; }
+    elif action == 'create_session':
+        s_data = data.get('session', {})
+        sub_id = str(s_data.get('subject_id', ''))
+        
+        if role != 'super_admin' and sub_id not in curr_user.get('allowed_subjects', []):
+            return jsonify({"status": "error", "message": "غير مصرح لك بفتح جلسة في هذه المادة!"}), 403
 
-            .sess-control-bar { padding: 7px; gap: 5px; }
-            .sess-stats-icon { font-size: 13px; }
-            .sess-stats-count { font-size: 17px; }
-            .sess-actions .btn { padding: 6px 9px !important; font-size: 10.5px !important; }
-            .glass-student-card { padding: 8px 10px; }
-            .gsc-name { font-size: 11.5px; max-width: 95px; }
-            .gsc-id, .gsc-time { font-size: 10.5px; }
-            .gsc-hide-xs { display: none; }
-            .gsc-btn { width: 26px; height: 26px; font-size: 9.5px; }
+        sess_id = f"SESS_{int(time.time())}_{''.join([c for c in sub_id if c.isalnum()][:4])}"
+        sessions_col.insert_one({
+            "session_id": sess_id,
+            "subject_id": sub_id,
+            "subject_name": str(s_data.get('subject_name', '')),
+            "type": str(s_data.get('type', 'Lecture')),
+            "title": str(s_data.get('title', 'عام')),
+            "is_open": True,
+            "created_by": curr['name'],
+            "created_at": datetime.now(pytz.timezone('Africa/Cairo')).strftime("%Y-%m-%d %I:%M %p")
+        })
 
-            .admin-subjects-grid {
-                grid-template-columns: repeat(2, 1fr) !important;
-                gap: 10px !important;
-            }
-            .admin-subject-card {
-                padding: 18px 10px 14px !important;
-            }
-            .admin-subject-card img {
-                width: 120px !important;
-                height: 120px !important;
-                padding: 6px !important;
-            }
-            .admin-subject-card h3 { font-size: 14px !important; }
-            .admin-subject-card p {
-                font-size: 10.5px !important;
-                padding: 3px 8px;
-            }
-        }
+    elif action == 'toggle_session':
+        sess_id = str(data.get('session_id', ''))
+        sess = sessions_col.find_one({"session_id": sess_id})
+        if sess and role != 'super_admin' and sess.get('subject_id') not in curr_user.get('allowed_subjects', []):
+            return jsonify({"status": "error", "message": "غير مصرح لك بتعديل هذه الجلسة!"}), 403
 
-        @media (prefers-reduced-motion: reduce) {
-            *, *::before, *::after {
-                animation-duration: 0.01ms !important;
-                animation-iteration-count: 1 !important;
-                transition-duration: 0.01ms !important;
-            }
-        }
-    </style>
-</head>
-<body>
+        sessions_col.update_one({"session_id": sess_id}, {"$set": {"is_open": bool(data.get('is_open'))}})
 
-    <div class="nx-aurora" aria-hidden="true">
-        <div class="blob b1"></div>
-        <div class="blob b2"></div>
-        <div class="blob b3"></div>
-    </div>
+    elif action == 'delete_session':
+        sess_id = str(data.get('session_id', ''))
+        sessions_col.delete_one({"session_id": sess_id})
+        attendance_col.delete_many({"session_id": sess_id})
 
-    <div class="nx-particles" id="nx-particles" aria-hidden="true"></div>
+    elif action == 'add_manual_attendance':
+        sess_id = str(data.get('session_id', '')).strip()
+        s_id = str(data.get('student_id', '')).strip()
+        s_name = str(data.get('student_name', '')).strip()
 
-    <div id="loading-screen">
-        <div class="nx-load-logo">
-            <div class="nx-load-ring"></div>
-            <div class="nx-load-ring ring-2"></div>
-            <div class="nx-load-core">CORE</div>
-        </div>
-        <h3>Loading</h3>
-    </div>
+        sess = sessions_col.find_one({"session_id": sess_id})
+        if not sess:
+            return jsonify({"status": "error", "message": "الجلسة غير موجودة!"}), 404
 
-    <div id="login-screen">
-        <div class="login-card">
-            <div class="nx-logo-wrap">
-                <div class="nx-logo-ring"></div>
-                <div class="nx-logo-core">CORE</div>
-            </div>
+        if attendance_col.find_one({"student_id": s_id, "session_id": sess_id}):
+            return jsonify({"status": "error", "message": "الطالب مسجل حضوره بالفعل في هذه الجلسة!"}), 409
 
-            <h2 class="login-title">Nexus Admin</h2>
-            <p class="login-subtitle">لوحة التحكم وبث الحضور المباشر</p>
+        st_record = students_col.find_one({"student_id": s_id})
+        year = st_record.get('year', '') if st_record else ''
+        dept = st_record.get('department', '') if st_record else ''
 
-            <input type="text" id="user" class="login-input ltr-input" placeholder="اسم المستخدم" autocomplete="off">
+        cairo_now = datetime.now(pytz.timezone('Africa/Cairo')).strftime("%Y-%m-%d %I:%M:%S %p")
+        attendance_col.insert_one({
+            "student_id": s_id,
+            "student_name": s_name,
+            "year": year,
+            "department": dept,
+            "subject_id": sess['subject_id'],
+            "subject_name": sess['subject_name'],
+            "session_id": sess_id,
+            "session_title": sess['title'],
+            "session_type": sess['type'],
+            "timestamp": cairo_now,
+            "device_token": "MANUAL_BY_ADMIN",
+            "ip": "ADMIN",
+            "is_manual": True
+        })
+        return jsonify({"status": "success", "message": "تم تحضير الطالب يدوياً بنجاح!"})
 
-            <div class="pass-toggle-wrap">
-                <input type="password" id="pass" class="login-input ltr-input" placeholder="كلمة المرور" autocomplete="off">
-                <i class="fas fa-eye" id="toggle-admin-pass-icon" onclick="toggleAdminPasswordVisibility()"></i>
-            </div>
+    elif action == 'edit_attendance_record':
+        sess_id = str(data.get('session_id', ''))
+        old_id = str(data.get('old_id', ''))
+        new_id = str(data.get('new_id', ''))
+        new_name = str(data.get('new_name', ''))
 
-            <button type="button" class="btn-primary" style="margin-top: 6px;" onclick="handleLogin()">
-                تسجيل الدخول <i class="fas fa-sign-in-alt" style="margin-right: 6px;"></i>
-            </button>
-        </div>
-    </div>
+        attendance_col.update_one(
+            {"session_id": sess_id, "student_id": old_id},
+            {"$set": {"student_id": new_id, "student_name": new_name}}
+        )
+        return jsonify({"status": "success"})
 
-    <div id="main-app" style="display:none;">
-        <div id="mobile-overlay" class="overlay" onclick="toggleSidebar()"></div>
+    elif action == 'delete_attendance_record':
+        attendance_col.delete_one({
+            "student_id": str(data.get('student_id', '')),
+            "session_id": str(data.get('session_id', ''))
+        })
 
-        <aside class="sidebar">
-            <div class="logo">
-                <i class="fas fa-crown"></i>
-                <span>Nexus Core</span>
-            </div>
-            <ul class="nav-links">
-                <li id="tab-sessions-btn" class="active" onclick="switchTab('sessions', this)">
-                    <i class="fas fa-broadcast-tower icon-main" style="color:var(--nx-gold);"></i>
-                    الجلسات والبث
-                </li>
-                <li id="tab-subjects-btn" onclick="switchTab('subjects', this)">
-                    <i class="fas fa-book icon-main"></i>
-                    إدارة المقررات
-                </li>
-                <li id="tab-staff-btn" onclick="switchTab('staff', this)">
-                    <i class="fas fa-users-cog icon-main"></i>
-                    إدارة الطاقم
-                </li>
-                <hr style="border:0; border-top:1px solid rgba(255,255,255,0.08); margin:16px 14px;">
-                <li class="super-only wipe-btn-li" onclick="wipeDatabase()">
-                    <i class="fas fa-dumpster-fire icon-main"></i>
-                    تصفير السجلات
-                </li>
-                <li style="color:#EF4444; margin-top:6px;" onclick="adminLogout()">
-                    <i class="fas fa-power-off icon-main"></i>
-                    تسجيل خروج
-                </li>
-            </ul>
-        </aside>
+    elif action == 'manage_subject' and role == 'super_admin':
+        sub_act = str(data.get('sub', ''))
+        if sub_act == 'add':
+            s_obj = data.get('subject', {})
+            sub_id = f"SUB_{int(time.time())}"
+            subjects_col.insert_one({
+                "id": sub_id,
+                "name": str(s_obj.get('name', '')),
+                "year": str(s_obj.get('year', '')),
+                "department": str(s_obj.get('department', '')),
+                "image": str(s_obj.get('image', '')),
+                "added_by": curr['name']
+            })
+        elif sub_act == 'delete':
+            sub_id = str(data.get('id', ''))
+            subjects_col.delete_one({"id": sub_id})
+            sessions_col.delete_many({"subject_id": sub_id})
+            attendance_col.delete_many({"subject_id": sub_id})
 
-        <main class="main-content">
-            <div class="mobile-header">
-                <div class="logo">
-                    <i class="fas fa-crown"></i>
-                    <span>Nexus Core</span>
-                </div>
-                <button type="button" class="menu-toggle" onclick="toggleSidebar()">
-                    <i class="fas fa-bars"></i>
-                </button>
-            </div>
+    elif action == 'manage_staff':
+        if role == 'ta':
+            return jsonify({"status": "error", "message": "المعيد ليس له صلاحية إدارة الطاقم!"}), 403
 
-            <div class="welcome-container">
-                <h2 id="welcome-text">مرحباً..</h2>
-            </div>
+        sub_act = str(data.get('sub', ''))
+        staff_data = data.get('staff', {})
 
-            <div id="sec-sessions" class="content-section active">
+        if sub_act == 'add':
+            new_role = str(staff_data.get('role', 'ta'))
+            allowed_subs = staff_data.get('allowed_subjects', [])
 
-                <div id="sessions-subjects-view">
-                    <div class="sessions-header-bar">
-                        <div>
-                            <h2 style="font-size:17px; font-weight:900; margin:0 0 4px; color:#fff;">
-                                <i class="fas fa-broadcast-tower" style="color:var(--nx-gold);"></i>
-                                اختر مادة لعرض جلساتها
-                            </h2>
-                            <p style="font-size:12px; color:var(--text-muted); margin:0;">اضغط على أي مادة لعرض الجلسات وإدارة البث</p>
-                        </div>
-                        <button class="btn btn-gold" onclick="createSessionModal()" style="padding: 12px 20px; font-size: 13px;">
-                            <i class="fas fa-plus"></i> فتح جلسة جديدة
-                        </button>
-                    </div>
+            if role == 'doctor':
+                new_role = 'ta'
+                my_subs = curr_user.get('allowed_subjects', [])
+                if not all(s in my_subs for s in allowed_subs):
+                    return jsonify({"status": "error", "message": "لا يمكنك منح صلاحية لمعيد في مادة لا تدرسها!"}), 403
 
-                    <div id="admin-subjects-grid" class="admin-subjects-grid"></div>
-                </div>
+            target_user = str(staff_data.get('username', '')).strip()
+            if users_col.find_one({"username": target_user}):
+                return jsonify({"status": "error", "message": "اسم المستخدم موجود مسبقاً!"}), 400
 
-                <div id="sessions-list-view" style="display: none;">
+            users_col.insert_one({
+                "name": str(staff_data.get('name', '')).strip(),
+                "username": target_user,
+                "password": generate_password_hash(str(staff_data.get('password', ''))),
+                "role": new_role,
+                "allowed_subjects": allowed_subs,
+                "created_by": curr['username']
+            })
 
-                    <div class="sessions-header-bar">
-                        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-                            <button class="btn btn-outline" onclick="backToSubjects()" style="padding:10px 14px; font-size:12px;">
-                                <i class="fas fa-arrow-right"></i> رجوع
-                            </button>
-                            <h2 id="sessions-subject-title" style="font-size:17px; font-weight:900; margin:0; color:var(--nx-gold);"></h2>
-                        </div>
-                        <button class="btn btn-gold" onclick="createSessionModal()" style="padding: 10px 16px; font-size: 12.5px;">
-                            <i class="fas fa-plus"></i> جلسة جديدة
-                        </button>
-                    </div>
+        elif sub_act == 'delete':
+            target_username = str(data.get('username', ''))
+            users_col.delete_one({"username": target_username})
 
-                    <div id="live-box" class="live-box" style="display:none;">
-                        <h3 id="live-session-title" style="color:#fff; font-size:18px; font-weight:900; margin-bottom:4px;"></h3>
-                        <p id="live-session-sub" style="color:var(--nx-gold); font-size:14px; font-weight:800;"></p>
-                        <div id="qr-canvas"></div>
-                        <div id="live-code-display" class="code-display">------</div>
-                        <div class="timer-track"><div id="live-timer-bar" class="timer-bar"></div></div>
-                        <p style="font-size:12px; color:var(--text-muted); margin-top:12px;">
-                            <i class="fas fa-sync-alt" style="color:var(--nx-gold);"></i>
-                            الرمز يتجدد كل 15 ثانية تلقائياً لمنع تصوير الشاشة
-                        </p>
-                        <button class="btn btn-red" style="margin-top:16px; padding: 10px 20px; font-size: 13px;" onclick="closeLiveScreen()">
-                            <i class="fas fa-stop"></i> إغلاق شاشة البث
-                        </button>
-                    </div>
+    elif action == 'wipe_all' and role == 'super_admin':
+        provided_pw = str(data.get('admin_password', ''))
+        if provided_pw == 'Nx!99@bATU#xK82_Secured':
+            attendance_col.delete_many({})
+            sessions_col.delete_many({})
+            return jsonify({"status": "success", "message": "تم تصفير كشوف الحضور والجلسات بنجاح"})
+        return jsonify({"status": "error", "message": "كلمة المرور غير صحيحة!"}), 403
 
-                    <div class="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>النوع</th>
-                                    <th>العنوان</th>
-                                    <th>الحالة</th>
-                                    <th>المحاضر</th>
-                                    <th>التاريخ</th>
-                                    <th>إجراء</th>
-                                </tr>
-                            </thead>
-                            <tbody id="sessions-table-body"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
+    return jsonify({"status": "success"})
 
-            <div id="sec-subjects" class="content-section">
-                <div class="filter-toolbar-box">
-                    <button type="button" class="btn btn-green super-only" onclick="addSubject()" style="padding: 12px 18px; font-size: 13px;">
-                        <i class="fas fa-plus"></i> إضافة مادة جديدة
-                    </button>
+# ----------------- تصدير إكسل بترميز سليم -----------------
+@app.route('/api/export-attendance-csv')
+def export_attendance_csv():
+    if 'admin' not in session:
+        return "Unauthorized", 401
 
-                    <div class="committee-filters" id="subject-nav-filters">
-                        <button type="button" class="com-btn active" onclick="filterSubjectsTab('all', this)">الكل</button>
-                        <button type="button" class="com-btn" onclick="filterSubjectsTab('الفرقة الأولى', this)">فرقة 1</button>
-                        <button type="button" class="com-btn" onclick="filterSubjectsTab('الفرقة الثانية', this)">فرقة 2</button>
-                        <button type="button" class="com-btn" onclick="filterSubjectsTab('الفرقة الثالثة_Software', this)">فرقة 3 (SW)</button>
-                        <button type="button" class="com-btn" onclick="filterSubjectsTab('الفرقة الثالثة_Network', this)">فرقة 3 (NW)</button>
-                        <button type="button" class="com-btn" onclick="filterSubjectsTab('الفرقة الرابعة_Software', this)">فرقة 4 (SW)</button>
-                        <button type="button" class="com-btn" onclick="filterSubjectsTab('الفرقة الرابعة_Network', this)">فرقة 4 (NW)</button>
-                    </div>
-                </div>
+    curr_admin = users_col.find_one({"username": session['admin']['username']})
+    allowed_subs = curr_admin.get('allowed_subjects', []) if curr_admin and session['admin']['role'] != 'super_admin' else None
 
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>الصورة</th>
-                                <th>المادة</th>
-                                <th>الفرقة والقسم</th>
-                                <th>بواسطة</th>
-                                <th>إجراء</th>
-                            </tr>
-                        </thead>
-                        <tbody id="subjects-table-body"></tbody>
-                    </table>
-                </div>
-            </div>
+    query = {}
+    sess_id = request.args.get('session_id')
+    raw_filename = "Attendance_Report"
 
-            <div id="sec-staff" class="content-section">
-                <div style="display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap; align-items:center;">
-                    <button type="button" class="btn btn-green staff-manager-only" onclick="addStaff()" style="padding: 12px 18px; font-size: 13px;">
-                        <i class="fas fa-user-plus"></i> إضافة عضو جديد
-                    </button>
-                    <button type="button" class="btn btn-gold staff-manager-only" onclick="assignExistingTA()" style="padding: 12px 18px; font-size: 13px;">
-                        <i class="fas fa-user-tag"></i> تعيين معيد مسجل
-                    </button>
-                    <button type="button" class="btn-change-pw" onclick="changeMyPassword()" style="padding: 12px 18px; font-size: 13px;">
-                        <i class="fas fa-key"></i> تغيير كلمة المرور
-                    </button>
-                </div>
-                <div class="table-container staff-manager-only">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>الاسم</th>
-                                <th>اسم الدخول</th>
-                                <th>المواد المسموحة</th>
-                                <th>الصفة</th>
-                                <th>إجراء</th>
-                            </tr>
-                        </thead>
-                        <tbody id="staff-table-body"></tbody>
-                    </table>
-                </div>
-            </div>
-        </main>
-    </div>
+    if sess_id:
+        query["session_id"] = sess_id
+        sess = sessions_col.find_one({"session_id": sess_id})
+        if sess:
+            raw_filename = f"{sess['subject_name']}_{sess['title']}"
 
-    <div id="session-attendance-modal" class="modal-screen">
-        <div class="modal-header">
-            <h2 id="sess-modal-title">...</h2>
-            <button class="modal-close" onclick="closeSessionAttendanceModal()"><i class="fas fa-times"></i></button>
-        </div>
-        <div class="modal-body">
-            <div style="max-width:1050px; width:100%; margin:0 auto;">
+    records = list(attendance_col.find(query, {"_id": 0}).sort("timestamp", -1))
 
-                <div class="sess-control-bar">
-                    <input type="text" id="session-student-search" class="search-input-glass" placeholder="🔍 ابحث بالاسم أو الـ ID..." onkeyup="filterSessionStudents()">
+    output = io.StringIO()
+    output.write('\ufeff')
+    writer = csv.writer(output)
+    writer.writerow(['كود الطالب', 'اسم الطالب', 'الفرقة', 'القسم', 'المادة', 'نوع الجلسة', 'عنوان الجلسة', 'توقيت الحضور', 'طريقة التسجيل', 'عنوان IP'])
 
-                    <div class="sess-bar-row">
-                        <div class="sess-stats">
-                            <span class="sess-stats-icon">👥</span>
-                            <span id="sess-modal-count" class="sess-stats-count">0</span>
-                            <span class="sess-stats-label">مسجل</span>
-                        </div>
+    for r in records:
+        writer.writerow([
+            r.get('student_id', ''),
+            r.get('student_name', ''),
+            r.get('year', ''),
+            r.get('department', ''),
+            r.get('subject_name', ''),
+            r.get('session_type', ''),
+            r.get('session_title', ''),
+            r.get('timestamp', ''),
+            'يدوي' if r.get('is_manual') or 'ADMIN' in str(r.get('ip', '')) else 'تلقائي (QR)',
+            r.get('ip', '')
+        ])
 
-                        <div class="sess-actions">
-                            <button type="button" class="btn btn-green" id="sess-btn-add-manual">
-                                <i class="fas fa-user-plus"></i> إضافة
-                            </button>
-                            <button type="button" class="btn btn-gold" id="sess-btn-export-excel">
-                                <i class="fas fa-file-excel"></i> إكسل
-                            </button>
-                        </div>
-                    </div>
-                </div>
+    csv_data = output.getvalue()
+    
+    safe_ascii_name = f"Attendance_{int(time.time())}.csv"
+    encoded_utf8_name = urllib.parse.quote(f"{raw_filename}_{int(time.time())}.csv")
+    disposition_header = f"attachment; filename=\"{safe_ascii_name}\"; filename*=UTF-8''{encoded_utf8_name}"
 
-                <div id="sess-glass-cards-container"></div>
-            </div>
-        </div>
-    </div>
+    return Response(
+        csv_data,
+        mimetype="text/csv; charset=utf-8",
+        headers={"Content-Disposition": disposition_header}
+    )
 
-    <script src="/static/admin.js"></script>
-
-    <script>
-        (function () {
-            const container = document.getElementById('nx-particles');
-            if (!container) return;
-            const count = window.innerWidth < 768 ? 12 : 22;
-            for (let i = 0; i < count; i++) {
-                const p = document.createElement('div');
-                p.className = 'nx-particle';
-                p.style.left = Math.random() * 100 + '%';
-                p.style.animationDuration = (10 + Math.random() * 14) + 's';
-                p.style.animationDelay = (Math.random() * 14) + 's';
-                const s = 1.5 + Math.random() * 2.5;
-                p.style.width = s + 'px';
-                p.style.height = s + 'px';
-                if (Math.random() > 0.7) {
-                    p.style.background = '#7C3AED';
-                    p.style.boxShadow = '0 0 10px #7C3AED, 0 0 20px rgba(124,58,237,0.5)';
-                } else if (Math.random() > 0.5) {
-                    p.style.background = '#06B6D4';
-                    p.style.boxShadow = '0 0 10px #06B6D4, 0 0 20px rgba(6,182,212,0.5)';
-                }
-                container.appendChild(p);
-            }
-        })();
-    </script>
-</body>
-</html>
+if __name__ == '__main__':
+    print("=" * 65)
+    print("🚀 سيرفر Nexus Attendance يعمل بنجاح على قاعدة البيانات الجديدة!")
+    print("🔑 رابط لوحة الآدمن: http://127.0.0.1:8080/secure-auth-gateway-2026-x9v2-pl7q-a84m")
+    print("👤 اسم المستخدم: Nexus_Admin_Core#2026")
+    print("🔒 كلمة المرور: Nx!99@bATU#xK82_Secured")
+    print("=" * 65)
+    app.run(host='0.0.0.0', port=8080, debug=True)

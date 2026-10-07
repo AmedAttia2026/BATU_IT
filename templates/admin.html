@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>لوحة الإدارة والتحكم | Nexus 2026</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&family=Plus+Jakarta+Sans:wght@700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .live-box {
+            text-align: center;
+            background: var(--bg-card);
+            border: 1px solid var(--gold);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 480px;
+            margin: 0 auto 25px;
+            box-shadow: 0 0 35px rgba(255, 179, 0, 0.15);
+        }
+        #qr-canvas { background: #fff; padding: 14px; border-radius: 14px; display: inline-block; margin: 15px 0; }
+        .code-display {
+            font-family: 'Plus Jakarta Sans', monospace;
+            font-size: 52px;
+            font-weight: 900;
+            letter-spacing: 10px;
+            color: var(--gold);
+            text-shadow: 0 0 15px rgba(255,179,0,0.3);
+            margin: 10px 0;
+        }
+        .timer-track { width: 100%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden; margin-top: 10px; }
+        .timer-bar { height: 100%; background: var(--gold); transition: width 0.2s linear; }
+
+        .glass-student-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 18px;
+            padding: 16px 20px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            transition: all 0.25s ease;
+        }
+        .glass-student-card:hover {
+            transform: scale(1.01);
+            background: rgba(30, 41, 59, 0.9);
+            border-color: rgba(255, 255, 255, 0.25);
+        }
+        .glass-student-card.auto-entry { border-right: 5px solid #10b981; }
+        .glass-student-card.manual-entry { border-right: 5px solid #f59e0b; }
+        .clickable-row { cursor: pointer; transition: background 0.2s; }
+        .clickable-row:hover { background: rgba(255, 179, 0, 0.08) !important; }
+
+        .search-input-glass {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #fff;
+            padding: 10px 16px;
+            border-radius: 12px;
+            font-size: 13px;
+            width: 100%;
+            max-width: 320px;
+            outline: none;
+            transition: 0.3s;
+        }
+        .search-input-glass:focus {
+            border-color: var(--gold);
+            box-shadow: 0 0 10px rgba(255, 179, 0, 0.25);
+        }
+
+        @media (max-width: 700px) {
+            .glass-student-card {
+                flex-direction: column-reverse;
+                align-items: stretch;
+                gap: 12px;
+                text-align: center;
+            }
+            .search-input-glass { max-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="login-screen">
+        <div class="login-card">
+            <i class="fas fa-user-shield fa-4x" style="color:var(--gold); margin-bottom:15px;"></i>
+            <h2 style="color:#fff; margin-bottom:8px; font-size:22px;">Nexus Attendance</h2>
+            <p style="color:var(--text-muted); font-size:13px; margin-bottom:20px;">لوحة تحكم وبث الحضور المباشر</p>
+            
+            <input type="text" id="user" class="login-input ltr-input" placeholder="اسم المستخدم" autocomplete="off">
+            
+            <div style="position: relative; margin-bottom: 15px;">
+                <input type="password" id="pass" class="login-input ltr-input" placeholder="كلمة المرور" style="margin-bottom: 0; padding-right: 40px;">
+                <i class="fas fa-eye" id="toggle-admin-pass-icon" onclick="toggleAdminPasswordVisibility()" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); color: var(--text-muted); cursor: pointer; font-size: 16px; transition: 0.3s;"></i>
+            </div>
+            
+            <button type="button" class="btn-primary" style="width:100%; margin-top: 5px; padding: 14px; font-size: 16px;" onclick="handleLogin()">تسجيل الدخول <i class="fas fa-sign-in-alt"></i></button>
+        </div>
+    </div>
+
+    <div id="main-app" style="display:none;">
+        <div id="mobile-overlay" class="overlay" onclick="toggleSidebar()"></div>
+
+        <aside class="sidebar">
+            <div class="logo"><i class="fas fa-crown"></i> Nexus Core</div>
+            <ul class="nav-links">
+                <li id="tab-sessions-btn" class="active" onclick="switchTab('sessions', this)"><i class="fas fa-broadcast-tower icon-main" style="color:var(--gold);"></i> الجلسات وبث المباشر</li>
+                <li id="tab-subjects-btn" onclick="switchTab('subjects', this)"><i class="fas fa-book icon-main"></i> إدارة المقررات</li>
+                <li id="tab-staff-btn" onclick="switchTab('staff', this)"><i class="fas fa-users-cog icon-main"></i> إدارة الطاقم / حسابي</li>
+                <hr style="border:0; border-top:1px solid var(--border); margin:15px 10px;">
+                <li class="super-only wipe-btn-li" onclick="wipeDatabase()"><i class="fas fa-dumpster-fire icon-main"></i> تصفير سجلات الحضور</li>
+                <li style="color:#EF4444; margin-top:5px;" onclick="location.href='/logout-gateway-vip-x9v2-pL7q-2026'"><i class="fas fa-power-off icon-main"></i> تسجيل خروج</li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <div class="mobile-header">
+                <div class="logo" style="margin-bottom:0; font-size:18px;"><i class="fas fa-crown"></i> Nexus Attendance</div>
+                <button type="button" class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-ellipsis-v"></i></button>
+            </div>
+
+            <div class="welcome-container" style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:20px;">
+                <h2 id="welcome-text" style="color:var(--gold); font-size: 20px;">مرحباً..</h2>
+                <button class="btn btn-green" onclick="location.href='/api/export-attendance-csv'"><i class="fas fa-file-excel"></i> تصدير الكشف الشامل (Excel/CSV)</button>
+            </div>
+
+            <!-- 1. شاشة الجلسات وبث المباشر -->
+            <div id="sec-sessions" class="content-section active">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+                    <button class="btn btn-gold" onclick="createSessionModal()"><i class="fas fa-plus"></i> فتح سكشن / محاضرة جديدة</button>
+                    <span style="color:var(--text-muted); font-size:13px;"><i class="fas fa-info-circle" style="color:var(--gold);"></i> اضغط مرتين (Double Click) على السطر لفتح طلاب الجلسة</span>
+                </div>
+
+                <div id="live-box" class="live-box" style="display:none;">
+                    <h3 id="live-session-title" style="color:#fff; font-size:18px;"></h3>
+                    <p id="live-session-sub" style="color:var(--gold); font-size:14px;"></p>
+                    <div id="qr-canvas"></div>
+                    <div id="live-code-display" class="code-display">------</div>
+                    <div class="timer-track"><div id="live-timer-bar" class="timer-bar"></div></div>
+                    <p style="font-size:12px; color:var(--text-muted); margin-top:10px;">الرمز يتجدد كل 15 ثانية تلقائياً لمنع تصوير الشاشة</p>
+                    <button class="btn btn-red" style="margin-top:15px;" onclick="closeLiveScreen()"><i class="fas fa-stop"></i> إغلاق شاشة البث</button>
+                </div>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>المادة</th>
+                                <th>النوع</th>
+                                <th>العنوان</th>
+                                <th>الحالة</th>
+                                <th>المحاضر</th>
+                                <th>إجراء</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sessions-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 2. إدارة المقررات -->
+            <div id="sec-subjects" class="content-section">
+                <div class="filter-toolbar-box">
+                    <button type="button" class="btn btn-green super-only" onclick="addSubject()"><i class="fas fa-plus"></i> إضافة مادة جديدة مع الصورة</button>
+                    
+                    <div class="committee-filters" id="subject-nav-filters">
+                        <button type="button" class="com-btn active" onclick="filterSubjectsTab('all', this)">الكل</button>
+                        <button type="button" class="com-btn" onclick="filterSubjectsTab('الفرقة الأولى', this)">فرقة 1</button>
+                        <button type="button" class="com-btn" onclick="filterSubjectsTab('الفرقة الثانية', this)">فرقة 2</button>
+                        <button type="button" class="com-btn" onclick="filterSubjectsTab('الفرقة الثالثة_Software', this)">فرقة 3 (SW)</button>
+                        <button type="button" class="com-btn" onclick="filterSubjectsTab('الفرقة الثالثة_Network', this)">فرقة 3 (NW)</button>
+                        <button type="button" class="com-btn" onclick="filterSubjectsTab('الفرقة الرابعة_Software', this)">فرقة 4 (SW)</button>
+                        <button type="button" class="com-btn" onclick="filterSubjectsTab('الفرقة الرابعة_Network', this)">فرقة 4 (NW)</button>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>الصورة</th>
+                                <th>المادة</th>
+                                <th>الفرقة والقسم</th>
+                                <th>بواسطة</th>
+                                <th>إجراء</th>
+                            </tr>
+                        </thead>
+                        <tbody id="subjects-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 3. إدارة الطاقم / حسابي -->
+            <div id="sec-staff" class="content-section">
+                <div style="display:flex; gap:12px; margin-bottom:15px; flex-wrap:wrap; align-items:center;">
+                    <button type="button" class="btn btn-green staff-manager-only" onclick="addStaff()"><i class="fas fa-user-plus"></i> إضافة عضو جديد للنظام</button>
+                    <button type="button" class="btn btn-gold staff-manager-only" onclick="assignExistingTA()"><i class="fas fa-user-tag"></i> تعيين معيد مسجل مسبقاً</button>
+                    <button type="button" class="btn-change-pw" onclick="changeMyPassword()"><i class="fas fa-key"></i> تغيير كلمة المرور (حسابي)</button>
+                </div>
+                <div class="table-container staff-manager-only">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>الاسم</th>
+                                <th>اسم الدخول</th>
+                                <th>المواد المسموحة</th>
+                                <th>الصفة</th>
+                                <th>إجراء</th>
+                            </tr>
+                        </thead>
+                        <tbody id="staff-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- النافذة الفخمة لعرض طلاب الجلسة (مع حقل البحث الفوري) -->
+    <div id="session-attendance-modal" class="modal-screen">
+        <div class="modal-header">
+            <h2 id="sess-modal-title" style="color:var(--gold); font-size:18px; font-weight:800;"></h2>
+            <button class="modal-close" onclick="closeSessionAttendanceModal()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body" style="padding:15px;">
+            <div style="max-width:1050px; width:100%; margin:0 auto;">
+                
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px; margin-bottom:20px; background:rgba(30,41,59,0.7); backdrop-filter:blur(10px); padding:16px 22px; border-radius:18px; border:1px solid rgba(255,255,255,0.1);">
+                    
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <span style="font-size:26px;">👥</span>
+                        <div>
+                            <span style="color:var(--text-muted); font-size:12px; display:block;">إجمالي المسجلين</span>
+                            <span id="sess-modal-count" style="font-size:24px; font-weight:900; color:#fff;">0</span>
+                        </div>
+                    </div>
+
+                    <div style="flex:1; display:flex; justify-content:center; min-width:260px;">
+                        <input type="text" id="session-student-search" class="search-input-glass" placeholder="🔍 ابحث بالاسم أو الـ ID هنا..." onkeyup="filterSessionStudents()">
+                    </div>
+
+                    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                        <button type="button" class="btn btn-green" id="sess-btn-add-manual"><i class="fas fa-user-plus"></i> إضافة طالب يدوياً</button>
+                        <button type="button" class="btn btn-gold" id="sess-btn-export-excel"><i class="fas fa-file-excel"></i> تحميل إكسل الجلسة</button>
+                    </div>
+                </div>
+
+                <div id="sess-glass-cards-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/admin.js"></script>
+</body>
+</html>

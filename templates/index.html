@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Attendance System | BATU</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&family=Plus+Jakarta+Sans:wght@700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .code-box {
+            font-family: 'Plus Jakarta Sans', monospace;
+            font-size: 26px !important;
+            letter-spacing: 8px;
+            text-align: center;
+            text-transform: uppercase;
+            color: var(--gold) !important;
+            font-weight: 900;
+        }
+        #reader { width: 100%; border-radius: 12px; overflow: hidden; margin-bottom: 15px; display: none; }
+        .custom-select {
+            width: 100%;
+            padding: 13px 16px;
+            margin-bottom: 15px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: #000;
+            color: #fff;
+            font-size: 14px;
+            outline: none;
+            cursor: pointer;
+        }
+        .custom-select:focus { border-color: var(--gold); }
+    </style>
+</head>
+<body>
+
+    <div id="loading-screen" style="display:none;">
+        <div class="loader"></div>
+        <h3 style="color:var(--gold); font-size: 16px;">جاري التحميل...</h3>
+    </div>
+
+    <!-- شاشة تسجيل بيانات الطالب مع الفرقة والقسم -->
+    <div id="auth-screen">
+        <div class="auth-card">
+            <i class="fas fa-user-graduate fa-4x" style="color:var(--gold); margin-bottom:15px;"></i>
+            <h2 style="color:#fff; margin-bottom:4px; font-size:24px; font-weight:900; letter-spacing:1px; font-family:'Plus Jakarta Sans', sans-serif;">Attendance System</h2>
+            <p style="color:var(--gold); font-size:15px; font-weight:800; letter-spacing:3px; margin-bottom:20px; font-family:'Plus Jakarta Sans', sans-serif;">BATU</p>
+            
+            <input type="text" id="login-name" class="auth-input" placeholder="اسم الطالب ثلاثي أو رباعي" autocomplete="off">
+
+            <div class="email-input-group">
+                <input type="text" id="login-id" placeholder="2220034" maxlength="7" autocomplete="off">
+                <span>@batechu.com</span>
+            </div>
+
+            <!-- قائمة اختيار الفرقة -->
+            <select id="login-year" class="custom-select" onchange="handleYearChange()">
+                <option value="" disabled selected>اختر الفرقة الدراسية</option>
+                <option value="الفرقة الأولى">الفرقة الأولى</option>
+                <option value="الفرقة الثانية">الفرقة الثانية</option>
+                <option value="الفرقة الثالثة">الفرقة الثالثة</option>
+                <option value="الفرقة الرابعة">الفرقة الرابعة</option>
+            </select>
+
+            <!-- قائمة اختيار القسم (تظهر تخصصات للفرقة 3 و 4) -->
+            <div id="dept-group" style="display:none;">
+                <select id="login-dept" class="custom-select">
+                    <option value="Software">قسم Software</option>
+                    <option value="Network">قسم Network</option>
+                </select>
+            </div>
+
+            <button class="btn-primary" style="width:100%; margin-top: 5px;" onclick="loginStudent()">دخول المنظومة <i class="fas fa-sign-in-alt"></i></button>
+        </div>
+    </div>
+
+    <!-- الواجهة الرئيسية للطالب -->
+    <div id="main-ui" style="display: none; flex-direction: column; min-height: 100vh;">
+        <nav class="navbar">
+            <div class="logo"><i class="fas fa-university"></i> <span>BATU Attendance</span></div>
+            <div class="nav-actions">
+                <button class="btn-outline" onclick="openHistoryModal()"><i class="fas fa-history"></i> سجل حضوري</button>
+                <button class="btn-danger-outline" onclick="logoutStudent()"><i class="fas fa-sign-out-alt"></i> خروج</button>
+            </div>
+        </nav>
+
+        <div class="container">
+            <div class="student-info-banner">
+                <div class="info-right">
+                    <span class="greeting-text">مرحباً بك</span>
+                    <strong id="display-name" class="student-name">...</strong>
+                    <span id="display-email" class="student-email">...</span>
+                </div>
+                <div class="info-left">
+                    <span class="info-line">كود الطالب: <b id="display-id" class="info-value-id">...</b></span>
+                    <span class="info-line" style="color:var(--gold); font-size:13px; font-weight:bold;" id="display-academic">...</span>
+                    <button class="btn-password" onclick="logoutStudent()"><i class="fas fa-user-edit"></i> تغيير الحساب</button>
+                </div>
+            </div>
+
+            <h2 style="font-size:22px; font-weight:900; margin-bottom:5px; display:flex; align-items:center; gap:8px;">
+                <i class="fas fa-book-open" style="color:var(--gold);"></i> المقررات الدراسية
+            </h2>
+            <p style="color:var(--text-muted); font-size:14px; margin-bottom: 15px;">المقررات الخاصة بدفعتك وقسمك فقط. اضغط على المادة لتسجيل الحضور.</p>
+            
+            <div id="subjects-container" class="grid-layout"></div>
+        </div>
+
+        <footer>
+            <h2 style="color: var(--gold); font-weight: 900; font-size: 18px; font-family:'Plus Jakarta Sans', sans-serif;">BATU 2026 Core</h2>
+        </footer>
+    </div>
+
+    <!-- نافذة تأكيد الحضور -->
+    <div id="verify-modal" class="modal-screen">
+        <div class="modal-header">
+            <h2 style="color:var(--gold); font-size:16px;"><i class="fas fa-qrcode"></i> تأكيد الحضور المباشر</h2>
+            <button class="modal-close" onclick="closeVerifyModal()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <div class="modal-card">
+                <h3 id="modal-sess-title" style="color:#fff; text-align:center; margin-bottom:5px; font-size:17px;"></h3>
+                <p id="modal-sess-sub" style="color:var(--gold); text-align:center; font-size:13px; margin-bottom:15px;"></p>
+
+                <button class="btn-secondary" style="width:100%; margin-bottom:12px;" onclick="toggleQrReader()"><i class="fas fa-camera"></i> مسح الـ QR بكاميرا الهاتف</button>
+                <div id="reader"></div>
+
+                <p style="text-align:right; color:var(--text-muted); font-size:12px; margin-bottom:6px;">أو اكتب الرمز المتغير المعروض على الشاشة (6 خانات):</p>
+                <input type="text" id="totp-input" class="input-dark code-box" placeholder="XXXXXX" maxlength="6" autocomplete="off">
+
+                <button class="btn-primary" style="width:100%; margin-top:10px;" onclick="submitAttendanceFinal()">تأكيد وتسجيل الحضور <i class="fas fa-check-circle"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- سجل الحضور السابق -->
+    <div id="history-modal" class="modal-screen">
+        <div class="modal-header">
+            <h2 style="color:var(--gold); font-size:16px;"><i class="fas fa-clipboard-check"></i> سجل حضورك السابق</h2>
+            <button class="modal-close" onclick="closeHistoryModal()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <div id="history-list-container" class="complaints-container"></div>
+        </div>
+    </div>
+
+    <script src="/static/student.js"></script>
+</body>
+</html>

@@ -428,7 +428,7 @@
             height: 100% !important;
             text-align: initial !important;
 
-            /* ✅ التمركز البصري — يمين شوية (اتحركت لـ 58%) */
+            /* ✅ التمركز البصري — يمين شوية */
             position: absolute !important;
             left: 58% !important;
             top: 50% !important;
@@ -1039,7 +1039,7 @@
         }
 
         /* ==========================================================
-           MODALS
+           ✅ MODALS — مع إصلاح زرار الإغلاق
            ========================================================== */
         .modal-screen {
             background: rgba(5,7,15,0.8) !important;
@@ -1054,6 +1054,12 @@
             backdrop-filter: blur(20px);
             border-bottom: 1px solid var(--nx-line) !important;
             padding: 18px 26px !important;
+            position: relative !important;
+            z-index: 100 !important;
+            padding-top: calc(18px + env(safe-area-inset-top, 0px)) !important;
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
         }
         .modal-header h2 {
             font-family: 'Cairo', sans-serif !important;
@@ -1065,7 +1071,8 @@
         .modal-header h2 i { color: var(--nx-gold); }
 
         .modal-close {
-            width: 40px; height: 40px;
+            width: 44px !important;
+            height: 44px !important;
             border-radius: 50% !important;
             background: rgba(239,68,68,0.1);
             border: 1px solid rgba(239,68,68,0.3) !important;
@@ -1073,11 +1080,18 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 15px !important;
+            font-size: 16px !important;
             transition: all .3s ease;
             cursor: pointer;
+            position: relative !important;
+            z-index: 101 !important;
+            pointer-events: auto !important;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            flex-shrink: 0;
         }
-        .modal-close:hover {
+        .modal-close:hover,
+        .modal-close:active {
             background: #EF4444 !important;
             color: #fff !important;
             transform: rotate(90deg) scale(1.1);
@@ -1299,7 +1313,7 @@
             .navbar .logo {
                 font-size: 20px !important;
                 letter-spacing: 2.5px;
-                left: 60% !important; /* على الموبايل يتحرك شوية كمان */
+                left: 60% !important;
             }
             .navbar .logo i {
                 font-size: 20px;
@@ -1372,6 +1386,16 @@
                 padding: 14px 8px 14px 18px !important;
             }
             .code-box::placeholder { letter-spacing: 10px; }
+
+            .modal-header {
+                padding: 14px 18px !important;
+                padding-top: calc(14px + env(safe-area-inset-top, 0px)) !important;
+            }
+            .modal-close {
+                width: 40px !important;
+                height: 40px !important;
+                font-size: 15px !important;
+            }
         }
 
         @media (max-width: 380px) {
@@ -1520,7 +1544,7 @@
     <div id="verify-modal" class="modal-screen">
         <div class="modal-header">
             <h2 style="color:var(--nx-gold); font-size:16px;"><i class="fas fa-qrcode"></i> تأكيد الحضور المباشر</h2>
-            <button class="modal-close" onclick="closeVerifyModal()"><i class="fas fa-times"></i></button>
+            <button class="modal-close" onclick="closeVerifyModal()" aria-label="إغلاق"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body">
             <div class="modal-card">
@@ -1548,7 +1572,7 @@
     <div id="history-modal" class="modal-screen">
         <div class="modal-header">
             <h2 style="color:var(--nx-gold); font-size:16px;"><i class="fas fa-clipboard-check"></i> سجل حضورك السابق</h2>
-            <button class="modal-close" onclick="closeHistoryModal()"><i class="fas fa-times"></i></button>
+            <button class="modal-close" onclick="closeHistoryModal()" aria-label="إغلاق"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body">
             <div id="history-list-container" class="complaints-container"></div>

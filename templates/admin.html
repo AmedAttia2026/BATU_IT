@@ -164,8 +164,8 @@
             box-shadow: 0 0 40px rgba(255,179,0,0.4);
             font-family: 'Plus Jakarta Sans', sans-serif;
             font-weight: 900;
-            font-size: 15px;
-            letter-spacing: 1px;
+            font-size: 14px;
+            letter-spacing: 1.5px;
             color: var(--nx-gold);
             animation: nxPulse 1.6s ease-in-out infinite;
         }
@@ -265,10 +265,10 @@
                 0 0 45px rgba(255,179,0,0.3),
                 inset 0 0 22px rgba(255,179,0,0.15);
             font-family: 'Plus Jakarta Sans', sans-serif;
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 900;
             color: var(--nx-gold);
-            letter-spacing: 1.5px;
+            letter-spacing: 2px;
         }
 
         .login-title {
@@ -686,7 +686,6 @@
             white-space: nowrap;
         }
 
-        /* ✅ شارة الدور — في مربع جميل */
         .welcome-role-badge {
             display: inline-flex;
             align-items: center;
@@ -1059,7 +1058,7 @@
             display: none !important;
         }
 
-        /* ---------- LOCKED SUBJECT FIELD (في modal الجلسة) ---------- */
+        /* ---------- LOCKED SUBJECT FIELD ---------- */
         .locked-subject-field {
             display: flex;
             align-items: center;
@@ -1485,7 +1484,6 @@
         @media (max-width: 768px) {
             .main-content { padding: 14px 12px 40px; }
 
-            /* البانر */
             .welcome-container {
                 padding: 16px 18px;
                 gap: 12px;
@@ -1597,7 +1595,7 @@
             .login-title { font-size: 21px !important; }
             .login-subtitle { font-size: 12px !important; margin-bottom: 20px !important; }
             .nx-logo-wrap { width: 80px; height: 80px; margin-bottom: 16px; }
-            .nx-logo-core { width: 66px; height: 66px; font-size: 15px; }
+            .nx-logo-core { width: 66px; height: 66px; font-size: 14px; }
             .login-input { padding: 13px 15px; font-size: 13.5px; margin-bottom: 12px; }
             .btn-primary { padding: 14px 18px !important; font-size: 14.5px !important; }
 
@@ -1698,20 +1696,22 @@
 
     <div class="nx-particles" id="nx-particles" aria-hidden="true"></div>
 
+    <!-- ✅ شاشة التحميل — BATU -->
     <div id="loading-screen">
         <div class="nx-load-logo">
             <div class="nx-load-ring"></div>
             <div class="nx-load-ring ring-2"></div>
-            <div class="nx-load-core">CORE</div>
+            <div class="nx-load-core">BATU</div>
         </div>
         <h3>Loading</h3>
     </div>
 
+    <!-- ✅ شاشة الدخول — BATU -->
     <div id="login-screen">
         <div class="login-card">
             <div class="nx-logo-wrap">
                 <div class="nx-logo-ring"></div>
-                <div class="nx-logo-core">CORE</div>
+                <div class="nx-logo-core">BATU</div>
             </div>
 
             <h2 class="login-title">Nexus Admin</h2>
@@ -1774,7 +1774,6 @@
                 </button>
             </div>
 
-            <!-- ✅ البانر الفخم -->
             <div class="welcome-container">
                 <div class="welcome-left">
                     <div class="welcome-icon-wrap role-super" id="welcome-icon">
@@ -1802,7 +1801,6 @@
                             </h2>
                             <p style="font-size:12px; color:var(--text-muted); margin:0;">اضغط على أي مادة لعرض الجلسات وإدارة البث</p>
                         </div>
-                        <!-- ✅ زر "فتح جلسة جديدة" اتحذف من هنا -->
                     </div>
 
                     <div id="admin-subjects-grid" class="admin-subjects-grid"></div>

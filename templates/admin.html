@@ -519,7 +519,7 @@
         }
 
         /* ==========================================================
-           ✅ MOBILE HEADER — BATU يمين شوية + زرار ☰ على اليسار
+           ✅ MOBILE HEADER
            ========================================================== */
         .mobile-header {
             display: none;
@@ -548,8 +548,6 @@
             margin: 0 !important;
             padding: 0 !important;
             text-align: center;
-
-            /* ✅ يمين شوية (اتحرك من 50% لـ 55%) */
             position: absolute !important;
             left: 55% !important;
             top: 50% !important;
@@ -577,7 +575,6 @@
             align-items: center;
         }
 
-        /* ✅ زرار المنيو — على اليسار */
         .menu-toggle {
             background: rgba(255,179,0,0.1);
             border: 1px solid rgba(255,179,0,0.35);
@@ -592,8 +589,6 @@
             justify-content: center;
             transition: all .25s ease;
             flex-shrink: 0;
-
-            /* ✅ التثبيت على اليسار */
             position: absolute !important;
             left: 14px !important;
             top: 50% !important;
@@ -918,19 +913,51 @@
             transform: translateY(-1px);
         }
 
-        /* ---------- FILTER TOOLBAR ---------- */
+        /* ==========================================================
+           ✅ FILTER TOOLBAR — تصميم احترافي جديد
+           ========================================================== */
         .filter-toolbar-box {
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
-            gap: 12px;
+            gap: 14px;
             margin-bottom: 18px;
-            background: linear-gradient(165deg, rgba(24,30,48,0.85), rgba(11,15,26,0.94));
+            background:
+                radial-gradient(500px circle at 100% 0%, rgba(255,179,0,0.06), transparent 55%),
+                linear-gradient(165deg, rgba(24,30,48,0.9), rgba(11,15,26,0.95));
             padding: 14px 18px;
-            border-radius: 18px;
+            border-radius: 20px;
             border: 1px solid var(--nx-line-strong);
-            backdrop-filter: blur(16px);
+            backdrop-filter: blur(18px);
+            box-shadow:
+                0 15px 40px rgba(0,0,0,0.4),
+                inset 0 1px 0 rgba(255,255,255,0.04);
+        }
+
+        .filters-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            order: 1;
+        }
+
+        .btn-add-subject {
+            padding: 12px 20px;
+            font-size: 13px;
+            border-radius: 14px !important;
+            box-shadow:
+                0 10px 24px rgba(16,185,129,0.28),
+                inset 0 1px 0 rgba(255,255,255,0.15) !important;
+            transition: all 0.3s cubic-bezier(.2,.8,.2,1) !important;
+            order: 2;
+        }
+        .btn-add-subject:hover {
+            transform: translateY(-2px) !important;
+            box-shadow:
+                0 14px 32px rgba(16,185,129,0.45),
+                inset 0 1px 0 rgba(255,255,255,0.25) !important;
         }
 
         .committee-filters {
@@ -945,37 +972,112 @@
         }
         .committee-filters::-webkit-scrollbar { display: none; }
 
+        .dept-filters {
+            position: relative;
+            padding-right: 14px;
+        }
+        .dept-filters::before {
+            content: "";
+            position: absolute;
+            right: 0;
+            top: 20%;
+            bottom: 20%;
+            width: 1px;
+            background: linear-gradient(180deg, transparent, var(--nx-line-strong), transparent);
+        }
+
         .com-btn {
+            position: relative;
             appearance: none;
-            background: rgba(13,17,23,0.9) !important;
-            border: 1px solid var(--nx-line-strong) !important;
+            background: linear-gradient(145deg, rgba(20, 26, 40, 0.95), rgba(11, 15, 26, 0.98)) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
             color: #9aa2b5 !important;
-            padding: 8px 15px !important;
-            border-radius: 11px !important;
+            padding: 9px 18px !important;
+            border-radius: 12px !important;
             font-size: 12.5px !important;
             font-weight: 800 !important;
             font-family: 'Cairo', sans-serif !important;
             cursor: pointer;
-            transition: all 0.25s ease;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             white-space: nowrap;
             flex-shrink: 0;
             outline: none;
+            letter-spacing: 0.2px;
+            overflow: hidden;
+            line-height: 1;
         }
+
+        .com-btn::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(255, 179, 0, 0.15), transparent 60%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            border-radius: inherit;
+            pointer-events: none;
+        }
+
         .com-btn:hover {
-            background: rgba(255,179,0,0.08) !important;
-            border-color: var(--nx-gold) !important;
+            border-color: rgba(255, 179, 0, 0.45) !important;
             color: #fff !important;
-            transform: translateY(-1px);
+            transform: translateY(-2px);
+            box-shadow:
+                0 8px 20px rgba(0, 0, 0, 0.4),
+                0 0 0 1px rgba(255, 179, 0, 0.15);
         }
+
+        .com-btn:hover::before {
+            opacity: 1;
+        }
+
         .com-btn.active {
-            background: rgba(255,179,0,0.16) !important;
+            background: linear-gradient(135deg, rgba(255, 179, 0, 0.22), rgba(255, 213, 79, 0.08)) !important;
             border-color: var(--nx-gold) !important;
             color: var(--nx-gold) !important;
-            box-shadow: 0 0 14px rgba(255,179,0,0.25) !important;
+            font-weight: 900 !important;
+            box-shadow:
+                0 0 22px rgba(255, 179, 0, 0.28),
+                0 0 0 1px rgba(255, 179, 0, 0.3),
+                inset 0 0 18px rgba(255, 179, 0, 0.08) !important;
+            transform: translateY(-1px);
+        }
+
+        .com-btn.active::after {
+            content: "";
+            position: absolute;
+            bottom: 0;
+            left: 22%;
+            right: 22%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--nx-gold), transparent);
+            border-radius: 2px;
+            box-shadow: 0 0 10px var(--nx-gold);
+        }
+
+        .sub-btn {
+            padding: 8px 15px !important;
+            font-size: 11.5px !important;
+            border-radius: 10px !important;
+            font-weight: 700 !important;
+        }
+
+        .sub-btn.active {
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.22), rgba(6, 182, 212, 0.08)) !important;
+            border-color: #a78bfa !important;
+            color: #c4b5fd !important;
+            box-shadow:
+                0 0 22px rgba(124, 58, 237, 0.28),
+                inset 0 0 18px rgba(124, 58, 237, 0.1) !important;
+        }
+
+        .sub-btn.active::after {
+            background: linear-gradient(90deg, transparent, #a78bfa, transparent) !important;
+            box-shadow: 0 0 10px #a78bfa !important;
         }
 
         /* ==========================================================
-           ✅ ADMIN SUBJECTS GRID — صورة أكبر
+           ✅ ADMIN SUBJECTS GRID
            ========================================================== */
         .sessions-header-bar {
             display: flex;
@@ -1120,26 +1222,13 @@
             border: 1px solid rgba(255,179,0,0.3);
             color: var(--nx-gold);
             font-family: 'Cairo', sans-serif;
-            font-size: 14.5px;
+            font-size: 14px;
             font-weight: 800;
             text-align: right;
             position: relative;
         }
-        .locked-subject-field i:first-child {
-            font-size: 16px;
-            flex-shrink: 0;
-        }
-        .locked-subject-field span {
-            flex: 1;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        .locked-subject-field .locked-icon {
-            color: #8b93a7;
-            font-size: 12px;
-            flex-shrink: 0;
-        }
+        .locked-subject-field i { font-size: 15px; flex-shrink: 0; }
+        .locked-subject-field span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
         /* ---------- LIVE BOX ---------- */
         .live-box {
@@ -1201,6 +1290,86 @@
             box-shadow: 0 0 12px var(--nx-gold);
             transition: width 0.2s linear;
             border-radius: 4px;
+        }
+
+        /* ==========================================================
+           ✅ STAFF TABLE — إدارة الطاقم المطورة
+           ========================================================== */
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 800;
+            white-space: nowrap;
+            font-family: 'Cairo', sans-serif;
+        }
+        .status-badge i { font-size: 6px; }
+
+        .status-active {
+            background: rgba(16,185,129,0.15);
+            color: #10B981;
+            border: 1px solid rgba(16,185,129,0.45);
+            box-shadow: 0 0 12px rgba(16,185,129,0.15);
+        }
+        .status-inactive {
+            background: rgba(239,68,68,0.12);
+            color: #f87171;
+            border: 1px solid rgba(239,68,68,0.4);
+        }
+
+        .row-inactive {
+            opacity: 0.55;
+        }
+
+        .staff-actions {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
+            padding: 4px;
+            gap: 2px;
+            box-shadow: inset 0 2px 6px rgba(0,0,0,0.3);
+        }
+
+        .staff-actions .gsc-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            background: transparent;
+            color: #8b93a7;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            padding: 0;
+        }
+
+        .staff-actions .gsc-btn-edit:hover {
+            background: rgba(255, 179, 0, 0.15);
+            color: var(--nx-gold);
+            transform: translateY(-2px);
+        }
+
+        .staff-actions .gsc-btn-pause:hover, 
+        .staff-actions .gsc-btn-activate:hover {
+            background: rgba(124, 58, 237, 0.15);
+            color: #a78bfa;
+            transform: translateY(-2px);
+        }
+
+        .staff-actions .gsc-btn-del:hover {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+            transform: translateY(-2px);
         }
 
         /* ==========================================================
@@ -1416,39 +1585,6 @@
             flex-shrink: 0;
         }
 
-        .gsc-btn {
-            width: 30px;
-            height: 30px;
-            border-radius: 9px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: 1px solid transparent;
-            cursor: pointer;
-            font-size: 11px;
-            transition: all 0.2s ease;
-            background: transparent;
-            padding: 0;
-        }
-        .gsc-btn-edit {
-            background: rgba(255,179,0,0.13);
-            color: var(--nx-gold);
-            border-color: rgba(255,179,0,0.3);
-        }
-        .gsc-btn-edit:hover {
-            background: var(--nx-gold);
-            color: #0a0e17;
-        }
-        .gsc-btn-del {
-            background: rgba(239,68,68,0.12);
-            color: #f87171;
-            border-color: rgba(239,68,68,0.3);
-        }
-        .gsc-btn-del:hover {
-            background: #EF4444;
-            color: #fff;
-        }
-
         .pass-toggle-wrap {
             position: relative;
             margin-bottom: 14px;
@@ -1560,12 +1696,18 @@
                 gap: 10px;
                 padding: 12px;
             }
-            .committee-filters { justify-content: flex-start; padding-bottom: 6px; }
-            .filter-toolbar-box .btn {
+            .filters-wrapper {
+                justify-content: flex-start;
+                overflow-x: auto;
+                padding-bottom: 4px;
+            }
+            .btn-add-subject {
                 width: 100%;
                 justify-content: center;
-                padding: 11px 14px !important;
-                font-size: 12.5px !important;
+                order: 0;
+            }
+            .dept-filters::before {
+                display: none;
             }
 
             .table-container { padding: 4px; border-radius: 16px; }
@@ -1678,7 +1820,6 @@
                 margin-top: 4px !important;
             }
 
-            /* ✅ الهيدر الموبايل */
             .mobile-header {
                 height: 56px;
                 padding: 0 14px;
@@ -1696,6 +1837,20 @@
                 height: 38px;
                 font-size: 16px;
                 left: 12px !important;
+            }
+
+            .staff-actions {
+                flex-direction: row;
+                gap: 4px;
+            }
+            .staff-actions .gsc-btn {
+                width: 30px;
+                height: 30px;
+                font-size: 11px;
+            }
+            .status-badge {
+                font-size: 10px;
+                padding: 3px 9px;
             }
         }
 
@@ -1942,19 +2097,27 @@
 
             <div id="sec-subjects" class="content-section">
                 <div class="filter-toolbar-box">
-                    <button type="button" class="btn btn-green super-only" onclick="addSubject()" style="padding: 12px 18px; font-size: 13px;">
+
+                    <div class="filters-wrapper">
+                        <div class="committee-filters" id="subject-nav-filters">
+                            <button type="button" class="com-btn active" onclick="filterSubjectsTab('all', this)">الكل</button>
+                            <button type="button" class="com-btn" onclick="filterSubjectsTab('الفرقة الأولى', this)">فرقة 1</button>
+                            <button type="button" class="com-btn" onclick="filterSubjectsTab('الفرقة الثانية', this)">فرقة 2</button>
+                            <button type="button" class="com-btn" onclick="filterSubjectsTab('الفرقة الثالثة', this)">فرقة 3</button>
+                            <button type="button" class="com-btn" onclick="filterSubjectsTab('الفرقة الرابعة', this)">فرقة 4</button>
+                        </div>
+
+                        <div class="committee-filters dept-filters" id="dept-sub-filters" style="display:none;">
+                            <button type="button" class="com-btn sub-btn active" onclick="filterSubjectsDept('all', this)">كل الأقسام</button>
+                            <button type="button" class="com-btn sub-btn" onclick="filterSubjectsDept('Software', this)">SW</button>
+                            <button type="button" class="com-btn sub-btn" onclick="filterSubjectsDept('Network', this)">NW</button>
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn btn-green super-only btn-add-subject" onclick="addSubject()">
                         <i class="fas fa-plus"></i> إضافة مادة جديدة
                     </button>
 
-                    <div class="committee-filters" id="subject-nav-filters">
-                        <button type="button" class="com-btn active" onclick="filterSubjectsTab('all', this)">الكل</button>
-                        <button type="button" class="com-btn" onclick="filterSubjectsTab('الفرقة الأولى', this)">فرقة 1</button>
-                        <button type="button" class="com-btn" onclick="filterSubjectsTab('الفرقة الثانية', this)">فرقة 2</button>
-                        <button type="button" class="com-btn" onclick="filterSubjectsTab('الفرقة الثالثة_Software', this)">فرقة 3 (SW)</button>
-                        <button type="button" class="com-btn" onclick="filterSubjectsTab('الفرقة الثالثة_Network', this)">فرقة 3 (NW)</button>
-                        <button type="button" class="com-btn" onclick="filterSubjectsTab('الفرقة الرابعة_Software', this)">فرقة 4 (SW)</button>
-                        <button type="button" class="com-btn" onclick="filterSubjectsTab('الفرقة الرابعة_Network', this)">فرقة 4 (NW)</button>
-                    </div>
                 </div>
 
                 <div class="table-container">
@@ -1993,6 +2156,7 @@
                                 <th>اسم الدخول</th>
                                 <th>المواد المسموحة</th>
                                 <th>الصفة</th>
+                                <th>الحالة</th>
                                 <th>إجراء</th>
                             </tr>
                         </thead>

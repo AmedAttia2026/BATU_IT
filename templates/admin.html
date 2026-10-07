@@ -411,22 +411,30 @@
         .sidebar .logo {
             text-align: center;
             font-family: 'Plus Jakarta Sans', sans-serif;
-            font-size: 19px;
+            font-size: 22px;
             font-weight: 900;
             color: #fff;
-            letter-spacing: 2px;
+            letter-spacing: 3px;
             margin-bottom: 26px;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 10px;
             padding: 0 20px;
+            line-height: 1;
         }
         .sidebar .logo i {
             color: var(--nx-gold);
             font-size: 22px;
             filter: drop-shadow(0 0 14px rgba(255,179,0,0.7));
             animation: nxPulseIcon 3s ease-in-out infinite;
+        }
+        .sidebar .logo span {
+            background: linear-gradient(120deg, #fff 40%, var(--nx-gold) 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            letter-spacing: 3px;
         }
         @keyframes nxPulseIcon {
             0%,100% { filter: drop-shadow(0 0 10px rgba(255,179,0,0.5)); }
@@ -510,33 +518,59 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
-        /* ---------- MOBILE HEADER ---------- */
+        /* ==========================================================
+           ✅ MOBILE HEADER — BATU في المنتصف (زي الطالب)
+           ========================================================== */
         .mobile-header {
             display: none;
             background: rgba(20,26,40,0.85);
             backdrop-filter: blur(18px);
-            padding: 14px 18px;
+            -webkit-backdrop-filter: blur(18px);
+            padding: 0 18px;
+            height: 62px;
             border-radius: 16px;
             margin-bottom: 18px;
             border: 1px solid var(--nx-line-strong);
             justify-content: space-between;
             align-items: center;
+            position: relative;
         }
+
         .mobile-header .logo {
             font-family: 'Plus Jakarta Sans', sans-serif;
-            font-size: 17px;
+            font-size: 20px;
             font-weight: 900;
             color: #fff;
             display: flex;
             align-items: center;
-            gap: 8px;
-            letter-spacing: 1.5px;
+            justify-content: center;
+            gap: 10px;
+            letter-spacing: 3px;
+            line-height: 1 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            height: 100%;
+            flex: 1;
+            text-align: center;
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+        .mobile-header .logo span {
+            background: linear-gradient(120deg, #fff 40%, var(--nx-gold) 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            letter-spacing: 3px;
         }
         .mobile-header .logo i {
             color: var(--nx-gold);
-            font-size: 18px;
-            filter: drop-shadow(0 0 12px rgba(255,179,0,0.6));
+            font-size: 20px;
+            filter: drop-shadow(0 0 14px rgba(255,179,0,0.7));
+            animation: nxPulseIcon 3s ease-in-out infinite;
+            line-height: 1;
         }
+
         .menu-toggle {
             background: rgba(255,179,0,0.1);
             border: 1px solid rgba(255,179,0,0.35);
@@ -550,6 +584,9 @@
             align-items: center;
             justify-content: center;
             transition: all .25s ease;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 2;
         }
         .menu-toggle:hover {
             background: var(--nx-gold);
@@ -558,7 +595,7 @@
         }
 
         /* ==========================================================
-           ✅ WELCOME BANNER — بتصميم فخم
+           WELCOME BANNER
            ========================================================== */
         .welcome-container {
             position: relative;
@@ -1627,6 +1664,23 @@
                 padding: 4px 10px;
                 margin-top: 4px !important;
             }
+
+            .mobile-header {
+                height: 56px;
+                padding: 0 14px;
+            }
+            .mobile-header .logo {
+                font-size: 18px;
+                letter-spacing: 2.5px;
+            }
+            .mobile-header .logo i {
+                font-size: 18px;
+            }
+            .menu-toggle {
+                width: 38px;
+                height: 38px;
+                font-size: 16px;
+            }
         }
 
         /* Very small phones */
@@ -1675,6 +1729,18 @@
                 font-size: 10.5px !important;
                 padding: 3px 8px;
             }
+
+            .mobile-header {
+                height: 54px;
+                padding: 0 12px;
+            }
+            .mobile-header .logo {
+                font-size: 17px;
+                letter-spacing: 2px;
+            }
+            .mobile-header .logo i {
+                font-size: 17px;
+            }
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -1696,7 +1762,6 @@
 
     <div class="nx-particles" id="nx-particles" aria-hidden="true"></div>
 
-    <!-- ✅ شاشة التحميل — BATU -->
     <div id="loading-screen">
         <div class="nx-load-logo">
             <div class="nx-load-ring"></div>
@@ -1706,7 +1771,6 @@
         <h3>Loading</h3>
     </div>
 
-    <!-- ✅ شاشة الدخول — BATU -->
     <div id="login-screen">
         <div class="login-card">
             <div class="nx-logo-wrap">
@@ -1736,7 +1800,7 @@
         <aside class="sidebar">
             <div class="logo">
                 <i class="fas fa-crown"></i>
-                <span>Nexus Core</span>
+                <span>BATU</span>
             </div>
             <ul class="nav-links">
                 <li id="tab-sessions-btn" class="active" onclick="switchTab('sessions', this)">
@@ -1767,7 +1831,7 @@
             <div class="mobile-header">
                 <div class="logo">
                     <i class="fas fa-crown"></i>
-                    <span>Nexus Core</span>
+                    <span>BATU</span>
                 </div>
                 <button type="button" class="menu-toggle" onclick="toggleSidebar()">
                     <i class="fas fa-bars"></i>

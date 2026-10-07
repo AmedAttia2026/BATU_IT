@@ -557,21 +557,23 @@
             transform: scale(1.05);
         }
 
-        /* ---------- WELCOME BANNER ---------- */
+        /* ==========================================================
+           ✅ WELCOME BANNER — بتصميم فخم
+           ========================================================== */
         .welcome-container {
             position: relative;
             display: flex;
             justify-content: space-between;
             align-items: center;
             gap: 16px;
-            padding: 22px 26px;
+            padding: 20px 24px;
             margin-bottom: 24px;
             border-radius: 22px;
             overflow: hidden;
             background:
-                radial-gradient(700px circle at 100% 0%, rgba(255,179,0,0.12), transparent 55%),
-                radial-gradient(600px circle at 0% 100%, rgba(124,58,237,0.10), transparent 55%),
-                linear-gradient(165deg, rgba(28,35,54,0.9), rgba(11,15,26,0.96));
+                radial-gradient(700px circle at 100% 0%, rgba(255,179,0,0.14), transparent 55%),
+                radial-gradient(600px circle at 0% 100%, rgba(124,58,237,0.12), transparent 55%),
+                linear-gradient(165deg, rgba(28,35,54,0.92), rgba(11,15,26,0.97));
             backdrop-filter: blur(20px) saturate(150%);
             border: 1px solid var(--nx-line-strong);
             box-shadow:
@@ -597,16 +599,135 @@
             100% { background-position:  200% 0; }
         }
 
-        #welcome-text {
-            font-family: 'Cairo', sans-serif !important;
-            font-size: 19px !important;
-            font-weight: 900 !important;
-            color: #fff;
+        .welcome-left {
             display: flex;
             align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin: 0;
+            gap: 16px;
+            flex: 1;
+            min-width: 0;
+            position: relative;
+            z-index: 2;
+        }
+
+        .welcome-icon-wrap {
+            position: relative;
+            width: 58px;
+            height: 58px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, rgba(255,179,0,0.18), rgba(124,58,237,0.15));
+            border: 1px solid rgba(255,179,0,0.35);
+            box-shadow:
+                0 0 24px rgba(255,179,0,0.2),
+                inset 0 0 18px rgba(255,179,0,0.08);
+            flex-shrink: 0;
+        }
+        .welcome-icon-wrap i {
+            font-size: 24px;
+            color: var(--nx-gold);
+            filter: drop-shadow(0 0 10px rgba(255,179,0,0.6));
+            animation: nxCrownPulse 3s ease-in-out infinite;
+        }
+        @keyframes nxCrownPulse {
+            0%,100% { transform: scale(1); filter: drop-shadow(0 0 10px rgba(255,179,0,0.5)); }
+            50%     { transform: scale(1.08); filter: drop-shadow(0 0 18px rgba(255,179,0,0.9)); }
+        }
+
+        .welcome-icon-wrap.role-super {
+            background: linear-gradient(135deg, rgba(255,179,0,0.22), rgba(255,213,79,0.14));
+            border-color: rgba(255,179,0,0.45);
+        }
+        .welcome-icon-wrap.role-doctor {
+            background: linear-gradient(135deg, rgba(16,185,129,0.2), rgba(6,182,212,0.14));
+            border-color: rgba(16,185,129,0.45);
+        }
+        .welcome-icon-wrap.role-doctor i {
+            color: #10B981;
+            filter: drop-shadow(0 0 10px rgba(16,185,129,0.6));
+        }
+        .welcome-icon-wrap.role-ta {
+            background: linear-gradient(135deg, rgba(59,130,246,0.2), rgba(124,58,237,0.14));
+            border-color: rgba(59,130,246,0.45);
+        }
+        .welcome-icon-wrap.role-ta i {
+            color: #3B82F6;
+            filter: drop-shadow(0 0 10px rgba(59,130,246,0.6));
+        }
+
+        .welcome-text-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            min-width: 0;
+            flex: 1;
+        }
+
+        .welcome-greet {
+            font-family: 'Cairo', sans-serif;
+            font-size: 12.5px;
+            font-weight: 700;
+            color: #8b93a7;
+            letter-spacing: 0.3px;
+        }
+
+        #welcome-name {
+            font-family: 'Cairo', sans-serif;
+            font-size: 21px;
+            font-weight: 900;
+            background: linear-gradient(120deg, #ffffff 20%, #ffd76a 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            line-height: 1.2;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* ✅ شارة الدور — في مربع جميل */
+        .welcome-role-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 8px 16px;
+            border-radius: 14px;
+            font-family: 'Cairo', sans-serif;
+            font-size: 12.5px;
+            font-weight: 800;
+            letter-spacing: 0.3px;
+            white-space: nowrap;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 2;
+            transition: all .3s ease;
+        }
+        .welcome-role-badge i { font-size: 13px; }
+
+        .welcome-role-badge.role-super {
+            background: linear-gradient(135deg, rgba(255,179,0,0.16), rgba(255,213,79,0.1));
+            color: var(--nx-gold);
+            border: 1px solid rgba(255,179,0,0.4);
+            box-shadow:
+                0 0 20px rgba(255,179,0,0.18),
+                inset 0 1px 0 rgba(255,255,255,0.08);
+        }
+        .welcome-role-badge.role-doctor {
+            background: linear-gradient(135deg, rgba(16,185,129,0.16), rgba(6,182,212,0.1));
+            color: #10B981;
+            border: 1px solid rgba(16,185,129,0.4);
+            box-shadow:
+                0 0 20px rgba(16,185,129,0.18),
+                inset 0 1px 0 rgba(255,255,255,0.08);
+        }
+        .welcome-role-badge.role-ta {
+            background: linear-gradient(135deg, rgba(59,130,246,0.16), rgba(124,58,237,0.1));
+            color: #3B82F6;
+            border: 1px solid rgba(59,130,246,0.4);
+            box-shadow:
+                0 0 20px rgba(59,130,246,0.18),
+                inset 0 1px 0 rgba(255,255,255,0.08);
         }
 
         /* ---------- TABLES ---------- */
@@ -805,7 +926,7 @@
         }
 
         /* ==========================================================
-           ✅ ADMIN SUBJECTS GRID — صورة أكبر
+           ✅ ADMIN SUBJECTS GRID
            ========================================================== */
         .sessions-header-bar {
             display: flex;
@@ -871,7 +992,6 @@
             box-shadow: 0 0 24px var(--nx-gold), 0 0 55px rgba(255,179,0,0.6);
         }
 
-        /* ✅ الصورة — أكبر */
         .admin-subject-card img {
             width: 180px !important;
             height: 180px !important;
@@ -937,6 +1057,39 @@
         .badge-live,
         .badge-empty {
             display: none !important;
+        }
+
+        /* ---------- LOCKED SUBJECT FIELD (في modal الجلسة) ---------- */
+        .locked-subject-field {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 18px;
+            margin-bottom: 14px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, rgba(255,179,0,0.08), rgba(124,58,237,0.05));
+            border: 1px solid rgba(255,179,0,0.3);
+            color: var(--nx-gold);
+            font-family: 'Cairo', sans-serif;
+            font-size: 14.5px;
+            font-weight: 800;
+            text-align: right;
+            position: relative;
+        }
+        .locked-subject-field i:first-child {
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+        .locked-subject-field span {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .locked-subject-field .locked-icon {
+            color: #8b93a7;
+            font-size: 12px;
+            flex-shrink: 0;
         }
 
         /* ---------- LIVE BOX ---------- */
@@ -1332,20 +1485,26 @@
         @media (max-width: 768px) {
             .main-content { padding: 14px 12px 40px; }
 
+            /* البانر */
             .welcome-container {
-                flex-direction: column;
-                align-items: stretch;
                 padding: 16px 18px;
-                gap: 10px;
-                border-radius: 18px;
-                text-align: center;
+                gap: 12px;
             }
-            #welcome-text {
-                font-size: 15px !important;
-                text-align: center;
-                justify-content: center;
-                flex-wrap: wrap;
+            .welcome-icon-wrap {
+                width: 50px;
+                height: 50px;
+                border-radius: 14px;
             }
+            .welcome-icon-wrap i { font-size: 20px; }
+            .welcome-greet { font-size: 11px; }
+            #welcome-name { font-size: 17px; }
+            .welcome-role-badge {
+                padding: 6px 12px;
+                font-size: 11px;
+                gap: 5px;
+                border-radius: 11px;
+            }
+            .welcome-role-badge i { font-size: 11px; }
 
             .filter-toolbar-box {
                 flex-direction: column;
@@ -1445,14 +1604,7 @@
             .sessions-header-bar { gap: 10px; }
             .sessions-header-bar h2 { font-size: 14px !important; }
             .sessions-header-bar p { font-size: 11px !important; }
-            .sessions-header-bar .btn {
-                width: 100%;
-                justify-content: center;
-                padding: 11px 14px !important;
-                font-size: 12.5px !important;
-            }
 
-            /* ✅ كروت المواد على الموبايل — صورة أكبر */
             .admin-subjects-grid {
                 grid-template-columns: repeat(2, 1fr) !important;
                 gap: 12px !important;
@@ -1481,7 +1633,18 @@
 
         /* Very small phones */
         @media (max-width: 480px) {
-            #welcome-text { font-size: 14px !important; }
+            .welcome-icon-wrap {
+                width: 44px;
+                height: 44px;
+                border-radius: 12px;
+            }
+            .welcome-icon-wrap i { font-size: 18px; }
+            #welcome-name { font-size: 15px; }
+            .welcome-role-badge {
+                padding: 5px 10px;
+                font-size: 10px;
+            }
+
             .code-display { font-size: 30px; letter-spacing: 5px; }
             table { min-width: 580px; }
             table th { padding: 10px 8px; font-size: 11px; }
@@ -1611,8 +1774,21 @@
                 </button>
             </div>
 
+            <!-- ✅ البانر الفخم -->
             <div class="welcome-container">
-                <h2 id="welcome-text">مرحباً..</h2>
+                <div class="welcome-left">
+                    <div class="welcome-icon-wrap role-super" id="welcome-icon">
+                        <i class="fas fa-crown"></i>
+                    </div>
+                    <div class="welcome-text-wrap">
+                        <span class="welcome-greet">مرحباً بك 👋</span>
+                        <span id="welcome-name">...</span>
+                    </div>
+                </div>
+                <div class="welcome-role-badge role-super" id="welcome-role-badge">
+                    <i class="fas fa-shield-halved"></i>
+                    <span>الآدمن الرئيسي</span>
+                </div>
             </div>
 
             <div id="sec-sessions" class="content-section active">
@@ -1626,9 +1802,7 @@
                             </h2>
                             <p style="font-size:12px; color:var(--text-muted); margin:0;">اضغط على أي مادة لعرض الجلسات وإدارة البث</p>
                         </div>
-                        <button class="btn btn-gold" onclick="createSessionModal()" style="padding: 12px 20px; font-size: 13px;">
-                            <i class="fas fa-plus"></i> فتح جلسة جديدة
-                        </button>
+                        <!-- ✅ زر "فتح جلسة جديدة" اتحذف من هنا -->
                     </div>
 
                     <div id="admin-subjects-grid" class="admin-subjects-grid"></div>

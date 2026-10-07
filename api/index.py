@@ -31,7 +31,7 @@ limiter = Limiter(
     storage_uri="memory://"
 )
 
-# ----------------- الاتصال بقاعدة بيانات MongoDB Atlas الجديدة -----------------
+# ----------------- الاتصال بقاعدة بيانات MongoDB Atlas -----------------
 username = urllib.parse.quote_plus('ahmedattia20041120_db_user')
 password = urllib.parse.quote_plus('wjXYBO8Pbj5GijfS')
 DEFAULT_MONGO_URI = f"mongodb+srv://{username}:{password}@cluster0.yimrrnh.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
@@ -54,7 +54,7 @@ try:
 except Exception:
     pass
 
-# تثبيت حساب الآدمن الرئيسي وتحديثه في قاعدة البيانات الجديدة
+# تثبيت حساب الآدمن الرئيسي
 users_col.update_one(
     {"username": "Nexus_Admin_Core#2026"},
     {"$set": {
@@ -68,7 +68,11 @@ users_col.update_one(
 
 SECRET_SALT = b"NEXUS_ATTENDANCE_CORE_SECRET_2026_PROD"
 BASE32_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-STEP_INTERVAL = 15  # كود الحضور يتغير كل 15 ثانية
+
+# ✅ التعديل: الفاصل الزمني = 10 ثواني
+STEP_INTERVAL = 10  # كود الحضور يتغير كل 10 ثواني
+GRACE_PERIOD = 2.0  # مهلة إضافية 2 ثانية للكود القديم (الإجمالي 12 ثانية)
+
 
 def get_step_code(step: int, session_id: str) -> str:
     key = SECRET_SALT + session_id.encode('utf-8')
@@ -80,10 +84,32 @@ def get_step_code(step: int, session_id: str) -> str:
         num //= len(BASE32_CHARS)
     return code
 
+
+# منطق تحقق صارم — الكود الحالي فقط + مهلة 2 ثانية للقديم
 def verify_totp(user_code: str, session_id: str) -> bool:
     clean = user_code.strip().upper()
-    current_step = int(time.time() // STEP_INTERVAL)
-    return any(clean == get_step_code(s, session_id) for s in [current_step, current_step - 1])
+    if not clean or len(clean) != 6:
+        return False
+
+    now = time.time()
+    current_step = int(now // STEP_INTERVAL)
+
+    # الكود الحالي مقبول دائماً
+    current_code = get_step_code(current_step, session_id)
+    if clean == current_code:
+        return True
+
+    # الكود القديم (السابق) مقبول فقط خلال أول 2 ثانية من الـ step الحالي
+    # ده بيخلي عمر الكود الأقصى = 10 + 2 = 12 ثانية
+    elapsed_in_current_step = now - (current_step * STEP_INTERVAL)
+    if elapsed_in_current_step < GRACE_PERIOD:
+        previous_code = get_step_code(current_step - 1, session_id)
+        if clean == previous_code:
+            return True
+
+    # ممنوع تماماً أي كود أقدم من كده
+    return False
+
 
 @app.after_request
 def set_security_headers(response):
@@ -300,7 +326,7 @@ def get_live_code():
     session_id = request.args.get('session_id', '')
     now = time.time()
     step = int(now // STEP_INTERVAL)
-    remaining = STEP_INTERVAL - (int(now) % STEP_INTERVAL)
+    remaining = STEP_INTERVAL - (now - (step * STEP_INTERVAL))
     code = get_step_code(step, session_id)
     return jsonify({"code": code, "remaining": remaining, "interval": STEP_INTERVAL})
 
@@ -323,7 +349,7 @@ def admin_action():
     elif action == 'create_session':
         s_data = data.get('session', {})
         sub_id = str(s_data.get('subject_id', ''))
-        
+
         if role != 'super_admin' and sub_id not in curr_user.get('allowed_subjects', []):
             return jsonify({"status": "error", "message": "غير مصرح لك بفتح جلسة في هذه المادة!"}), 403
 
@@ -467,7 +493,7 @@ def admin_action():
 
     return jsonify({"status": "success"})
 
-# ----------------- تصدير إكسل بترميز سليم -----------------
+# ----------------- تصدير إكسل -----------------
 @app.route('/api/export-attendance-csv')
 def export_attendance_csv():
     if 'admin' not in session:
@@ -508,7 +534,7 @@ def export_attendance_csv():
         ])
 
     csv_data = output.getvalue()
-    
+
     safe_ascii_name = f"Attendance_{int(time.time())}.csv"
     encoded_utf8_name = urllib.parse.quote(f"{raw_filename}_{int(time.time())}.csv")
     disposition_header = f"attachment; filename=\"{safe_ascii_name}\"; filename*=UTF-8''{encoded_utf8_name}"

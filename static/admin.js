@@ -6,30 +6,108 @@ let liveCodeInterval = null;
 let activeSubjectsFilter = 'all';
 let currentInspectedSessionId = null;
 let currentSessionRecords = [];
+let currentSessionsFilter = null;
 
-function toggleSidebar() {
-    const sidebar = document.querySelector('.sidebar');
-    const overlay = document.getElementById('mobile-overlay');
-    sidebar.classList.toggle('open');
-    overlay.style.display = sidebar.classList.contains('open') ? 'block' : 'none';
+/* =========================================================
+   🖥️ شاشات التحكم
+   ========================================================= */
+function showLoading() {
+    document.getElementById('loading-screen').style.display = 'flex';
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('main-app').style.display = 'none';
+}
+function showLoginScreen() {
+    document.getElementById('loading-screen').style.display = 'none';
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('main-app').style.display = 'none';
+}
+function showMainApp() {
+    document.getElementById('loading-screen').style.display = 'none';
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('main-app').style.display = 'flex';
 }
 
-function toggleAdminPasswordVisibility() {
+/* =========================================================
+   🔑 AUTO-LOGIN
+   ========================================================= */
+const ADMIN_STORAGE_KEY = 'nx_admin_auth';
+
+function saveAdminCredentials(username, password) {
+    try {
+        localStorage.setItem(ADMIN_STORAGE_KEY, JSON.stringify({
+            username, password, savedAt: Date.now()
+        }));
+    } catch (e) {}
+}
+
+function getSavedAdminCredentials() {
+    try {
+        const raw = localStorage.getItem(ADMIN_STORAGE_KEY);
+        if (!raw) return null;
+        const data = JSON.parse(raw);
+        if (!data || !data.username || !data.password) return null;
+        return data;
+    } catch (e) { return null; }
+}
+
+function clearAdminCredentials() {
+    try { localStorage.removeItem(ADMIN_STORAGE_KEY); } catch (e) {}
+}
+
+window.onload = async () => {
     const passInput = document.getElementById('pass');
-    const icon = document.getElementById('toggle-admin-pass-icon');
-    if (passInput.type === 'password') {
-        passInput.type = 'text';
-        icon.classList.remove('fa-eye');
-        icon.classList.add('fa-eye-slash');
-        icon.style.color = 'var(--gold)';
-    } else {
-        passInput.type = 'password';
-        icon.classList.remove('fa-eye-slash');
-        icon.classList.add('fa-eye');
-        icon.style.color = 'var(--text-muted)';
+    if (passInput) {
+        passInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleLogin();
+        });
     }
+
+    showLoading();
+    const loggedIn = await tryAutoLogin();
+    if (!loggedIn) showLoginScreen();
+};
+
+async function tryAutoLogin() {
+    try {
+        const res = await fetch('/api/admin-data', { credentials: 'same-origin' });
+        const data = await res.json();
+        if (data.status === 'success') {
+            allData = data;
+            showMainApp();
+            applyAdminData(data);
+            return true;
+        }
+    } catch (e) {}
+
+    const saved = getSavedAdminCredentials();
+    if (!saved) return false;
+
+    try {
+        const res = await fetch('/api/admin-login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ username: saved.username, password: saved.password })
+        });
+        const data = await res.json();
+        if (res.ok && data.status === 'success') {
+            enterAdminDashboard();
+            return true;
+        } else {
+            clearAdminCredentials();
+            return false;
+        }
+    } catch (e) { return false; }
 }
 
+function enterAdminDashboard() {
+    showMainApp();
+    loadAdminData();
+}
+
+/* =========================================================
+   تسجيل الدخول اليدوي
+   ========================================================= */
 async function handleLogin() {
     const u = document.getElementById('user').value.trim();
     const p = document.getElementById('pass').value.trim();
@@ -39,9 +117,7 @@ async function handleLogin() {
     }
 
     Swal.fire({
-        title: 'جاري التحقق...',
-        background: '#161b26',
-        color: '#fff',
+        title: 'جاري التحقق...', background: '#161b26', color: '#fff',
         didOpen: () => Swal.showLoading()
     });
 
@@ -49,15 +125,15 @@ async function handleLogin() {
         const res = await fetch('/api/admin-login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ username: u, password: p })
         });
         const data = await res.json();
         Swal.close();
 
         if (res.ok && data.status === 'success') {
-            document.getElementById('login-screen').style.display = 'none';
-            document.getElementById('main-app').style.display = 'flex';
-            loadAdminData();
+            saveAdminCredentials(u, p);
+            enterAdminDashboard();
         } else {
             Swal.fire({ ...swalDark, icon: 'error', title: 'خطأ', text: data.message || 'بيانات الدخول غير صحيحة!' });
         }
@@ -67,41 +143,47 @@ async function handleLogin() {
     }
 }
 
-window.onload = () => {
-    const passInput = document.getElementById('pass');
-    if (passInput) {
-        passInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') handleLogin();
-        });
-    }
-
-    fetch('/api/admin-data')
-        .then(r => r.json())
-        .then(d => {
-            if (d.status === 'success') {
-                document.getElementById('login-screen').style.display = 'none';
-                document.getElementById('main-app').style.display = 'flex';
-                allData = d;
-                applyAdminData(d);
-            }
-        }).catch(() => {});
-};
-
 async function loadAdminData() {
-    const res = await fetch('/api/admin-data');
-    const data = await res.json();
-    if (data.status === 'unauthorized') return location.reload();
-    allData = data;
-    applyAdminData(data);
+    try {
+        const res = await fetch('/api/admin-data', { credentials: 'same-origin' });
+        const data = await res.json();
+        if (data.status === 'unauthorized') {
+            clearAdminCredentials();
+            return location.reload();
+        }
+        allData = data;
+        applyAdminData(data);
+    } catch (e) {}
 }
 
-function applyAdminData(data) {
-    let roleBadge = '';
-    if(data.currentAdmin.role === 'super_admin') roleBadge = '<span style="color:var(--gold); font-size:12px; background:#000; padding:2px 8px; border-radius:10px;">الآدمن الرئيسي</span>';
-    else if(data.currentAdmin.role === 'doctor') roleBadge = '<span style="color:#10B981; font-size:12px; background:#000; padding:2px 8px; border-radius:10px;">دكتور مادة</span>';
-    else roleBadge = '<span style="color:#3B82F6; font-size:12px; background:#000; padding:2px 8px; border-radius:10px;">معيد</span>';
+function adminLogout() {
+    clearAdminCredentials();
+    window.location.href = '/logout-gateway-vip-x9v2-pL7q-2026';
+}
 
-    document.getElementById('welcome-text').innerHTML = `مرحباً، ${data.currentAdmin.name} ${roleBadge}`;
+/* =========================================================
+   تطبيق البيانات
+   ========================================================= */
+function applyAdminData(data) {
+    const adminName = (data.currentAdmin.name || '').trim();
+    const roleMap = {
+        super_admin: 'الآدمن الرئيسي',
+        doctor: 'دكتور مادة',
+        ta: 'معيد'
+    };
+    const roleName = roleMap[data.currentAdmin.role] || '';
+
+    // ✅ لو الاسم نفس الدور، ما نظهرش الشارة (لتجنب التكرار)
+    let roleBadge = '';
+    if (adminName && adminName !== roleName && roleName) {
+        let badgeColor = 'var(--nx-gold)';
+        if (data.currentAdmin.role === 'doctor') badgeColor = '#10B981';
+        else if (data.currentAdmin.role === 'ta') badgeColor = '#3B82F6';
+
+        roleBadge = `<span style="color:${badgeColor}; font-size:12px; background:#000; padding:3px 10px; border-radius:10px; margin-right:6px;">${roleName}</span>`;
+    }
+
+    document.getElementById('welcome-text').innerHTML = `مرحباً، ${adminName} ${roleBadge}`;
 
     if (data.currentAdmin.role !== 'super_admin') {
         document.querySelectorAll('.super-only').forEach(el => el.style.display = 'none');
@@ -110,7 +192,7 @@ function applyAdminData(data) {
         document.querySelectorAll('.staff-manager-only').forEach(el => el.style.display = 'none');
     }
 
-    renderSessions(data.sessions);
+    renderSessionsView();
     renderSubjectsTable();
     renderStaff(data.staff);
 }
@@ -123,27 +205,131 @@ function switchTab(sec, el) {
     if(window.innerWidth <= 1024) toggleSidebar();
 }
 
-// ----------------- جدول الجلسات -----------------
-function renderSessions(list) {
-    document.getElementById('sessions-table-body').innerHTML = list.map(s => `
+/* =========================================================
+   🎬 شاشة الجلسات
+   ========================================================= */
+function renderSessionsView() {
+    if (currentSessionsFilter === null) {
+        renderAdminSubjectsGrid();
+    } else {
+        renderFilteredSessionsTable(currentSessionsFilter);
+    }
+}
+
+function renderAdminSubjectsGrid() {
+    const viewSubjects = document.getElementById('sessions-subjects-view');
+    const viewSessions = document.getElementById('sessions-list-view');
+    if (viewSubjects) viewSubjects.style.display = 'block';
+    if (viewSessions) viewSessions.style.display = 'none';
+
+    const grid = document.getElementById('admin-subjects-grid');
+    if (!grid) return;
+
+    if (allData.subjects.length === 0) {
+        grid.innerHTML = `
+            <div class="empty-state" style="grid-column:1/-1;">
+                <i class="fas fa-book fa-3x" style="color:var(--nx-line-strong); margin-bottom:14px;"></i>
+                <h3 style="color:#fff; font-size:15px; margin:0;">لا توجد مواد مصرح بها لك</h3>
+                <p style="color:var(--text-muted); font-size:12px; margin-top:6px;">تواصل مع الآدمن الرئيسي لإضافة مواد</p>
+            </div>`;
+        return;
+    }
+
+    grid.innerHTML = allData.subjects.map(sub => {
+        const safeName = (sub.name || '').replace(/'/g, "\\'");
+        return `
+            <div class="admin-subject-card" onclick="openSubjectSessions('${sub.id}', '${safeName}')">
+                <img src="${sub.image || 'https://cdn-icons-png.flaticon.com/512/2997/2997295.png'}" alt="${sub.name}">
+                <h3>${sub.name}</h3>
+                <p>${sub.year || ''}${sub.department ? ' · ' + sub.department : ''}</p>
+            </div>
+        `;
+    }).join('');
+}
+
+function openSubjectSessions(subId, subName) {
+    currentSessionsFilter = subId;
+    const vSubjects = document.getElementById('sessions-subjects-view');
+    const vSessions = document.getElementById('sessions-list-view');
+    if (vSubjects) vSubjects.style.display = 'none';
+    if (vSessions) vSessions.style.display = 'block';
+    document.getElementById('sessions-subject-title').innerText = subName;
+    renderFilteredSessionsTable(subId);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function backToSubjects() {
+    currentSessionsFilter = null;
+    closeLiveScreen();
+    renderAdminSubjectsGrid();
+}
+
+function renderFilteredSessionsTable(subId) {
+    const filtered = allData.sessions.filter(s => s.subject_id === subId);
+    const tbody = document.getElementById('sessions-table-body');
+    if (!tbody) return;
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = `
+            <tr><td colspan="6" style="padding:40px 20px;">
+                <div style="text-align:center;">
+                    <i class="fas fa-calendar-times fa-2x" style="color:var(--nx-line-strong); margin-bottom:12px;"></i>
+                    <h3 style="color:#fff; font-size:14px; margin:0;">لا توجد جلسات لهذه المادة</h3>
+                    <p style="color:var(--text-muted); font-size:12px; margin-top:6px;">اضغط "فتح جلسة جديدة" لإنشاء أول جلسة</p>
+                </div>
+            </td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = filtered.map(s => `
         <tr class="clickable-row" ondblclick="openSessionAttendanceModal('${s.session_id}')" title="اضغط مرتين لفتح كشف الطلاب المسجلين">
-            <td style="font-weight:bold; color:var(--gold); font-size:15px;">${s.subject_name}</td>
             <td>${s.type === 'Lecture' ? 'محاضرة' : 'سكشن'}</td>
             <td><b>${s.title}</b></td>
             <td>${s.is_open ? '<span style="color:#10B981; font-weight:bold;">مفتوح 🟢</span>' : '<span style="color:#EF4444; font-weight:bold;">مغلق 🔴</span>'}</td>
             <td style="color:#fff; font-size:13px;">${s.created_by || 'الآدمن الرئيسي'}</td>
+            <td style="color:var(--text-muted); font-size:11px;">${s.created_at || ''}</td>
             <td>
-                <div style="display:flex; justify-content:center; gap:8px; align-items:center;">
-                    <button class="btn btn-gold" style="padding:6px 14px; font-size:13px;" onclick="event.stopPropagation(); startLiveBroadcast('${s.session_id}', '${s.title}', '${s.subject_name}')"><i class="fas fa-qrcode"></i> بث الـ QR</button>
-                    <button class="btn ${s.is_open ? 'btn-red':'btn-green'}" style="padding:6px 14px; font-size:13px;" onclick="event.stopPropagation(); toggleSession('${s.session_id}', ${!s.is_open})">${s.is_open ? 'إغلاق':'فتح'}</button>
-                    <button class="btn btn-red" style="padding:6px 10px;" onclick="event.stopPropagation(); deleteSession('${s.session_id}')" title="حذف الجلسة"><i class="fas fa-trash"></i></button>
+                <div style="display:flex; justify-content:center; gap:6px; align-items:center; flex-wrap:wrap;">
+                    <button class="btn btn-gold" style="padding:6px 12px; font-size:12px;" onclick="event.stopPropagation(); startLiveBroadcast('${s.session_id}', '${s.title}', '${s.subject_name}')"><i class="fas fa-qrcode"></i> بث</button>
+                    <button class="btn ${s.is_open ? 'btn-red':'btn-green'}" style="padding:6px 12px; font-size:12px;" onclick="event.stopPropagation(); toggleSession('${s.session_id}', ${!s.is_open})">${s.is_open ? 'إغلاق':'فتح'}</button>
+                    <button class="btn btn-red" style="padding:6px 10px;" onclick="event.stopPropagation(); deleteSession('${s.session_id}')" title="حذف"><i class="fas fa-trash"></i></button>
                 </div>
             </td>
         </tr>
     `).join('');
 }
 
-// ----------------- نافذة عرض طلاب الجلسة -----------------
+function renderSessions(list) {
+    renderSessionsView();
+}
+
+/* =========================================================
+   أدوات مساعدة
+   ========================================================= */
+function toggleSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.getElementById('mobile-overlay');
+    sidebar.classList.toggle('open');
+    overlay.style.display = sidebar.classList.contains('open') ? 'block' : 'none';
+}
+
+function toggleAdminPasswordVisibility() {
+    const passInput = document.getElementById('pass');
+    const icon = document.getElementById('toggle-admin-pass-icon');
+    if (passInput.type === 'password') {
+        passInput.type = 'text';
+        icon.classList.remove('fa-eye'); icon.classList.add('fa-eye-slash');
+        icon.style.color = 'var(--gold)';
+    } else {
+        passInput.type = 'password';
+        icon.classList.remove('fa-eye-slash'); icon.classList.add('fa-eye');
+        icon.style.color = 'var(--text-muted)';
+    }
+}
+
+/* =========================================================
+   نافذة عرض طلاب الجلسة
+   ========================================================= */
 async function openSessionAttendanceModal(sessionId) {
     currentInspectedSessionId = sessionId;
     const container = document.getElementById('sess-glass-cards-container');
@@ -158,23 +344,18 @@ async function openSessionAttendanceModal(sessionId) {
         const sess = data.session || {};
         document.getElementById('sess-modal-title').innerText = `📜 ${sess.subject_name} - ${sess.title} (${sess.type === 'Lecture' ? 'محاضرة' : 'سكشن'})`;
         document.getElementById('sess-modal-count').innerText = data.records.length;
-        
-        currentSessionRecords = data.records || [];
 
+        currentSessionRecords = data.records || [];
         document.getElementById('sess-btn-add-manual').onclick = () => addManualStudentAttendanceModal(sessionId);
         document.getElementById('sess-btn-export-excel').onclick = () => location.href = `/api/export-attendance-csv?session_id=${sessionId}`;
-
         renderGlassStudentCards(currentSessionRecords, sessionId);
     }
 }
 
 function filterSessionStudents() {
     const q = document.getElementById('session-student-search').value.toLowerCase().trim();
-    if (!q) {
-        renderGlassStudentCards(currentSessionRecords, currentInspectedSessionId);
-        return;
-    }
-    const filtered = currentSessionRecords.filter(r => 
+    if (!q) { renderGlassStudentCards(currentSessionRecords, currentInspectedSessionId); return; }
+    const filtered = currentSessionRecords.filter(r =>
         (r.student_name && r.student_name.toLowerCase().includes(q)) ||
         (r.student_id && r.student_id.includes(q))
     );
@@ -185,40 +366,38 @@ function renderGlassStudentCards(records, sessionId) {
     const container = document.getElementById('sess-glass-cards-container');
     if(!records || records.length === 0) {
         container.innerHTML = `
-            <div style="text-align:center; padding:50px 20px; background:rgba(30,41,59,0.5); border-radius:18px; border:1px dashed rgba(255,255,255,0.15);">
-                <i class="fas fa-user-clock fa-3x" style="color:var(--text-muted); margin-bottom:12px;"></i>
-                <h3 style="color:#fff; font-size:16px;">لا توجد نتائج مطابقة</h3>
-                <p style="color:var(--text-muted); font-size:13px; margin-top:5px;">تأكد من كتابة الاسم أو رقم الـ ID بشكل صحيح.</p>
-            </div>
-        `;
+            <div style="text-align:center; padding:40px 20px; background:rgba(30,41,59,0.5); border-radius:16px; border:1px dashed rgba(255,255,255,0.15);">
+                <i class="fas fa-user-clock fa-2x" style="color:var(--text-muted); margin-bottom:10px;"></i>
+                <h3 style="color:#fff; font-size:14px; margin:0;">لا توجد نتائج مطابقة</h3>
+            </div>`;
         return;
     }
 
     container.innerHTML = records.map(r => {
         const isManual = r.is_manual || (r.ip && r.ip.includes("ADMIN"));
-        const entryColor = isManual ? '#f59e0b' : '#10b981';
-        const entryText = isManual ? '✍️ تسجيل يدوي (الآدمن)' : '🖥️ تسجيل تلقائي (QR)';
+        const entryClass = isManual ? 'manual-entry' : 'auto-entry';
+        const entryIcon = isManual ? '✍️' : '🖥️';
+        const entryLabel = isManual ? 'يدوي' : 'QR';
+
+        let timeShort = r.timestamp || '';
+        const m = timeShort.match(/(\d{1,2}:\d{2}):\d{2}\s*(AM|PM)/i);
+        if (m) timeShort = m[1] + ' ' + m[2];
 
         return `
-            <div class="glass-student-card ${isManual ? 'manual-entry' : 'auto-entry'}">
-                <div style="display:flex; flex-direction:column; gap:6px;">
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <span style="background:rgba(255,255,255,0.1); color:#cbd5e1; font-weight:700; font-size:13px; padding:3px 10px; border-radius:8px; font-family:monospace;">ID: ${r.student_id}</span>
-                        <span style="font-size:12px; font-weight:bold; color:${entryColor};">${entryText}</span>
-                    </div>
-                    <div style="font-size:12px; color:var(--text-muted);"><i class="far fa-clock" style="color:#10b981;"></i> ${r.timestamp}</div>
+            <div class="glass-student-card ${entryClass}">
+                <div class="gsc-main">
+                    <span class="gsc-dot"></span>
+                    <span class="gsc-name" title="${r.student_name}">${r.student_name}</span>
+                    <span class="gsc-sep">·</span>
+                    <span class="gsc-id">${r.student_id}</span>
+                    <span class="gsc-sep gsc-hide-xs">·</span>
+                    <span class="gsc-type gsc-hide-xs">${entryIcon} ${entryLabel}</span>
+                    <span class="gsc-sep">·</span>
+                    <span class="gsc-time">${timeShort}</span>
                 </div>
-
-                <div style="display:flex; align-items:center; gap:15px; flex-wrap:wrap; justify-content:flex-end;">
-                    <div style="text-align:left;">
-                        <h3 style="font-size:18px; font-weight:900; color:#fff; margin:0;">${r.student_name}</h3>
-                        <span style="font-size:12px; color:var(--text-muted);">${r.year || ''} ${r.department ? '- ' + r.department : ''}</span>
-                    </div>
-
-                    <div style="display:flex; gap:6px;">
-                        <button class="btn btn-gold" style="padding:6px 10px; font-size:12px;" onclick="editAttendanceRecordModal('${sessionId}', '${r.student_id}', '${r.student_name}')"><i class="fas fa-edit"></i> تعديل</button>
-                        <button class="btn btn-red" style="padding:6px 10px; font-size:12px;" onclick="deleteSessionAttendanceRecord('${sessionId}', '${r.student_id}')"><i class="fas fa-trash"></i></button>
-                    </div>
+                <div class="gsc-actions">
+                    <button class="gsc-btn gsc-btn-edit" onclick="event.stopPropagation(); editAttendanceRecordModal('${sessionId}', '${r.student_id}', '${r.student_name}')" title="تعديل"><i class="fas fa-edit"></i></button>
+                    <button class="gsc-btn gsc-btn-del" onclick="event.stopPropagation(); deleteSessionAttendanceRecord('${sessionId}', '${r.student_id}')" title="حذف"><i class="fas fa-trash"></i></button>
                 </div>
             </div>
         `;
@@ -231,6 +410,9 @@ function closeSessionAttendanceModal() {
     loadAdminData();
 }
 
+/* =========================================================
+   عمليات الحضور اليدوية
+   ========================================================= */
 async function addManualStudentAttendanceModal(sessionId) {
     const { value: form } = await Swal.fire({
         ...swalDark, title: 'إضافة حضور طالب يدوياً للجلسة',
@@ -248,8 +430,7 @@ async function addManualStudentAttendanceModal(sessionId) {
 
     if(form) {
         const res = await fetch('/api/admin-action', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ action: 'add_manual_attendance', session_id: sessionId, ...form })
         });
         const data = await res.json();
@@ -277,8 +458,7 @@ async function editAttendanceRecordModal(sessionId, oldId, oldName) {
 
     if(form && form.new_name && form.new_id) {
         await fetch('/api/admin-action', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ action: 'edit_attendance_record', session_id: sessionId, old_id: oldId, ...form })
         });
         openSessionAttendanceModal(sessionId);
@@ -288,14 +468,15 @@ async function editAttendanceRecordModal(sessionId, oldId, oldName) {
 async function deleteSessionAttendanceRecord(sessionId, studentId) {
     if(!confirm(`هل تريد حذف تسجيل حضور الطالب (${studentId}) من هذه الجلسة؟`)) return;
     await fetch('/api/admin-action', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ action: 'delete_attendance_record', session_id: sessionId, student_id: studentId })
     });
     openSessionAttendanceModal(sessionId);
 }
 
-// ----------------- إدارة المواد -----------------
+/* =========================================================
+   إدارة المواد
+   ========================================================= */
 function filterSubjectsTab(filterValue, btnEl) {
     activeSubjectsFilter = filterValue;
     document.querySelectorAll('#subject-nav-filters .com-btn').forEach(btn => btn.classList.remove('active'));
@@ -317,12 +498,15 @@ function renderSubjectsTable() {
         }
     }
 
+    const tbody = document.getElementById('subjects-table-body');
+    if(!tbody) return;
+
     if(filteredSubs.length === 0) {
-        document.getElementById('subjects-table-body').innerHTML = `<tr><td colspan="5" style="color:var(--text-muted); padding:30px;">لا توجد مواد مضافة في هذا القسم.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="color:var(--text-muted); padding:30px;">لا توجد مواد مضافة في هذا القسم.</td></tr>`;
         return;
     }
 
-    document.getElementById('subjects-table-body').innerHTML = filteredSubs.map(s => {
+    tbody.innerHTML = filteredSubs.map(s => {
         let deptColor = '#3B82F6';
         let bgDeptColor = 'rgba(59, 130, 246, 0.2)';
         if (s.department === 'Software') { deptColor = '#10B981'; bgDeptColor = 'rgba(16, 185, 129, 0.2)'; }
@@ -359,7 +543,7 @@ async function addSubject() {
             <select id="as-dept" class="login-input">
                 <option>عام (IT)</option><option>Software</option><option>Network</option>
             </select>
-            <p style="text-align:right; font-size:12px; color:var(--text-muted);">أيقونة / صورة المادة (من الجهاز):</p>
+            <p style="text-align:right; font-size:12px; color:var(--text-muted);">صورة المادة:</p>
             <input type="file" id="as-file" class="login-input" accept="image/*">
         `,
         preConfirm: () => {
@@ -368,7 +552,6 @@ async function addSubject() {
             const dept = document.getElementById('as-dept').value;
             const file = document.getElementById('as-file').files[0];
             if(!name) return Swal.showValidationMessage('يرجى كتابة اسم المادة!');
-            
             return new Promise(resolve => {
                 if(file) {
                     const reader = new FileReader();
@@ -382,8 +565,7 @@ async function addSubject() {
     });
     if (form) {
         await fetch('/api/admin-action', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'manage_subject', sub: 'add', subject: form })
         });
         loadAdminData();
@@ -393,14 +575,15 @@ async function addSubject() {
 async function deleteSubject(id) {
     if (!confirm("مسح هذه المادة وجميع جلساتها؟")) return;
     await fetch('/api/admin-action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'manage_subject', sub: 'delete', id: id })
     });
     loadAdminData();
 }
 
-// ----------------- البث المباشر والكود -----------------
+/* =========================================================
+   البث المباشر
+   ========================================================= */
 function startLiveBroadcast(sessId, title, subName) {
     activeLiveSession = sessId;
     document.getElementById('live-box').style.display = 'block';
@@ -417,7 +600,8 @@ function startLiveBroadcast(sessId, title, subName) {
 
 function closeLiveScreen() {
     clearInterval(liveCodeInterval);
-    document.getElementById('live-box').style.display = 'none';
+    const box = document.getElementById('live-box');
+    if (box) box.style.display = 'none';
     activeLiveSession = null;
 }
 
@@ -433,8 +617,7 @@ async function fetchLiveCode() {
 
 async function toggleSession(id, isOpen) {
     await fetch('/api/admin-action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'toggle_session', session_id: id, is_open: isOpen })
     });
     loadAdminData();
@@ -443,15 +626,19 @@ async function toggleSession(id, isOpen) {
 async function deleteSession(id) {
     if(!confirm("حذف هذه الجلسة وجميع سجلات الحضور الخاصة بها؟")) return;
     await fetch('/api/admin-action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'delete_session', session_id: id })
     });
     loadAdminData();
 }
 
 async function createSessionModal() {
-    const subOpts = allData.subjects.map(s => `<option value="${s.id}" data-name="${s.name}">${s.name}</option>`).join('');
+    let subjectsToShow = allData.subjects;
+    if (currentSessionsFilter !== null) {
+        subjectsToShow = allData.subjects.filter(s => s.id === currentSessionsFilter);
+    }
+
+    const subOpts = subjectsToShow.map(s => `<option value="${s.id}" data-name="${s.name}">${s.name}</option>`).join('');
     if(!subOpts) return Swal.fire({...swalDark, icon:'warning', text:'لا توجد مواد مصرح لك بفتح جلسة لها حالياً!'});
 
     const { value: form } = await Swal.fire({
@@ -459,7 +646,7 @@ async function createSessionModal() {
         html: `
             <select id="sw-sub" class="login-input">${subOpts}</select>
             <select id="sw-type" class="login-input"><option value="Lecture">محاضرة (Lecture)</option><option value="Section">سكشن عملي (Section)</option></select>
-            <input id="sw-title" class="login-input" placeholder="عنوان المحاضرة أو السكشن (مثال: سكشن 3)">
+            <input id="sw-title" class="login-input" placeholder="عنوان الجلسة (مثال: سكشن 3)">
         `,
         preConfirm: () => {
             const sel = document.getElementById('sw-sub');
@@ -473,17 +660,21 @@ async function createSessionModal() {
     });
     if (form) {
         await fetch('/api/admin-action', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'create_session', session: form })
         });
         loadAdminData();
     }
 }
 
-// ----------------- إدارة الطاقم -----------------
+/* =========================================================
+   إدارة الطاقم
+   ========================================================= */
 function renderStaff(list) {
-    document.getElementById('staff-table-body').innerHTML = list.map(u => {
+    const tbody = document.getElementById('staff-table-body');
+    if (!tbody) return;
+
+    tbody.innerHTML = list.map(u => {
         let allowedNames = '-';
         if (u.allowed_subjects && u.allowed_subjects.length > 0) {
             allowedNames = u.allowed_subjects.map(subId => {
@@ -491,7 +682,6 @@ function renderStaff(list) {
                 return fSub ? `<span style="background:rgba(255, 179, 0, 0.1); color:var(--gold); padding:2px 6px; border-radius:4px; font-size:11px; margin:2px; display:inline-block;">${fSub.name}</span>` : '';
             }).join('');
         }
-
         let roleStr = u.role === 'doctor' ? '<i class="fas fa-user-tie" style="color:#10B981"></i> دكتور مادة' : '<i class="fas fa-user-graduate" style="color:#3B82F6"></i> معيد';
 
         return `
@@ -500,9 +690,7 @@ function renderStaff(list) {
             <td style="font-family:monospace;">${u.username}</td>
             <td>${allowedNames}</td>
             <td>${roleStr}</td>
-            <td>
-                <button class="btn btn-red" style="padding:4px 8px; font-size:12px;" onclick="deleteStaff('${u.username}')"><i class="fas fa-trash"></i> حذف</button>
-            </td>
+            <td><button class="btn btn-red" style="padding:4px 8px; font-size:12px;" onclick="deleteStaff('${u.username}')"><i class="fas fa-trash"></i> حذف</button></td>
         </tr>
     `}).join('');
 }
@@ -511,11 +699,7 @@ function getGroupedSubjectsHTML(allowedSubjects = []) {
     let html = '<div style="background:#000; padding:12px; border-radius:10px; max-height:180px; overflow-y:auto; text-align:right;">';
     allData.subjects.forEach(s => {
         const isChecked = allowedSubjects.includes(s.id) ? 'checked' : '';
-        html += `
-            <label style="display:block; font-size:12px; margin-bottom:6px; cursor:pointer;">
-                <input type="checkbox" class="st-sub-check" value="${s.id}" ${isChecked}> ${s.name} (${s.year || ''})
-            </label>
-        `;
+        html += `<label style="display:block; font-size:12px; margin-bottom:6px; cursor:pointer;"><input type="checkbox" class="st-sub-check" value="${s.id}" ${isChecked}> ${s.name} (${s.year || ''})</label>`;
     });
     html += '</div>';
     return html;
@@ -524,12 +708,7 @@ function getGroupedSubjectsHTML(allowedSubjects = []) {
 async function addStaff() {
     let roleSelectHtml = '';
     if(allData.currentAdmin.role === 'super_admin') {
-        roleSelectHtml = `
-            <select id="st-role" class="login-input">
-                <option value="doctor">دكتور مادة</option>
-                <option value="ta" selected>معيد</option>
-            </select>
-        `;
+        roleSelectHtml = `<select id="st-role" class="login-input"><option value="doctor">دكتور مادة</option><option value="ta" selected>معيد</option></select>`;
     } else {
         roleSelectHtml = `<p style="text-align:right; color:#10B981; font-size:12px; margin-bottom:10px;"><i class="fas fa-info-circle"></i> سيتم إضافة المستخدم كـ (معيد) تحت إشرافك.</p>`;
     }
@@ -551,15 +730,13 @@ async function addStaff() {
             const password = document.getElementById('st-pass').value.trim();
             let role = 'ta';
             if(document.getElementById('st-role')) role = document.getElementById('st-role').value;
-
             if(!name || !username || !password) return Swal.showValidationMessage('يرجى ملء جميع البيانات!');
             return { name, username, password, role, allowed_subjects: selSubs };
         }
     });
     if (form) {
         const res = await fetch('/api/admin-action', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'manage_staff', sub: 'add', staff: form })
         });
         const data = await res.json();
@@ -583,10 +760,7 @@ async function assignExistingTA() {
         const member = tas.find(t => t.username === selectedUser);
         const { value: form } = await Swal.fire({
             ...swalDark, title: `تعديل صلاحيات (${member.name})`,
-            html: `
-                <p style="text-align:right; font-size:12px; color:var(--text-muted); margin-bottom:5px;">حدد المواد المسموحة له:</p>
-                ${getGroupedSubjectsHTML(member.allowed_subjects || [])}
-            `,
+            html: `<p style="text-align:right; font-size:12px; color:var(--text-muted); margin-bottom:5px;">حدد المواد المسموحة له:</p>${getGroupedSubjectsHTML(member.allowed_subjects || [])}`,
             preConfirm: () => {
                 const selSubs = Array.from(document.querySelectorAll('.st-sub-check:checked')).map(c => c.value);
                 return { name: member.name, role: member.role, allowed_subjects: selSubs };
@@ -594,8 +768,7 @@ async function assignExistingTA() {
         });
         if(form) {
             await fetch('/api/admin-action', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ action: 'manage_staff', sub: 'edit', old_username: selectedUser, staff: form })
             });
             loadAdminData();
@@ -610,19 +783,19 @@ async function changeMyPassword() {
     });
     if(pw) {
         await fetch('/api/admin-action', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'change_my_password', new_password: pw })
         });
         Swal.fire({...swalDark, icon:'success', title: 'تم تغيير كلمة المرور بنجاح!'});
+        const saved = getSavedAdminCredentials();
+        if (saved) saveAdminCredentials(saved.username, pw);
     }
 }
 
 async function deleteStaff(u) {
     if (!confirm("تأكيد حذف هذا العضو؟")) return;
     const res = await fetch('/api/admin-action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'manage_staff', sub: 'delete', username: u })
     });
     const data = await res.json();
@@ -638,8 +811,7 @@ async function wipeDatabase() {
     });
     if (pass) {
         const res = await fetch('/api/admin-action', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'wipe_all', admin_password: pass })
         });
         const data = await res.json();

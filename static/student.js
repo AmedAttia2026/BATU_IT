@@ -5,7 +5,35 @@ let allActiveSessions = [];
 let selectedSession = null;
 let html5Qr = null;
 let dashboardRefreshInterval = null;
+let qrScannerStarting = false; // منع التشغيل المزدوج
 
+/* =========================================================
+   🔒 قفل الجهاز — جهاز واحد = طالب واحد فقط
+   ========================================================= */
+const DEVICE_OWNER_ID_KEY = 'nx_device_owner_id';
+const DEVICE_OWNER_NAME_KEY = 'nx_device_owner_name';
+
+function getDeviceOwner() {
+    try {
+        return {
+            id: localStorage.getItem(DEVICE_OWNER_ID_KEY),
+            name: localStorage.getItem(DEVICE_OWNER_NAME_KEY) || ''
+        };
+    } catch (e) {
+        return { id: null, name: '' };
+    }
+}
+
+function setDeviceOwner(id, name) {
+    try {
+        localStorage.setItem(DEVICE_OWNER_ID_KEY, id);
+        localStorage.setItem(DEVICE_OWNER_NAME_KEY, name || '');
+    } catch (e) {}
+}
+
+/* =========================================================
+   🎫 Device Token
+   ========================================================= */
 function getDeviceToken() {
     let t = localStorage.getItem('nx_device_token');
     if(!t) {
@@ -46,6 +74,36 @@ async function loginStudent() {
     if(!name || name.length < 3) return Swal.fire({...swalDark, icon:'warning', text:'يرجى إدخال اسم الطالب بشكل صحيح!'});
     if(id.length !== 7 || isNaN(id)) return Swal.fire({...swalDark, icon:'warning', text:'رقم الـ ID يجب أن يتكون من 7 أرقام!'});
     if(!year) return Swal.fire({...swalDark, icon:'warning', text:'يرجى اختيار الفرقة الدراسية!'});
+
+    // 🔒 فحص قفل الجهاز
+    const owner = getDeviceOwner();
+    if (owner.id && owner.id !== id) {
+        const confirmReset = await Swal.fire({
+            ...swalDark,
+            icon: 'warning',
+            title: 'هذا الجهاز مرتبط بطالب آخر',
+            html: `
+                <div style="text-align:center; line-height:1.8;">
+                    <p style="color:#fff; margin-bottom:8px;">هذا الجهاز مسجّل باسم:</p>
+                    <p style="color:#FFB300; font-weight:900; font-size:16px; margin-bottom:12px;">${owner.name || '—'}</p>
+                    <p style="color:#9CA3AF; font-size:13px;">لا يمكن استخدام نفس الجهاز لتسجيل حضور أكثر من طالب واحد.</p>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'إعادة تعيين الجهاز',
+            cancelButtonText: 'إلغاء',
+            confirmButtonColor: '#EF4444'
+        });
+
+        if (confirmReset.isConfirmed) {
+            try {
+                localStorage.removeItem(DEVICE_OWNER_ID_KEY);
+                localStorage.removeItem(DEVICE_OWNER_NAME_KEY);
+            } catch(e) {}
+        } else {
+            return;
+        }
+    }
 
     const res = await fetch('/api/student-login', {
         method: 'POST',
@@ -89,6 +147,7 @@ function showStudentUI() {
 
 function logoutStudent() {
     stopAutoRefresh();
+    stopQrReader();
     localStorage.removeItem('nx_student_auth');
     location.reload();
 }
@@ -140,7 +199,7 @@ function renderSubjectCards() {
 }
 
 /* =========================================================
-   🔄 AUTO-REFRESH  ·  تحديث تلقائي لشارة "مفتوح جلسة الآن"
+   🔄 AUTO-REFRESH
    ========================================================= */
 function startAutoRefresh() {
     stopAutoRefresh();
@@ -197,7 +256,6 @@ async function refreshSessionStatus() {
         // silent fail
     }
 }
-/* ========================================================= */
 
 function selectSubjectForAttendance(subId, subName) {
     const filtered = allActiveSessions.filter(s => s.subject_id === subId);
@@ -228,8 +286,43 @@ function selectSubjectForAttendance(subId, subName) {
     });
 }
 
-function openVerifyModal(sessId, title, subName, type) {
+/* =========================================================
+   ✅ فتح نافذة تأكيد الحضور — مع فحص "أنت مسجل بالفعل"
+   ========================================================= */
+async function openVerifyModal(sessId, title, subName, type) {
     Swal.close();
+
+    /* فحص سريع: هل الطالب سجل في هذه الجلسة بالفعل؟ */
+    try {
+        const res = await fetch('/api/student-history', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({student_id: currentStudent.student_id})
+        });
+        const data = await res.json();
+
+        if (data.history && Array.isArray(data.history)) {
+            const already = data.history.find(h => h.session_id === sessId);
+            if (already) {
+                return Swal.fire({
+                    ...swalDark,
+                    icon: 'success',
+                    title: 'أنت مسجل بالفعل ✅',
+                    html: `
+                        <div style="text-align:center; line-height:1.8;">
+                            <p style="color:#fff; margin-bottom:6px;">لقد سجّلت حضورك في هذه الجلسة مسبقاً</p>
+                            <p style="color:#10B981; font-weight:900; font-size:14px; margin-bottom:12px;">${already.subject_name} — ${already.session_title}</p>
+                            <span style="font-size:12px; color:#9CA3AF; font-family:monospace;">
+                                <i class="far fa-clock"></i> ${already.timestamp}
+                            </span>
+                        </div>
+                    `,
+                    confirmButtonText: 'حسناً'
+                });
+            }
+        }
+    } catch (e) { /* لو الاتصال فشل، نكمل عادي */ }
+
     selectedSession = sessId;
     document.getElementById('modal-sess-title').innerText = `${title} (${type === 'Lecture' ? 'محاضرة' : 'سكشن'})`;
     document.getElementById('modal-sess-sub').innerText = subName;
@@ -237,31 +330,225 @@ function openVerifyModal(sessId, title, subName, type) {
     document.getElementById('verify-modal').style.display = 'flex';
 }
 
+/* =========================================================
+   ✅ إغلاق نافذة التأكيد
+   ========================================================= */
 function closeVerifyModal() {
-    if(html5Qr) { html5Qr.stop(); html5Qr = null; }
-    document.getElementById('reader').style.display = 'none';
-    document.getElementById('verify-modal').style.display = 'none';
+    stopQrReader();
+
+    const modalEl = document.getElementById('verify-modal');
+    if (modalEl) modalEl.style.display = 'none';
+
+    const inputEl = document.getElementById('totp-input');
+    if (inputEl) inputEl.value = '';
+
+    selectedSession = null;
 }
 
-function toggleQrReader() {
+/* =========================================================
+   📷 QR Scanner — نسخة محسّنة مع Fallback وحل المشاكل
+   ========================================================= */
+async function stopQrReader() {
     const r = document.getElementById('reader');
-    if(r.style.display === 'block') {
-        if(html5Qr) html5Qr.stop();
+    const wasVisible = r && r.style.display === 'block';
+
+    if (html5Qr) {
+        try {
+            // نوقف الكاميرا الأول
+            const state = html5Qr.getState ? html5Qr.getState() : null;
+            // 2 = SCANNING, 3 = PAUSED
+            if (state === 2 || state === 3) {
+                try {
+                    await html5Qr.stop();
+                } catch (e) { /* تجاهل */ }
+            }
+            try {
+                html5Qr.clear();
+            } catch (e) { /* تجاهل */ }
+        } catch (e) { /* تجاهل */ }
+        html5Qr = null;
+    }
+
+    if (r) {
         r.style.display = 'none';
+        r.innerHTML = '';
+    }
+    qrScannerStarting = false;
+}
+
+async function toggleQrReader() {
+    const r = document.getElementById('reader');
+    if (!r) return;
+
+    // لو شغال، نقفله
+    if (r.style.display === 'block' || html5Qr) {
+        await stopQrReader();
         return;
     }
+
+    // منع التشغيل المزدوج
+    if (qrScannerStarting) return;
+    qrScannerStarting = true;
+
     r.style.display = 'block';
-    html5Qr = new Html5Qrcode("reader");
-    html5Qr.start({ facingMode: "environment" }, { fps: 10, qrbox: 240 }, (text) => {
-        document.getElementById('totp-input').value = text.trim();
-        html5Qr.stop();
-        r.style.display = 'none';
-    }).catch(() => Swal.fire({...swalDark, icon:'error', text:'تعذر تشغيل الكاميرا'}));
+    r.innerHTML = '<div style="text-align:center; padding:20px; color:#FFB300;"><i class="fas fa-spinner fa-spin fa-2x"></i><br><br>جاري تشغيل الكاميرا...</div>';
+
+    // تأخير بسيط للسماح للمتصفح ببناء الـ DOM
+    await new Promise(resolve => setTimeout(resolve, 150));
+
+    try {
+        // تنظيف أي instance قديم
+        if (html5Qr) {
+            try { await html5Qr.stop(); } catch(e) {}
+            try { html5Qr.clear(); } catch(e) {}
+            html5Qr = null;
+        }
+
+        r.innerHTML = '';
+        html5Qr = new Html5Qrcode("reader", { verbose: false });
+
+        // إعدادات مربع المسح — متجاوب مع حجم الشاشة
+        const config = {
+            fps: 10,
+            qrbox: function(viewfinderWidth, viewfinderHeight) {
+                const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+                const size = Math.floor(minEdge * 0.75);
+                return { width: size, height: size };
+            },
+            aspectRatio: 1.0,
+            disableFlip: false
+        };
+
+        const onScanSuccess = (decodedText) => {
+            const input = document.getElementById('totp-input');
+            if (input) input.value = (decodedText || '').trim().substring(0, 6);
+            stopQrReader();
+        };
+
+        const onScanError = () => { /* تجاهل الأخطاء العادية */ };
+
+        let started = false;
+        let lastError = null;
+
+        // المحاولة 1: الكاميرا الخلفية
+        try {
+            await html5Qr.start(
+                { facingMode: "environment" },
+                config,
+                onScanSuccess,
+                onScanError
+            );
+            started = true;
+        } catch (err1) {
+            lastError = err1;
+            console.warn("Back camera failed:", err1);
+        }
+
+        // المحاولة 2: الكاميرا الأمامية (لو الخلفية فشلت)
+        if (!started) {
+            try {
+                await html5Qr.start(
+                    { facingMode: "user" },
+                    config,
+                    onScanSuccess,
+                    onScanError
+                );
+                started = true;
+            } catch (err2) {
+                lastError = err2;
+                console.warn("Front camera failed:", err2);
+            }
+        }
+
+        // المحاولة 3: أي كاميرا متاحة
+        if (!started) {
+            try {
+                const devices = await Html5Qrcode.getCameras();
+                if (devices && devices.length > 0) {
+                    await html5Qr.start(
+                        devices[0].id,
+                        config,
+                        onScanSuccess,
+                        onScanError
+                    );
+                    started = true;
+                }
+            } catch (err3) {
+                lastError = err3;
+                console.warn("Any camera failed:", err3);
+            }
+        }
+
+        if (!started) {
+            throw lastError || new Error("No camera available");
+        }
+
+        qrScannerStarting = false;
+
+    } catch (err) {
+        qrScannerStarting = false;
+        await stopQrReader();
+
+        const errStr = String(err).toLowerCase();
+        let title = 'تعذر تشغيل الكاميرا';
+        let msg = 'حدث خطأ غير متوقع، جرب مرة أخرى';
+
+        if (errStr.includes('permission') || errStr.includes('notallowed') || errStr.includes('denied')) {
+            title = 'صلاحية الكاميرا مرفوضة';
+            msg = 'يرجى السماح بالوصول للكاميرا من إعدادات المتصفح ثم إعادة المحاولة';
+        } else if (errStr.includes('notfound') || errStr.includes('no camera') || errStr.includes('devicesnotfound')) {
+            title = 'لا توجد كاميرا';
+            msg = 'هذا الجهاز لا يحتوي على كاميرا متاحة';
+        } else if (errStr.includes('notreadable') || errStr.includes('in use') || errStr.includes('trackstarterror')) {
+            title = 'الكاميرا مشغولة';
+            msg = 'الكاميرا مستخدمة من تطبيق آخر — يرجى إغلاقه ثم إعادة المحاولة';
+        } else if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+            title = 'اتصال غير آمن';
+            msg = 'تشغيل الكاميرا يحتاج اتصال HTTPS — يمكنك استخدام الرمز اليدوي';
+        } else if (errStr.includes('overconstrained')) {
+            title = 'الكاميرا غير مدعومة';
+            msg = 'إعدادات الكاميرا المطلوبة غير متوفرة';
+        }
+
+        Swal.fire({
+            ...swalDark,
+            icon: 'error',
+            title: title,
+            html: `
+                <div style="text-align:center; line-height:1.8;">
+                    <p style="color:#fff; margin-bottom:12px;">${msg}</p>
+                    <p style="font-size:12px; color:#9CA3AF;">💡 يمكنك استخدام الرمز اليدوي بدلاً من الكاميرا</p>
+                </div>
+            `,
+            confirmButtonText: 'حسناً'
+        });
+    }
 }
 
+/* =========================================================
+   ✅ إرسال الحضور — مع فحص قفل الجهاز
+   ========================================================= */
 async function submitAttendanceFinal() {
     const code = document.getElementById('totp-input').value.trim();
     if(code.length !== 6) return Swal.fire({...swalDark, icon:'warning', text:'الرمز السري يتكون من 6 خانات!'});
+
+    // 🔒 فحص قفل الجهاز
+    const owner = getDeviceOwner();
+    if (owner.id && owner.id !== currentStudent.student_id) {
+        return Swal.fire({
+            ...swalDark,
+            icon: 'error',
+            title: 'هذا الجهاز مرتبط بطالب آخر',
+            html: `
+                <div style="text-align:center; line-height:1.8;">
+                    <p style="color:#fff; margin-bottom:8px;">لا يمكن استخدام هذا الجهاز لتسجيل حضور أكثر من طالب.</p>
+                    <p style="color:#FFB300; font-weight:900; font-size:14px; margin-bottom:12px;">مسجّل باسم: ${owner.name || owner.id}</p>
+                    <p style="color:#9CA3AF; font-size:12px;">يُرجى استخدام جهازك الخاص أو التواصل مع الإدارة.</p>
+                </div>
+            `,
+            confirmButtonText: 'فهمت'
+        });
+    }
 
     Swal.fire({title: 'جاري تسجيل حضورك...', background:'#1a1f2c', color:'#fff', didOpen: () => Swal.showLoading()});
 
@@ -278,6 +565,8 @@ async function submitAttendanceFinal() {
     });
     const data = await res.json();
     if(res.ok) {
+        setDeviceOwner(currentStudent.student_id, currentStudent.name);
+
         closeVerifyModal();
         Swal.fire({...swalDark, icon:'success', title:'تم بنجاح!', text: data.message});
         if (typeof confetti === 'function') {
@@ -293,6 +582,9 @@ async function submitAttendanceFinal() {
     }
 }
 
+/* =========================================================
+   سجل الحضور
+   ========================================================= */
 async function openHistoryModal() {
     document.getElementById('history-modal').style.display = 'flex';
     const res = await fetch('/api/student-history', {

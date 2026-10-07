@@ -7,6 +7,7 @@ let activeSubjectsFilter = 'all';
 let currentInspectedSessionId = null;
 let currentSessionRecords = [];
 let currentSessionsFilter = null;
+let currentAdminRole = 'super_admin'; // ✅ دور الآدمن الحالي
 
 /* =========================================================
    🖥️ شاشات التحكم
@@ -159,9 +160,12 @@ function adminLogout() {
 }
 
 /* =========================================================
-   تطبيق البيانات — البانر بتصميم فخم
+   تطبيق البيانات
    ========================================================= */
 function applyAdminData(data) {
+    // ✅ حفظ دور الآدمن الحالي
+    currentAdminRole = data.currentAdmin.role || 'super_admin';
+
     const adminName = (data.currentAdmin.name || '').trim() || 'مرحباً';
     const roleMap = {
         super_admin: { label: 'الآدمن الرئيسي', icon: 'fa-shield-halved', cls: 'role-super' },
@@ -635,9 +639,32 @@ async function deleteSession(id) {
 }
 
 /* =========================================================
-   ✅ فتح جلسة جديدة
-   - لو داخل مادة → المادة تكون مقفولة (تظهر كنص فقط)
-   - لو بره → يختار المادة من قائمة
+   ✅ ترقيم الجلسات تلقائياً
+   - Lecture  → LEC 1, LEC 2, LEC 3 ...
+   - Section  → Sec 1, Sec 2, Sec 3 ...
+   ========================================================= */
+function generateSessionTitle(subjectId, type) {
+    const prefix = type === 'Lecture' ? 'LEC' : 'Sec';
+    const regex = new RegExp(`^${prefix}\\s+(\\d+)$`, 'i');
+    let maxNum = 0;
+
+    allData.sessions.forEach(s => {
+        if (s.subject_id === subjectId && s.type === type) {
+            const match = (s.title || '').trim().match(regex);
+            if (match) {
+                const n = parseInt(match[1], 10);
+                if (n > maxNum) maxNum = n;
+            }
+        }
+    });
+
+    return `${prefix} ${maxNum + 1}`;
+}
+
+/* =========================================================
+   ✅ فتح جلسة جديدة — مع النوع والعنوان الافتراضي حسب الدور
+   - doctor / super_admin → Lecture (LEC N)
+   - ta → Section (Sec N)
    ========================================================= */
 async function createSessionModal() {
     let subjectsToShow = allData.subjects;
@@ -651,22 +678,34 @@ async function createSessionModal() {
         return Swal.fire({...swalDark, icon:'warning', text:'لا توجد مواد مصرح لك بفتح جلسة لها حالياً!'});
     }
 
+    // ✅ النوع الافتراضي حسب دور الآدمن
+    // - معيد (ta) → سكشن
+    // - غيره (doctor / super_admin) → محاضرة
+    let defaultType = 'Lecture';
+    if (currentAdminRole === 'ta') defaultType = 'Section';
+
+    const firstSub = subjectsToShow[0];
+    const initialTitle = generateSessionTitle(firstSub.id, defaultType);
+
+    // ✅ حقل المادة
     let subjectFieldHtml = '';
     if (isInsideSubject) {
-        // ✅ المادة مقفولة — تظهر كنص فقط
-        const sub = subjectsToShow[0];
         subjectFieldHtml = `
             <div class="locked-subject-field">
                 <i class="fas fa-book"></i>
-                <span>${sub.name}</span>
+                <span>${firstSub.name}</span>
                 <i class="fas fa-lock locked-icon"></i>
             </div>
-            <input type="hidden" id="sw-sub" value="${sub.id}" data-name="${sub.name}">
+            <input type="hidden" id="sw-sub" value="${firstSub.id}" data-name="${firstSub.name}">
         `;
     } else {
         const subOpts = subjectsToShow.map(s => `<option value="${s.id}" data-name="${s.name}">${s.name}</option>`).join('');
         subjectFieldHtml = `<select id="sw-sub" class="login-input">${subOpts}</select>`;
     }
+
+    // ✅ ترتيب الـ options حسب النوع الافتراضي
+    const lectureSelected = defaultType === 'Lecture' ? 'selected' : '';
+    const sectionSelected = defaultType === 'Section' ? 'selected' : '';
 
     const { value: form } = await Swal.fire({
         ...swalDark,
@@ -674,21 +713,40 @@ async function createSessionModal() {
         html: `
             ${subjectFieldHtml}
             <select id="sw-type" class="login-input">
-                <option value="Lecture">محاضرة (Lecture)</option>
-                <option value="Section">سكشن عملي (Section)</option>
+                <option value="Lecture" ${lectureSelected}>محاضرة (Lecture)</option>
+                <option value="Section" ${sectionSelected}>سكشن عملي (Section)</option>
             </select>
-            <input id="sw-title" class="login-input" placeholder="عنوان الجلسة (مثال: سكشن 3)">
+            <input id="sw-title" class="login-input" placeholder="عنوان الجلسة" value="${initialTitle}">
         `,
+        didOpen: () => {
+            const typeSel = document.getElementById('sw-type');
+            const subSel = document.getElementById('sw-sub');
+            const titleInput = document.getElementById('sw-title');
+
+            // ✅ تحديث العنوان تلقائياً عند تغيير النوع أو المادة
+            const updateTitle = () => {
+                const subId = subSel.value;
+                const type = typeSel.value;
+                titleInput.value = generateSessionTitle(subId, type);
+            };
+
+            typeSel.addEventListener('change', updateTitle);
+            if (subSel && !isInsideSubject) {
+                subSel.addEventListener('change', updateTitle);
+            }
+        },
         preConfirm: () => {
             const sel = document.getElementById('sw-sub');
+            const title = document.getElementById('sw-title').value.trim();
             return {
                 subject_id: sel.value,
                 subject_name: sel.getAttribute('data-name'),
                 type: document.getElementById('sw-type').value,
-                title: document.getElementById('sw-title').value.trim() || 'عام'
+                title: title || 'عام'
             };
         }
     });
+
     if (form) {
         await fetch('/api/admin-action', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },

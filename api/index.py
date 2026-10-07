@@ -31,7 +31,7 @@ limiter = Limiter(
     storage_uri="memory://"
 )
 
-# ----------------- الاتصال بقاعدة بيانات MongoDB Atlas -----------------
+# ----------------- MongoDB Atlas -----------------
 username = urllib.parse.quote_plus('ahmedattia20041120_db_user')
 password = urllib.parse.quote_plus('wjXYBO8Pbj5GijfS')
 DEFAULT_MONGO_URI = f"mongodb+srv://{username}:{password}@cluster0.yimrrnh.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
@@ -61,6 +61,7 @@ users_col.update_one(
         "username": "Nexus_Admin_Core#2026",
         "role": "super_admin",
         "name": "الآدمن الرئيسي",
+        "is_active": True,
         "password": generate_password_hash("Nx!99@bATU#xK82_Secured")
     }},
     upsert=True
@@ -69,9 +70,8 @@ users_col.update_one(
 SECRET_SALT = b"NEXUS_ATTENDANCE_CORE_SECRET_2026_PROD"
 BASE32_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
-# ✅ التعديل: الفاصل الزمني = 10 ثواني
-STEP_INTERVAL = 10  # كود الحضور يتغير كل 10 ثواني
-GRACE_PERIOD = 2.0  # مهلة إضافية 2 ثانية للكود القديم (الإجمالي 12 ثانية)
+STEP_INTERVAL = 10
+GRACE_PERIOD = 2.0
 
 
 def get_step_code(step: int, session_id: str) -> str:
@@ -85,7 +85,6 @@ def get_step_code(step: int, session_id: str) -> str:
     return code
 
 
-# منطق تحقق صارم — الكود الحالي فقط + مهلة 2 ثانية للقديم
 def verify_totp(user_code: str, session_id: str) -> bool:
     clean = user_code.strip().upper()
     if not clean or len(clean) != 6:
@@ -94,20 +93,16 @@ def verify_totp(user_code: str, session_id: str) -> bool:
     now = time.time()
     current_step = int(now // STEP_INTERVAL)
 
-    # الكود الحالي مقبول دائماً
     current_code = get_step_code(current_step, session_id)
     if clean == current_code:
         return True
 
-    # الكود القديم (السابق) مقبول فقط خلال أول 2 ثانية من الـ step الحالي
-    # ده بيخلي عمر الكود الأقصى = 10 + 2 = 12 ثانية
     elapsed_in_current_step = now - (current_step * STEP_INTERVAL)
     if elapsed_in_current_step < GRACE_PERIOD:
         previous_code = get_step_code(current_step - 1, session_id)
         if clean == previous_code:
             return True
 
-    # ممنوع تماماً أي كود أقدم من كده
     return False
 
 
@@ -263,17 +258,26 @@ def admin_login():
 
     if username == 'Nexus_Admin_Core#2026' and password == 'Nx!99@bATU#xK82_Secured':
         session.permanent = True
-        session['admin'] = {"username": "Nexus_Admin_Core#2026", "name": "الآدمن الرئيسي", "role": "super_admin"}
+        session['admin'] = {
+            "username": "Nexus_Admin_Core#2026",
+            "name": "الآدمن الرئيسي",
+            "role": "super_admin",
+            "allowed_subjects": []
+        }
         return jsonify({"status": "success", "admin": session['admin']})
 
     user = users_col.find_one({"username": {"$regex": f"^{username}$", "$options": "i"}})
     if user:
+        if user.get('is_active', True) == False:
+            return jsonify({"status": "error", "message": "هذا الحساب موقوف حالياً. تواصل مع الإدارة لتنشيطه."}), 403
+
         if check_password_hash(user.get('password', ''), password) or user.get('password') == password:
             session.permanent = True
             session['admin'] = {
                 "username": user['username'],
                 "name": user.get('name', user['username']),
-                "role": user.get('role', 'doctor')
+                "role": user.get('role', 'doctor'),
+                "allowed_subjects": user.get('allowed_subjects', [])
             }
             return jsonify({"status": "success", "admin": session['admin']})
 
@@ -293,19 +297,35 @@ def get_admin_data():
         subjects = list(subjects_col.find({}, {"_id": 0}))
         sessions_list = list(sessions_col.find({}, {"_id": 0}).sort("created_at", -1))
         staff_list = list(users_col.find({"role": {"$ne": "super_admin"}}, {"_id": 0, "password": 0}))
+
     else:
         subjects = list(subjects_col.find({"id": {"$in": allowed_subs}}, {"_id": 0}))
         sessions_list = list(sessions_col.find({"subject_id": {"$in": allowed_subs}}, {"_id": 0}).sort("created_at", -1))
+
         if role == 'doctor':
-            staff_list = list(users_col.find({"role": "ta"}, {"_id": 0, "password": 0}))
-            for s in staff_list:
-                s['allowed_subjects'] = [sub for sub in s.get('allowed_subjects', []) if sub in allowed_subs]
+            all_tas = list(users_col.find({"role": "ta"}, {"_id": 0, "password": 0}))
+            filtered = []
+            for ta in all_tas:
+                ta_subs = ta.get('allowed_subjects', [])
+                has_common = any(s in allowed_subs for s in ta_subs)
+                created_by_him = (ta.get('created_by') == curr_username)
+
+                if has_common or created_by_him:
+                    ta['allowed_subjects'] = [s for s in ta_subs if s in allowed_subs]
+                    filtered.append(ta)
+            staff_list = filtered
+
         else:
             staff_list = []
 
     return jsonify({
         "status": "success",
-        "currentAdmin": session['admin'],
+        "currentAdmin": {
+            "username": session['admin']['username'],
+            "name": session['admin']['name'],
+            "role": session['admin']['role'],
+            "allowed_subjects": allowed_subs
+        },
         "subjects": subjects,
         "sessions": sessions_list,
         "staff": staff_list
@@ -443,12 +463,42 @@ def admin_action():
                 "image": str(s_obj.get('image', '')),
                 "added_by": curr['name']
             })
+        elif sub_act == 'edit':
+            sub_id = str(data.get('id', ''))
+            s_obj = data.get('subject', {})
+            target = subjects_col.find_one({"id": sub_id})
+            if not target:
+                return jsonify({"status": "error", "message": "المادة غير موجودة!"}), 404
+
+            new_name = str(s_obj.get('name', target.get('name', ''))).strip()
+            updates = {
+                "name": new_name,
+                "year": str(s_obj.get('year', target.get('year', ''))),
+                "department": str(s_obj.get('department', target.get('department', '')))
+            }
+            if s_obj.get('image'):
+                updates['image'] = str(s_obj.get('image'))
+
+            subjects_col.update_one({"id": sub_id}, {"$set": updates})
+
+            # تحديث اسم المادة في الجلسات وسجلات الحضور (في حال تغيّر الاسم)
+            if new_name and new_name != target.get('name'):
+                sessions_col.update_many(
+                    {"subject_id": sub_id},
+                    {"$set": {"subject_name": new_name}}
+                )
+                attendance_col.update_many(
+                    {"subject_id": sub_id},
+                    {"$set": {"subject_name": new_name}}
+                )
+
         elif sub_act == 'delete':
             sub_id = str(data.get('id', ''))
             subjects_col.delete_one({"id": sub_id})
             sessions_col.delete_many({"subject_id": sub_id})
             attendance_col.delete_many({"subject_id": sub_id})
 
+    # ✅ إدارة الطاقم — إضافة
     elif action == 'manage_staff':
         if role == 'ta':
             return jsonify({"status": "error", "message": "المعيد ليس له صلاحية إدارة الطاقم!"}), 403
@@ -476,12 +526,146 @@ def admin_action():
                 "password": generate_password_hash(str(staff_data.get('password', ''))),
                 "role": new_role,
                 "allowed_subjects": allowed_subs,
+                "is_active": True,
                 "created_by": curr['username']
             })
 
         elif sub_act == 'delete':
             target_username = str(data.get('username', ''))
+
+            if target_username == curr['username']:
+                return jsonify({"status": "error", "message": "لا يمكنك حذف حسابك الشخصي!"}), 403
+
+            target = users_col.find_one({"username": target_username})
+            if not target:
+                return jsonify({"status": "error", "message": "العضو غير موجود!"}), 404
+
+            if role == 'doctor':
+                if target.get('role') != 'ta':
+                    return jsonify({"status": "error", "message": "يمكنك حذف المعيدين فقط!"}), 403
+                my_subs = curr_user.get('allowed_subjects', [])
+                target_subs = target.get('allowed_subjects', [])
+                has_common = any(s in my_subs for s in target_subs)
+                created_by_him = (target.get('created_by') == curr['username'])
+                if not (has_common or created_by_him):
+                    return jsonify({"status": "error", "message": "لا يمكنك حذف هذا العضو!"}), 403
+
             users_col.delete_one({"username": target_username})
+
+        elif sub_act == 'edit':
+            target_username = str(data.get('old_username', '')).strip()
+            target = users_col.find_one({"username": target_username})
+            if not target:
+                return jsonify({"status": "error", "message": "العضو غير موجود!"}), 404
+
+            new_subs = staff_data.get('allowed_subjects', [])
+
+            if role == 'super_admin':
+                users_col.update_one(
+                    {"username": target_username},
+                    {"$set": {"allowed_subjects": new_subs}}
+                )
+            elif role == 'doctor':
+                if target.get('role') != 'ta':
+                    return jsonify({"status": "error", "message": "يمكنك تعديل المعيدين فقط!"}), 403
+                my_subs = curr_user.get('allowed_subjects', [])
+                if not all(s in my_subs for s in new_subs):
+                    return jsonify({"status": "error", "message": "يمكنك تعديل المواد التي تدرسها فقط!"}), 403
+                target_subs = target.get('allowed_subjects', [])
+                other_subs = [s for s in target_subs if s not in my_subs]
+                final_subs = list(set(other_subs + new_subs))
+                users_col.update_one(
+                    {"username": target_username},
+                    {"$set": {"allowed_subjects": final_subs}}
+                )
+            else:
+                return jsonify({"status": "error", "message": "غير مصرح"}), 403
+
+        return jsonify({"status": "success"})
+
+    elif action == 'edit_staff':
+        target_username = str(data.get('target_username', '')).strip()
+        if not target_username:
+            return jsonify({"status": "error", "message": "بيانات ناقصة"}), 400
+
+        target = users_col.find_one({"username": target_username})
+        if not target:
+            return jsonify({"status": "error", "message": "العضو غير موجود!"}), 404
+
+        if target_username == curr['username']:
+            return jsonify({"status": "error", "message": "لا يمكنك تعديل حسابك الشخصي من هنا!"}), 403
+
+        staff_data = data.get('staff', {})
+        updates = {}
+
+        if role == 'super_admin':
+            new_name = str(staff_data.get('name', target.get('name', ''))).strip()
+            new_role = str(staff_data.get('role', target.get('role', 'ta')))
+            new_subs = staff_data.get('allowed_subjects', target.get('allowed_subjects', []))
+
+            if new_name:
+                updates['name'] = new_name
+            if new_role in ['doctor', 'ta']:
+                updates['role'] = new_role
+            updates['allowed_subjects'] = new_subs
+
+        elif role == 'doctor':
+            if target.get('role') != 'ta':
+                return jsonify({"status": "error", "message": "يمكنك تعديل المعيدين فقط!"}), 403
+
+            my_subs = curr_user.get('allowed_subjects', [])
+            target_subs = target.get('allowed_subjects', [])
+            has_common = any(s in my_subs for s in target_subs)
+            created_by_him = (target.get('created_by') == curr['username'])
+
+            if not (has_common or created_by_him):
+                return jsonify({"status": "error", "message": "لا يمكنك تعديل هذا العضو!"}), 403
+
+            new_subs = staff_data.get('allowed_subjects', [])
+            if not all(s in my_subs for s in new_subs):
+                return jsonify({"status": "error", "message": "يمكنك تعديل المواد التي تدرسها فقط!"}), 403
+
+            other_subs = [s for s in target_subs if s not in my_subs]
+            final_subs = list(set(other_subs + new_subs))
+            updates['allowed_subjects'] = final_subs
+
+        else:
+            return jsonify({"status": "error", "message": "غير مصرح"}), 403
+
+        if updates:
+            users_col.update_one({"username": target_username}, {"$set": updates})
+
+        return jsonify({"status": "success", "message": "تم تحديث بيانات العضو"})
+
+    elif action == 'toggle_staff_status':
+        target_username = str(data.get('target_username', '')).strip()
+        if not target_username:
+            return jsonify({"status": "error", "message": "بيانات ناقصة"}), 400
+
+        target = users_col.find_one({"username": target_username})
+        if not target:
+            return jsonify({"status": "error", "message": "العضو غير موجود!"}), 404
+
+        if target_username == curr['username']:
+            return jsonify({"status": "error", "message": "لا يمكنك إيقاف حسابك الشخصي!"}), 403
+
+        if role == 'doctor':
+            if target.get('role') != 'ta':
+                return jsonify({"status": "error", "message": "يمكنك التحكم في المعيدين فقط!"}), 403
+            my_subs = curr_user.get('allowed_subjects', [])
+            target_subs = target.get('allowed_subjects', [])
+            has_common = any(s in my_subs for s in target_subs)
+            created_by_him = (target.get('created_by') == curr['username'])
+            if not (has_common or created_by_him):
+                return jsonify({"status": "error", "message": "لا يمكنك التحكم في هذا العضو!"}), 403
+        elif role != 'super_admin':
+            return jsonify({"status": "error", "message": "غير مصرح"}), 403
+
+        new_status = bool(data.get('is_active', True))
+        users_col.update_one({"username": target_username}, {"$set": {"is_active": new_status}})
+
+        status_msg = "تم تنشيط الحساب" if new_status else "تم إيقاف الحساب"
+        return jsonify({"status": "success", "message": status_msg})
 
     elif action == 'wipe_all' and role == 'super_admin':
         provided_pw = str(data.get('admin_password', ''))
@@ -547,7 +731,7 @@ def export_attendance_csv():
 
 if __name__ == '__main__':
     print("=" * 65)
-    print("🚀 سيرفر Nexus Attendance يعمل بنجاح على قاعدة البيانات الجديدة!")
+    print("🚀 سيرفر Nexus Attendance يعمل بنجاح!")
     print("🔑 رابط لوحة الآدمن: http://127.0.0.1:8080/secure-auth-gateway-2026-x9v2-pl7q-a84m")
     print("👤 اسم المستخدم: Nexus_Admin_Core#2026")
     print("🔒 كلمة المرور: Nx!99@bATU#xK82_Secured")

@@ -4,6 +4,7 @@ let allSubjects = [];
 let allActiveSessions = [];
 let selectedSession = null;
 let html5Qr = null;
+let dashboardRefreshInterval = null;
 
 function getDeviceToken() {
     let t = localStorage.getItem('nx_device_token');
@@ -64,21 +65,36 @@ async function loginStudent() {
 function showStudentUI() {
     document.getElementById('auth-screen').style.display = 'none';
     document.getElementById('main-ui').style.display = 'flex';
+
     document.getElementById('display-name').innerText = currentStudent.name;
-    document.getElementById('display-email').innerText = currentStudent.email;
     document.getElementById('display-id').innerText = currentStudent.student_id;
-    document.getElementById('display-academic').innerText = `${currentStudent.year} - ${currentStudent.department}`;
+
+    const yrEl = document.getElementById('display-year');
+    const dpEl = document.getElementById('display-dept');
+    if (yrEl) yrEl.innerText = currentStudent.year || '';
+    if (dpEl) dpEl.innerText = currentStudent.department || '';
+
+    const nameParts = (currentStudent.name || '').trim().split(/\s+/);
+    let initials = '•';
+    if (nameParts.length >= 2) {
+        initials = (nameParts[0][0] || '') + (nameParts[1][0] || '');
+    } else if (nameParts.length === 1 && nameParts[0]) {
+        initials = nameParts[0].substring(0, 2);
+    }
+    const av = document.getElementById('display-avatar');
+    if (av) av.innerText = initials;
+
     loadDashboard();
 }
 
 function logoutStudent() {
+    stopAutoRefresh();
     localStorage.removeItem('nx_student_auth');
     location.reload();
 }
 
 async function loadDashboard() {
     document.getElementById('loading-screen').style.display = 'flex';
-    // طلب المواد الخاصة بفرقة وقسم هذا الطالب تحديداً
     const res = await fetch(`/api/student-init?year=${encodeURIComponent(currentStudent.year)}&dept=${encodeURIComponent(currentStudent.department)}`);
     const data = await res.json();
     document.getElementById('loading-screen').style.display = 'none';
@@ -86,7 +102,13 @@ async function loadDashboard() {
     allSubjects = data.subjects || [];
     allActiveSessions = data.sessions || [];
 
+    renderSubjectCards();
+    startAutoRefresh();
+}
+
+function renderSubjectCards() {
     const container = document.getElementById('subjects-container');
+
     if(allSubjects.length === 0) {
         container.innerHTML = `
             <div class="empty-state">
@@ -97,22 +119,85 @@ async function loadDashboard() {
         return;
     }
 
-    // هنا التعديل المطلوب: تم حذف شارة (الفرقة - القسم) نهائياً من تحت اسم المادة
     container.innerHTML = allSubjects.map(sub => {
         const activeCount = allActiveSessions.filter(s => s.subject_id === sub.id).length;
-        const statusBadge = activeCount > 0 
-            ? `<span style="background:rgba(16,185,129,0.2); color:#10B981; border:1px solid #10B981; padding:4px 10px; border-radius:8px; font-size:12px; margin-top:12px; font-weight:bold;">مفتوح جلسة الآن 🟢</span>` 
-            : `<span style="color:var(--text-muted); font-size:12px; margin-top:12px;">لا توجد جلسات حالياً</span>`;
+        const isOpen = activeCount > 0;
+
+        const statusHtml = isOpen
+            ? `<span class="badge-open"><i class="fas fa-circle"></i> مفتوح جلسة الآن</span>`
+            : `<span class="badge-closed">لا توجد جلسات حالياً</span>`;
 
         return `
-            <div class="subject-card" onclick="selectSubjectForAttendance('${sub.id}', '${sub.name}')">
+            <div class="subject-card" data-sub-id="${sub.id}" onclick="selectSubjectForAttendance('${sub.id}', '${sub.name}')">
                 <img src="${sub.image || 'https://cdn-icons-png.flaticon.com/512/2997/2997295.png'}" alt="subject">
                 <h2 class="sub-title">${sub.name}</h2>
-                ${statusBadge}
+                <div class="session-status-badge" data-open="${isOpen ? '1' : '0'}">
+                    ${statusHtml}
+                </div>
             </div>
         `;
     }).join('');
 }
+
+/* =========================================================
+   🔄 AUTO-REFRESH  ·  تحديث تلقائي لشارة "مفتوح جلسة الآن"
+   ========================================================= */
+function startAutoRefresh() {
+    stopAutoRefresh();
+    dashboardRefreshInterval = setInterval(refreshSessionStatus, 15000);
+}
+
+function stopAutoRefresh() {
+    if (dashboardRefreshInterval) {
+        clearInterval(dashboardRefreshInterval);
+        dashboardRefreshInterval = null;
+    }
+}
+
+async function refreshSessionStatus() {
+    if (!currentStudent) return;
+    try {
+        const res = await fetch(`/api/student-init?year=${encodeURIComponent(currentStudent.year)}&dept=${encodeURIComponent(currentStudent.department)}`);
+        const data = await res.json();
+
+        const newSessions = data.sessions || [];
+        const newSubjects = data.subjects || [];
+
+        if (newSubjects.length !== allSubjects.length) {
+            allSubjects = newSubjects;
+            allActiveSessions = newSessions;
+            renderSubjectCards();
+            return;
+        }
+
+        allActiveSessions = newSessions;
+
+        newSubjects.forEach(sub => {
+            const card = document.querySelector(`.subject-card[data-sub-id="${sub.id}"]`);
+            if (!card) return;
+
+            const badge = card.querySelector('.session-status-badge');
+            if (!badge) return;
+
+            const activeCount = allActiveSessions.filter(s => s.subject_id === sub.id).length;
+            const isOpen = activeCount > 0;
+            const wasOpen = badge.dataset.open === '1';
+
+            if (isOpen !== wasOpen) {
+                badge.dataset.open = isOpen ? '1' : '0';
+                badge.innerHTML = isOpen
+                    ? `<span class="badge-open"><i class="fas fa-circle"></i> مفتوح جلسة الآن</span>`
+                    : `<span class="badge-closed">لا توجد جلسات حالياً</span>`;
+
+                badge.classList.add('bump');
+                setTimeout(() => badge.classList.remove('bump'), 600);
+            }
+        });
+    } catch (err) {
+        // silent fail
+    }
+}
+/* ========================================================= */
 
 function selectSubjectForAttendance(subId, subName) {
     const filtered = allActiveSessions.filter(s => s.subject_id === subId);
@@ -195,6 +280,14 @@ async function submitAttendanceFinal() {
     if(res.ok) {
         closeVerifyModal();
         Swal.fire({...swalDark, icon:'success', title:'تم بنجاح!', text: data.message});
+        if (typeof confetti === 'function') {
+            const colors = ['#FFB300', '#FFD54F', '#10B981', '#7C3AED', '#06B6D4'];
+            confetti({ particleCount: 80, angle: 60, spread: 70, origin: { x: 0 }, colors });
+            confetti({ particleCount: 80, angle: 120, spread: 70, origin: { x: 1 }, colors });
+            setTimeout(() => {
+                confetti({ particleCount: 60, spread: 100, origin: { y: 0.6 }, colors });
+            }, 200);
+        }
     } else {
         Swal.fire({...swalDark, icon:'error', title:'خطأ', text: data.message});
     }

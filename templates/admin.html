@@ -518,33 +518,67 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
-        /* ---------- MOBILE HEADER ---------- */
+        /* ==========================================================
+           ✅ MOBILE HEADER — BATU في المنتصف بالظبط
+           ========================================================== */
         .mobile-header {
             display: none;
             background: rgba(20,26,40,0.85);
             backdrop-filter: blur(18px);
-            padding: 14px 18px;
+            -webkit-backdrop-filter: blur(18px);
+            padding: 0 18px;
+            height: 62px;
             border-radius: 16px;
             margin-bottom: 18px;
             border: 1px solid var(--nx-line-strong);
             justify-content: space-between;
             align-items: center;
+            position: relative;
         }
+
         .mobile-header .logo {
             font-family: 'Plus Jakarta Sans', sans-serif;
-            font-size: 17px;
+            font-size: 20px;
             font-weight: 900;
             color: #fff;
             display: flex;
             align-items: center;
-            gap: 8px;
-            letter-spacing: 1.5px;
+            justify-content: center;
+            gap: 10px;
+            letter-spacing: 3px;
+            line-height: 1 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            text-align: center;
+
+            /* ✅ التمركز في المنتصف بالظبط */
+            position: absolute !important;
+            left: 50% !important;
+            top: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            pointer-events: none;
+            z-index: 1;
+        }
+        .mobile-header .logo span {
+            background: linear-gradient(120deg, #fff 40%, var(--nx-gold) 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            letter-spacing: 3px;
+            display: inline-flex;
+            align-items: center;
+            line-height: 1 !important;
         }
         .mobile-header .logo i {
             color: var(--nx-gold);
-            font-size: 18px;
-            filter: drop-shadow(0 0 12px rgba(255,179,0,0.6));
+            font-size: 20px;
+            line-height: 1 !important;
+            filter: drop-shadow(0 0 14px rgba(255,179,0,0.7));
+            animation: nxPulseIcon 3s ease-in-out infinite;
+            display: inline-flex;
+            align-items: center;
         }
+
         .menu-toggle {
             background: rgba(255,179,0,0.1);
             border: 1px solid rgba(255,179,0,0.35);
@@ -558,6 +592,9 @@
             align-items: center;
             justify-content: center;
             transition: all .25s ease;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 2;
         }
         .menu-toggle:hover {
             background: var(--nx-gold);
@@ -1635,6 +1672,25 @@
                 padding: 4px 10px;
                 margin-top: 4px !important;
             }
+
+            /* ✅ الهيدر الموبايل */
+            .mobile-header {
+                height: 56px;
+                padding: 0 14px;
+            }
+            .mobile-header .logo {
+                font-size: 18px;
+                letter-spacing: 2.5px;
+                left: 50% !important;
+            }
+            .mobile-header .logo i {
+                font-size: 18px;
+            }
+            .menu-toggle {
+                width: 38px;
+                height: 38px;
+                font-size: 16px;
+            }
         }
 
         /* Very small phones */
@@ -1682,6 +1738,19 @@
             .admin-subject-card p {
                 font-size: 10.5px !important;
                 padding: 3px 8px;
+            }
+
+            .mobile-header {
+                height: 54px;
+                padding: 0 12px;
+            }
+            .mobile-header .logo {
+                font-size: 17px;
+                letter-spacing: 2px;
+                left: 50% !important;
+            }
+            .mobile-header .logo i {
+                font-size: 17px;
             }
         }
 

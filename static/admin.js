@@ -105,9 +105,6 @@ function enterAdminDashboard() {
     loadAdminData();
 }
 
-/* =========================================================
-   تسجيل الدخول اليدوي
-   ========================================================= */
 async function handleLogin() {
     const u = document.getElementById('user').value.trim();
     const p = document.getElementById('pass').value.trim();
@@ -162,28 +159,33 @@ function adminLogout() {
 }
 
 /* =========================================================
-   تطبيق البيانات
+   تطبيق البيانات — البانر بتصميم فخم
    ========================================================= */
 function applyAdminData(data) {
-    const adminName = (data.currentAdmin.name || '').trim();
+    const adminName = (data.currentAdmin.name || '').trim() || 'مرحباً';
     const roleMap = {
-        super_admin: 'الآدمن الرئيسي',
-        doctor: 'دكتور مادة',
-        ta: 'معيد'
+        super_admin: { label: 'الآدمن الرئيسي', icon: 'fa-shield-halved', cls: 'role-super' },
+        doctor: { label: 'دكتور مادة', icon: 'fa-user-tie', cls: 'role-doctor' },
+        ta: { label: 'معيد', icon: 'fa-user-graduate', cls: 'role-ta' }
     };
-    const roleName = roleMap[data.currentAdmin.role] || '';
+    const role = roleMap[data.currentAdmin.role] || { label: '', icon: 'fa-user', cls: 'role-default' };
 
-    // ✅ لو الاسم نفس الدور، ما نظهرش الشارة (لتجنب التكرار)
-    let roleBadge = '';
-    if (adminName && adminName !== roleName && roleName) {
-        let badgeColor = 'var(--nx-gold)';
-        if (data.currentAdmin.role === 'doctor') badgeColor = '#10B981';
-        else if (data.currentAdmin.role === 'ta') badgeColor = '#3B82F6';
+    // الاسم
+    const nameEl = document.getElementById('welcome-name');
+    if (nameEl) nameEl.innerText = adminName;
 
-        roleBadge = `<span style="color:${badgeColor}; font-size:12px; background:#000; padding:3px 10px; border-radius:10px; margin-right:6px;">${roleName}</span>`;
+    // الشارة
+    const badgeEl = document.getElementById('welcome-role-badge');
+    if (badgeEl && role.label) {
+        badgeEl.className = 'welcome-role-badge ' + role.cls;
+        badgeEl.innerHTML = `<i class="fas ${role.icon}"></i><span>${role.label}</span>`;
     }
 
-    document.getElementById('welcome-text').innerHTML = `مرحباً، ${adminName} ${roleBadge}`;
+    // الأيقونة الكبيرة
+    const iconEl = document.getElementById('welcome-icon');
+    if (iconEl) {
+        iconEl.className = 'welcome-icon-wrap ' + role.cls;
+    }
 
     if (data.currentAdmin.role !== 'super_admin') {
         document.querySelectorAll('.super-only').forEach(el => el.style.display = 'none');
@@ -275,7 +277,7 @@ function renderFilteredSessionsTable(subId) {
                 <div style="text-align:center;">
                     <i class="fas fa-calendar-times fa-2x" style="color:var(--nx-line-strong); margin-bottom:12px;"></i>
                     <h3 style="color:#fff; font-size:14px; margin:0;">لا توجد جلسات لهذه المادة</h3>
-                    <p style="color:var(--text-muted); font-size:12px; margin-top:6px;">اضغط "فتح جلسة جديدة" لإنشاء أول جلسة</p>
+                    <p style="color:var(--text-muted); font-size:12px; margin-top:6px;">اضغط "جلسة جديدة" لإنشاء أول جلسة</p>
                 </div>
             </td></tr>`;
         return;
@@ -632,27 +634,56 @@ async function deleteSession(id) {
     loadAdminData();
 }
 
+/* =========================================================
+   ✅ فتح جلسة جديدة
+   - لو داخل مادة → المادة تكون مقفولة (تظهر كنص فقط)
+   - لو بره → يختار المادة من قائمة
+   ========================================================= */
 async function createSessionModal() {
     let subjectsToShow = allData.subjects;
-    if (currentSessionsFilter !== null) {
+    const isInsideSubject = currentSessionsFilter !== null;
+
+    if (isInsideSubject) {
         subjectsToShow = allData.subjects.filter(s => s.id === currentSessionsFilter);
     }
 
-    const subOpts = subjectsToShow.map(s => `<option value="${s.id}" data-name="${s.name}">${s.name}</option>`).join('');
-    if(!subOpts) return Swal.fire({...swalDark, icon:'warning', text:'لا توجد مواد مصرح لك بفتح جلسة لها حالياً!'});
+    if (subjectsToShow.length === 0) {
+        return Swal.fire({...swalDark, icon:'warning', text:'لا توجد مواد مصرح لك بفتح جلسة لها حالياً!'});
+    }
+
+    let subjectFieldHtml = '';
+    if (isInsideSubject) {
+        // ✅ المادة مقفولة — تظهر كنص فقط
+        const sub = subjectsToShow[0];
+        subjectFieldHtml = `
+            <div class="locked-subject-field">
+                <i class="fas fa-book"></i>
+                <span>${sub.name}</span>
+                <i class="fas fa-lock locked-icon"></i>
+            </div>
+            <input type="hidden" id="sw-sub" value="${sub.id}" data-name="${sub.name}">
+        `;
+    } else {
+        const subOpts = subjectsToShow.map(s => `<option value="${s.id}" data-name="${s.name}">${s.name}</option>`).join('');
+        subjectFieldHtml = `<select id="sw-sub" class="login-input">${subOpts}</select>`;
+    }
 
     const { value: form } = await Swal.fire({
-        ...swalDark, title: 'فتح جلسة حضور جديدة',
+        ...swalDark,
+        title: 'فتح جلسة حضور جديدة',
         html: `
-            <select id="sw-sub" class="login-input">${subOpts}</select>
-            <select id="sw-type" class="login-input"><option value="Lecture">محاضرة (Lecture)</option><option value="Section">سكشن عملي (Section)</option></select>
+            ${subjectFieldHtml}
+            <select id="sw-type" class="login-input">
+                <option value="Lecture">محاضرة (Lecture)</option>
+                <option value="Section">سكشن عملي (Section)</option>
+            </select>
             <input id="sw-title" class="login-input" placeholder="عنوان الجلسة (مثال: سكشن 3)">
         `,
         preConfirm: () => {
             const sel = document.getElementById('sw-sub');
             return {
                 subject_id: sel.value,
-                subject_name: sel.options[sel.selectedIndex].getAttribute('data-name'),
+                subject_name: sel.getAttribute('data-name'),
                 type: document.getElementById('sw-type').value,
                 title: document.getElementById('sw-title').value.trim() || 'عام'
             };

@@ -1045,7 +1045,7 @@ def admin_action():
 
         return jsonify({"status": "success"})
 
-    # ---------- EDIT STAFF ----------
+    # ---------- EDIT STAFF (مع دعم preserve_classes) ----------
     elif action == 'edit_staff':
         target_username = str(data.get('target_username', '')).strip()
         if not target_username:
@@ -1059,18 +1059,22 @@ def admin_action():
             return jsonify({"status": "error", "message": "لا يمكنك تعديل حسابك!"}), 403
 
         staff_data = data.get('staff', {})
+        preserve_classes = bool(data.get('preserve_classes', False))  # ✅ جديد
         updates = {}
 
         if role == 'super_admin':
             new_name = str(staff_data.get('name', target.get('name', ''))).strip()
             new_role = str(staff_data.get('role', target.get('role', 'ta')))
             new_subs = staff_data.get('allowed_subjects', target.get('allowed_subjects', []))
-            new_classes = staff_data.get('allowed_classes', target.get('allowed_classes', []))
 
             if new_name: updates['name'] = new_name
             if new_role in ['doctor', 'ta']: updates['role'] = new_role
             updates['allowed_subjects'] = new_subs
-            updates['allowed_classes'] = new_classes
+
+            # ✅ لو preserve_classes → نحافظ على الفصول الحالية
+            if not preserve_classes:
+                updates['allowed_classes'] = staff_data.get('allowed_classes', target.get('allowed_classes', []))
+            # else: متلمسش allowed_classes — تفضل زي ما هي
 
         elif role == 'doctor':
             if target.get('role') != 'ta':
@@ -1084,7 +1088,6 @@ def admin_action():
                 return jsonify({"status": "error", "message": "غير مصرح!"}), 403
 
             new_subs = staff_data.get('allowed_subjects', [])
-            new_classes = staff_data.get('allowed_classes', [])
             if not all(s in my_subs for s in new_subs):
                 return jsonify({"status": "error", "message": "يمكنك تعديل المواد التي تدرسها فقط!"}), 403
 
@@ -1093,7 +1096,12 @@ def admin_action():
             other_classes = [c for c in target_classes if c.split('|')[0] not in my_subs]
 
             updates['allowed_subjects'] = list(set(other_subs + new_subs))
-            updates['allowed_classes'] = list(set(other_classes + new_classes))
+
+            # ✅ لو preserve_classes → نحافظ على الفصول الحالية
+            if not preserve_classes:
+                new_classes = staff_data.get('allowed_classes', [])
+                updates['allowed_classes'] = list(set(other_classes + new_classes))
+            # else: متلمسش allowed_classes
 
         else:
             return jsonify({"status": "error", "message": "غير مصرح"}), 403

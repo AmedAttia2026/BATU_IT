@@ -146,7 +146,6 @@ async function loadAdminData() {
     } catch (e) {}
 }
 
-/* ✅ تحديث صامت في الخلفية */
 async function refreshDataSilently() {
     try {
         const res = await fetch('/api/admin-data', { credentials: 'same-origin' });
@@ -325,7 +324,7 @@ function getSessionTypeDisplay(sess) {
 }
 
 /* =========================================================
-   ✅ جدول الجلسات — محاضرات للدكتور / سكاشن للمعيد
+   ✅ جدول الجلسات
    ========================================================= */
 function renderFilteredSessionsTable(subId) {
     const isTA = (currentAdminRole === 'ta');
@@ -417,7 +416,7 @@ function renderFilteredSessionsTable(subId) {
 }
 
 /* =========================================================
-   ✅ تعديل عنوان الجلسة — Optimistic
+   ✅ تعديل عنوان الجلسة
    ========================================================= */
 async function editSessionTitle(sessionId, currentTitle) {
     const { value: newTitle } = await Swal.fire({
@@ -469,7 +468,7 @@ async function editSessionTitle(sessionId, currentTitle) {
 }
 
 /* =========================================================
-   ✅ جدول الفصول (للدكتور/الآدمن فقط)
+   ✅ جدول الفصول
    ========================================================= */
 function renderClassesTable(subId) {
     const tbody = document.getElementById('classes-table-body');
@@ -568,8 +567,7 @@ function renderClassesTable(subId) {
 }
 
 /* =========================================================
-   ✅ نافذة فتح سكشن جديد (شاشة واحدة) — للمعيد
-   ✅ الفصل + العنوان معاً — بدون "التالي"
+   ✅ نافذة فتح سكشن جديد — للمعيد
    ========================================================= */
 async function openNewSectionChoiceModal() {
     const subjectId = currentSessionsFilter;
@@ -602,7 +600,6 @@ async function openNewSectionChoiceModal() {
     const isSingle = allowedClasses.length === 1;
     const initialClass = allowedClasses[0];
 
-    // ✅ لو فصل واحد → locked. لو أكثر → select بس في نفس الشاشة
     let classFieldHtml = '';
     if (isSingle) {
         classFieldHtml = `
@@ -700,7 +697,7 @@ async function openNewSectionChoiceModal() {
 }
 
 /* =========================================================
-   ✅ createSessionForClass — نسخة بسيطة
+   ✅ createSessionForClass
    ========================================================= */
 async function createSessionForClass(subjectId, classNumber) {
     const subject = allData.subjects.find(s => s.id === subjectId);
@@ -751,7 +748,7 @@ async function createSessionForClass(subjectId, classNumber) {
 }
 
 /* =========================================================
-   ✅ نافذة عرض سكاشن فصل معيّن
+   ✅ نافذة عرض سكاشن فصل
    ========================================================= */
 function openClassSessionsModal(classId) {
     const cls = (allData.classes || []).find(c => c.class_id === classId);
@@ -860,7 +857,7 @@ function openClassSessionsModal(classId) {
 }
 
 /* =========================================================
-   ✅ نافذة تفاصيل الفصل الكامل (للدكتور/الآدمن)
+   ✅ نافذة تفاصيل الفصل الكامل
    ========================================================= */
 async function openClassDetailsModal(classId) {
     Swal.fire({
@@ -1033,7 +1030,6 @@ async function openAssignTAsModal(classId) {
 
     if (!isConfirmed) return;
 
-    /* ✅ تحديث فوري في الذاكرة */
     const targetSet = new Set(selectedUsernames || []);
     availableTAs.forEach(ta => {
         const classes = ta.allowed_classes || [];
@@ -1080,7 +1076,7 @@ function toggleAllTaAssign() {
 }
 
 /* =========================================================
-   ✅ إضافة فصل جديد — Optimistic
+   ✅ إضافة فصل جديد
    ========================================================= */
 async function addClass() {
     if (!currentSessionsFilter) return;
@@ -1128,7 +1124,6 @@ async function addClass() {
 
     if (!classNum) return;
 
-    /* ✅ ضيف مؤقتًا في الذاكرة */
     const tempClass = {
         class_id: 'TEMP_' + Date.now(),
         subject_id: subjectId,
@@ -1181,7 +1176,7 @@ async function addClass() {
 }
 
 /* =========================================================
-   ✅ حذف فصل — Optimistic
+   ✅ حذف فصل
    ========================================================= */
 async function deleteClass(classId) {
     const cls = (allData.classes || []).find(c => c.class_id === classId);
@@ -1435,7 +1430,7 @@ async function editAttendanceRecordModal(sessionId, oldId, oldName) {
 }
 
 /* =========================================================
-   ✅ حذف سجل الحضور — Optimistic
+   ✅ حذف سجل الحضور
    ========================================================= */
 async function deleteSessionAttendanceRecord(sessionId, studentId) {
     const record = currentSessionRecords.find(r => r.student_id === studentId);
@@ -1820,7 +1815,7 @@ function getTaClassesForSubject(subjectId) {
 }
 
 /* =========================================================
-   ✅ فتح محاضرة جديدة (للدكتور/الآدمن)
+   ✅ فتح محاضرة جديدة
    ========================================================= */
 async function createSessionModal() {
     let subjectsToShow = allData.subjects;
@@ -1947,7 +1942,7 @@ async function createSessionModalDoctor(subjectsToShow, isInsideSubject) {
 }
 
 /* =========================================================
-   ✅ إرسال إنشاء الجلسة — Optimistic
+   ✅ إرسال إنشاء الجلسة
    ========================================================= */
 async function sendCreateSession(form) {
     const tempSession = {
@@ -2100,7 +2095,7 @@ async function fetchLiveCode() {
 }
 
 /* =========================================================
-   ✅ TOGGLE SESSION — Optimistic
+   ✅ TOGGLE SESSION
    ========================================================= */
 async function toggleSession(id, isOpen) {
     const sess = allData.sessions.find(s => s.session_id === id);
@@ -2128,7 +2123,7 @@ async function toggleSession(id, isOpen) {
 }
 
 /* =========================================================
-   ✅ DELETE SESSION — Optimistic
+   ✅ DELETE SESSION
    ========================================================= */
 async function deleteSession(id) {
     const result = await Swal.fire({
@@ -2189,167 +2184,220 @@ function canEditStaff(targetUser) {
     return false;
 }
 
+/* =========================================================
+   ✅ عرض المواد — Bulletproof FIX
+   ✅ override كل CSS قديم (background-clip, gradient, shadow)
+   ✅ الـ checkbox + الاسم على اليسار معاً
+   ========================================================= */
 function getGroupedSubjectsHTML(allowedSubjects = [], allowedClasses = [], subjectsList = null) {
     const subs = subjectsList || allData.subjects;
 
     if (subs.length === 0) {
-        return `<div style="background:#000; padding:12px; border-radius:10px; text-align:center; color:var(--text-muted); font-size:12px;">لا توجد مواد متاحة</div>`;
+        return `<div style="background:rgba(0,0,0,0.3); padding:24px; border-radius:14px; text-align:center; color:#9CA3AF; font-size:13px;">
+            <i class="fas fa-inbox fa-2x" style="display:block; margin-bottom:10px; opacity:0.35;"></i>
+            لا توجد مواد متاحة
+        </div>`;
     }
 
-    const parsed = {};
+    /* ✅ خريطة المواد → عدد الفصول المُعيَّنة */
+    const classesCountMap = {};
     allowedClasses.forEach(item => {
         const parts = item.split('|');
         if (parts.length === 2) {
-            const sub = parts[0];
-            const cls = (parts[1] || '').replace('Class', '');
-            if (!parsed[sub]) parsed[sub] = new Set();
-            parsed[sub].add(cls);
+            classesCountMap[parts[0]] = (classesCountMap[parts[0]] || 0) + 1;
         }
     });
 
-    let html = '<div style="background:#000; padding:12px; border-radius:10px; max-height:400px; overflow-y:auto; text-align:right;">';
+    /* ✅ inject style مرة واحدة — يـ override كل CSS قديم */
+    if (!document.getElementById('nx-sub-name-fix')) {
+        const st = document.createElement('style');
+        st.id = 'nx-sub-name-fix';
+        st.textContent = `
+            .sub-name-text {
+                display: block !important;
+                color: #ffffff !important;
+                background: none !important;
+                background-image: none !important;
+                -webkit-background-clip: border-box !important;
+                background-clip: border-box !important;
+                -webkit-text-fill-color: #ffffff !important;
+                -webkit-text-stroke: 0 !important;
+                text-shadow: none !important;
+                font-family: 'Plus Jakarta Sans', 'Cairo', Arial, sans-serif !important;
+                font-weight: 700 !important;
+                font-size: 14px !important;
+                line-height: 1.6 !important;
+                padding: 3px 0 !important;
+                margin: 0 !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                white-space: nowrap !important;
+                letter-spacing: 0.3px !important;
+                -webkit-font-smoothing: antialiased !important;
+                -moz-osx-font-smoothing: grayscale !important;
+                min-height: 22px !important;
+                direction: ltr !important;
+                text-align: left !important;
+            }
+            .sub-block {
+                overflow: visible !important;
+                min-height: 48px !important;
+            }
+            .sub-block label {
+                background: none !important;
+                background-image: none !important;
+            }
+        `;
+        document.head.appendChild(st);
+    }
+
+    let html = `
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; padding:0 4px; gap:10px;">
+            <span style="color:#8b93a7; font-size:12px; font-weight:700; white-space:nowrap;">
+                <i class="fas fa-book" style="color:#FFB300;"></i>
+                المواد المتاحة: <b style="color:#fff;">${subs.length}</b>
+            </span>
+            <button type="button" onclick="toggleAllSubjectsInModal()" 
+                style="background:transparent; border:1px solid rgba(255,179,0,0.35); color:#FFB300; padding:5px 12px; border-radius:8px; font-size:11px; font-weight:800; cursor:pointer; font-family:'Cairo',sans-serif; white-space:nowrap; transition:all 0.2s ease;"
+                onmouseover="this.style.background='rgba(255,179,0,0.12)'"
+                onmouseout="this.style.background='transparent'">
+                <i class="fas fa-check-double"></i> تحديد الكل / إلغاء
+            </button>
+        </div>
+        <div class="subjects-list-container" style="display:flex; flex-direction:column; gap:8px; max-height:400px; overflow-y:auto; padding:4px 4px 4px 2px;">
+    `;
 
     subs.forEach(s => {
         const subId = s.id;
-        const isSubjectChecked = allowedSubjects.includes(subId) ? 'checked' : '';
-        const existingClasses = parsed[subId] ? Array.from(parsed[subId]).sort((a,b) => parseInt(a)-parseInt(b)) : [];
-
-        const availableClasses = (allData.classes || [])
-            .filter(c => c.subject_id === subId)
-            .sort((a,b) => (parseInt(a.class_number)||0) - (parseInt(b.class_number)||0));
-
-        let classesHtml = '';
-        if (existingClasses.length === 0) {
-            classesHtml = '<p style="color:#6b7385; font-size:11px; margin:4px 0;">لا توجد فصول مُعيَّنة بعد</p>';
-        } else {
-            classesHtml = existingClasses.map(cls => `
-                <span class="cls-chip" data-subject="${subId}" data-class="${cls}"
-                      style="display:inline-flex; align-items:center; gap:5px; background:rgba(6,182,212,0.15); color:#22d3ee; padding:3px 8px; border-radius:6px; font-size:11px; margin:2px; font-family:monospace; font-weight:800;">
-                    Class ${cls}
-                    <i class="fas fa-times" style="cursor:pointer; opacity:0.7;" onclick="removeClassChip(this)"></i>
-                </span>
-            `).join('');
-        }
-
-        const classOptionsHtml = availableClasses.length === 0
-            ? '<option value="">لا توجد فصول</option>'
-            : '<option value="">— اختر —</option>' + availableClasses.map(c =>
-                `<option value="${c.class_number}">Class ${c.class_number}</option>`
-            ).join('');
-
-        const addBtnDisabled = availableClasses.length === 0 ? 'disabled' : '';
+        const isSubjectChecked = allowedSubjects.includes(subId);
+        const assignedCount = classesCountMap[subId] || 0;
 
         html += `
             <div class="sub-block" data-sub-id="${subId}"
-                 style="border-bottom:1px dashed rgba(255,255,255,0.08); padding-bottom:10px; margin-bottom:10px;">
-                <label style="display:block; font-size:13px; margin-bottom:6px; cursor:pointer; font-weight:800; color:#fff;">
-                    <input type="checkbox" class="sub-checkbox" value="${subId}" data-name="${s.name}" ${isSubjectChecked}>
-                    ${s.name}
-                </label>
+                 style="background:linear-gradient(145deg, rgba(20,26,40,0.92), rgba(11,15,26,0.96));
+                        border:1px solid rgba(255,255,255,0.08);
+                        border-radius:12px;
+                        padding:12px 14px;
+                        transition:all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+                        position:relative;">
 
-                <div style="padding-right:22px;">
-                    <p style="color:#8b93a7; font-size:10.5px; margin:0 0 6px;">الفصول المُعيَّنة:</p>
-                    <div class="cls-list" data-sub-id="${subId}">${classesHtml}</div>
+                <div class="sub-block-indicator" style="position:absolute; right:0; top:0; bottom:0; width:3px;
+                    background:${isSubjectChecked ? 'linear-gradient(180deg, #FFB300, #FFD54F)' : 'transparent'};
+                    border-radius:0 12px 12px 0; transition:background 0.3s ease;
+                    box-shadow:${isSubjectChecked ? '0 0 12px rgba(255,179,0,0.5)' : 'none'};"></div>
 
-                    <div style="display:flex; gap:6px; margin-top:8px; align-items:flex-end;">
-                        <div style="flex:1;">
-                            <label style="color:#8b93a7; font-size:10px; display:block; margin-bottom:3px; text-align:right;">اختر Class</label>
-                            <select class="add-cls-select login-input" data-subject="${subId}"
-                                    style="margin-bottom:0; padding:8px 10px; font-size:13px;" ${addBtnDisabled}>
-                                ${classOptionsHtml}
-                            </select>
-                        </div>
-                        <button type="button" class="btn btn-green" onclick="addClassToSub('${subId}')"
-                                style="padding:8px 12px; font-size:12px;" ${addBtnDisabled}>
-                            <i class="fas fa-plus"></i> إضافة
-                        </button>
-                    </div>
-                    ${availableClasses.length === 0 ? `<p style="color:#6b7385; font-size:10.5px; margin:6px 0 0; text-align:right;">لا توجد فصول مُنشأة — أنشئها من "المحاضرات"</p>` : ''}
+                <div style="display:flex; align-items:center; gap:10px; direction:rtl;">
+
+                    <label style="display:flex; align-items:center; gap:12px; cursor:pointer; margin:0; flex:1; min-width:0;">
+                        <input type="checkbox" class="sub-checkbox" value="${subId}" data-name="${s.name}" ${isSubjectChecked}
+                               style="width:18px; height:18px; accent-color:#FFB300; cursor:pointer; flex-shrink:0; margin:0;">
+
+                        <span class="sub-name-text">${s.name}</span>
+                    </label>
+
+                    ${assignedCount > 0 ? `
+                        <span style="background:rgba(6,182,212,0.12); color:#22d3ee;
+                            padding:3px 10px; border-radius:8px; font-size:10.5px;
+                            font-weight:800; font-family:'Plus Jakarta Sans',monospace;
+                            white-space:nowrap; border:1px solid rgba(6,182,212,0.3);
+                            display:inline-flex; align-items:center; gap:4px;
+                            flex-shrink:0;">
+                            <i class="fas fa-layer-group" style="font-size:9px;"></i> ${assignedCount}
+                        </span>
+                    ` : ''}
                 </div>
             </div>
         `;
     });
 
-    html += '</div>';
+    html += `</div>`;
+
+    html += `
+        <div style="margin-top:12px; padding:10px 12px;
+             background:rgba(6,182,212,0.06); border:1px solid rgba(6,182,212,0.2);
+             border-radius:10px; display:flex; align-items:flex-start; gap:8px;">
+            <i class="fas fa-info-circle" style="color:#22d3ee; font-size:13px; margin-top:2px; flex-shrink:0;"></i>
+            <p style="color:#8b93a7; font-size:11.5px; margin:0; line-height:1.6; text-align:right;">
+                من هنا تختار <b style="color:#fff;">المواد فقط</b>.<br>
+                لتعيين <b style="color:#22d3ee;">فصول معيّنة</b> للمعيد، اذهب إلى
+                <b style="color:#FFB300;">"الجلسات والبث"</b> ← اختر المادة ← اضغط
+                <b style="color:#FFB300;">"تعيين"</b> على الفصل المطلوب.
+            </p>
+        </div>
+    `;
+
     return html;
 }
 
-function addClassToSub(subId) {
-    const sel = document.querySelector(`.add-cls-select[data-subject="${subId}"]`);
-    if (!sel || !sel.value) {
-        return Swal.fire({...swalDark, icon:'warning', text:'يرجى اختيار Class!'});
-    }
-    const clsNum = sel.value;
+/* =========================================================
+   ✅ تحديد / إلغاء كل المواد
+   ========================================================= */
+function toggleAllSubjectsInModal() {
+    const checkboxes = document.querySelectorAll('.sub-checkbox');
+    if (!checkboxes.length) return;
 
-    const existing = document.querySelector(`.cls-chip[data-subject="${subId}"][data-class="${clsNum}"]`);
-    if (existing) {
-        return Swal.fire({...swalDark, icon:'info', text:`Class ${clsNum} مُضاف بالفعل!`});
-    }
+    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
 
-    const chip = document.createElement('span');
-    chip.className = 'cls-chip';
-    chip.setAttribute('data-subject', subId);
-    chip.setAttribute('data-class', clsNum);
-    chip.style.cssText = 'display:inline-flex; align-items:center; gap:5px; background:rgba(6,182,212,0.15); color:#22d3ee; padding:3px 8px; border-radius:6px; font-size:11px; margin:2px; font-family:monospace; font-weight:800;';
-    chip.innerHTML = `Class ${clsNum} <i class="fas fa-times" style="cursor:pointer; opacity:0.7;" onclick="removeClassChip(this)"></i>`;
+    checkboxes.forEach(cb => {
+        cb.checked = !allChecked;
 
-    const list = document.querySelector(`.cls-list[data-sub-id="${subId}"]`);
-    if (list) {
-        if (list.querySelector('p')) list.innerHTML = '';
-        list.appendChild(chip);
-    }
+        const block = cb.closest('.sub-block');
+        if (!block) return;
 
-    const subCb = document.querySelector(`.sub-checkbox[value="${subId}"]`);
-    if (subCb) subCb.checked = true;
+        const indicator = block.querySelector('.sub-block-indicator');
 
-    sel.value = '';
-}
-
-function removeClassChip(iconEl) {
-    const chip = iconEl.closest('.cls-chip');
-    if (!chip) return;
-    const subId = chip.getAttribute('data-subject');
-    chip.remove();
-
-    const list = document.querySelector(`.cls-list[data-sub-id="${subId}"]`);
-    if (list && list.querySelectorAll('.cls-chip').length === 0) {
-        list.innerHTML = '<p style="color:#6b7385; font-size:11px; margin:4px 0;">لا توجد فصول مُعيَّنة بعد</p>';
-    }
-}
-
-function collectSelectedClasses() {
-    const result = [];
-    document.querySelectorAll('.cls-chip').forEach(chip => {
-        const subId = chip.getAttribute('data-subject');
-        const cls = chip.getAttribute('data-class');
-        result.push(`${subId}|Class${cls}`);
+        if (!allChecked) {
+            if (indicator) {
+                indicator.style.background = 'linear-gradient(180deg, #FFB300, #FFD54F)';
+                indicator.style.boxShadow = '0 0 12px rgba(255,179,0,0.5)';
+            }
+        } else {
+            if (indicator) {
+                indicator.style.background = 'transparent';
+                indicator.style.boxShadow = 'none';
+            }
+        }
     });
-    return result;
 }
 
-function collectSelectedSubjects() {
-    const result = [];
-    document.querySelectorAll('.sub-checkbox:checked').forEach(cb => result.push(cb.value));
-    return result;
-}
-
+/* =========================================================
+   ✅ bindStaffCheckboxes
+   ========================================================= */
 function bindStaffCheckboxes() {
     document.querySelectorAll('.sub-checkbox').forEach(subCb => {
         if (subCb.dataset.bound) return;
         subCb.dataset.bound = '1';
         subCb.addEventListener('change', () => {
-            const subId = subCb.value;
-            if (!subCb.checked) {
-                document.querySelectorAll(`.cls-chip[data-subject="${subId}"]`).forEach(chip => chip.remove());
-                const list = document.querySelector(`.cls-list[data-sub-id="${subId}"]`);
-                if (list && list.querySelectorAll('.cls-chip').length === 0) {
-                    list.innerHTML = '<p style="color:#6b7385; font-size:11px; margin:4px 0;">لا توجد فصول مُعيَّنة بعد</p>';
+            const block = subCb.closest('.sub-block');
+            const indicator = block ? block.querySelector('.sub-block-indicator') : null;
+
+            if (subCb.checked) {
+                if (indicator) {
+                    indicator.style.background = 'linear-gradient(180deg, #FFB300, #FFD54F)';
+                    indicator.style.boxShadow = '0 0 12px rgba(255,179,0,0.5)';
+                }
+            } else {
+                if (indicator) {
+                    indicator.style.background = 'transparent';
+                    indicator.style.boxShadow = 'none';
                 }
             }
         });
     });
 }
 
+/* =========================================================
+   ✅ collectSelectedSubjects
+   ========================================================= */
+function collectSelectedSubjects() {
+    const result = [];
+    document.querySelectorAll('.sub-checkbox:checked').forEach(cb => result.push(cb.value));
+    return result;
+}
+
+/* =========================================================
+   ✅ renderStaff
+   ========================================================= */
 function renderStaff(list) {
     const tbody = document.getElementById('staff-table-body');
     if (!tbody) return;
@@ -2413,6 +2461,9 @@ function renderStaff(list) {
     `}).join('');
 }
 
+/* =========================================================
+   ✅ editStaffModal
+   ========================================================= */
 async function editStaffModal(username) {
     const member = allData.staff.find(s => s.username === username);
     if (!member) return;
@@ -2444,17 +2495,21 @@ async function editStaffModal(username) {
     }
 
     const { value: form } = await Swal.fire({
-        ...swalDark, title: `تعديل صلاحيات (${member.name})`, width: 640,
+        ...swalDark, title: `تعديل صلاحيات (${member.name})`, width: 620,
         html: `
             ${nameAndRoleHtml}
-            <p style="text-align:right; font-size:12px; color:var(--text-muted); margin: 12px 0 6px;">المواد والفصول المصرح بها:</p>
+            <p style="text-align:right; font-size:12px; color:var(--text-muted); margin: 12px 0 6px;">
+                <i class="fas fa-book" style="color:#FFB300;"></i>
+                المواد المصرح بها:
+            </p>
             ${getGroupedSubjectsHTML(member.allowed_subjects || [], member.allowed_classes || [], subjectsToShow)}
         `,
         didOpen: () => bindStaffCheckboxes(),
         preConfirm: () => {
             const selSubs = collectSelectedSubjects();
-            const selClasses = collectSelectedClasses();
-            const result = { allowed_subjects: selSubs, allowed_classes: selClasses };
+            const result = {
+                allowed_subjects: selSubs
+            };
             if (canEditRole) {
                 const nameInput = document.getElementById('ed-name');
                 if (nameInput && nameInput.value.trim()) result.name = nameInput.value.trim();
@@ -2468,7 +2523,12 @@ async function editStaffModal(username) {
     if (form) {
         const res = await fetch('/api/admin-action', {
             method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ action: 'edit_staff', target_username: username, staff: form })
+            body: JSON.stringify({
+                action: 'edit_staff',
+                target_username: username,
+                staff: form,
+                preserve_classes: true
+            })
         });
         const data = await res.json();
         if (data.status === 'success') {
@@ -2480,6 +2540,9 @@ async function editStaffModal(username) {
     }
 }
 
+/* =========================================================
+   ✅ addStaff
+   ========================================================= */
 async function addStaff() {
     let roleSelectHtml = '';
     if(currentAdminRole === 'super_admin') {
@@ -2495,26 +2558,32 @@ async function addStaff() {
     }
 
     const { value: form } = await Swal.fire({
-        ...swalDark, title: 'إضافة عضو جديد', width: 640,
+        ...swalDark, title: 'إضافة عضو جديد', width: 620,
         html: `
             <input id="st-name" class="login-input" placeholder="الاسم ثلاثي">
             <input id="st-user" class="login-input ltr-input" placeholder="Username">
             <input id="st-pass" class="login-input ltr-input" placeholder="Password">
             ${roleSelectHtml}
-            <p style="text-align:right; font-size:12px; color:var(--text-muted); margin: 8px 0 6px;">المواد والفصول المصرح بها:</p>
+            <p style="text-align:right; font-size:12px; color:var(--text-muted); margin: 8px 0 6px;">
+                <i class="fas fa-book" style="color:#FFB300;"></i>
+                المواد المصرح بها:
+            </p>
             ${getGroupedSubjectsHTML([], [], subjectsForAdd)}
         `,
         didOpen: () => bindStaffCheckboxes(),
         preConfirm: () => {
             const selSubs = collectSelectedSubjects();
-            const selClasses = collectSelectedClasses();
             const name = document.getElementById('st-name').value.trim();
             const username = document.getElementById('st-user').value.trim();
             const password = document.getElementById('st-pass').value.trim();
             let role = 'ta';
             if(document.getElementById('st-role')) role = document.getElementById('st-role').value;
             if(!name || !username || !password) return Swal.showValidationMessage('املأ البيانات!');
-            return { name, username, password, role, allowed_subjects: selSubs, allowed_classes: selClasses };
+            return {
+                name, username, password, role,
+                allowed_subjects: selSubs,
+                allowed_classes: []
+            };
         }
     });
 
@@ -2533,6 +2602,9 @@ async function addStaff() {
     }
 }
 
+/* =========================================================
+   ✅ toggleStaffStatus
+   ========================================================= */
 async function toggleStaffStatus(username, newActiveStatus) {
     const member = allData.staff.find(s => s.username === username);
     if (!member) return;
@@ -2570,6 +2642,9 @@ async function toggleStaffStatus(username, newActiveStatus) {
     }
 }
 
+/* =========================================================
+   ✅ deleteStaff
+   ========================================================= */
 async function deleteStaff(u) {
     const member = allData.staff.find(s => s.username === u);
     if (member && !canEditStaff(member)) return Swal.fire({...swalDark, icon:'error', text:'غير مصرح!'});
@@ -2611,6 +2686,9 @@ async function deleteStaff(u) {
     }
 }
 
+/* =========================================================
+   ✅ changeMyPassword
+   ========================================================= */
 async function changeMyPassword() {
     const { value: pw } = await Swal.fire({
         ...swalDark, title: 'تغيير كلمة المرور',
@@ -2627,6 +2705,9 @@ async function changeMyPassword() {
     }
 }
 
+/* =========================================================
+   ✅ wipeDatabase
+   ========================================================= */
 async function wipeDatabase() {
     const { value: pass } = await Swal.fire({
         ...swalDark, title: '⚠️ تصفير السجلات',

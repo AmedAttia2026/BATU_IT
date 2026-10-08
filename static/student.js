@@ -181,7 +181,6 @@ async function loadClassesFor(year, dept) {
                 </select>
             `;
         }
-        // ✅ زر الدخول يفضل مخفي لحد ما يختار Class
     } catch (e) {
         console.error("loadClassesFor error:", e);
         classGroup.innerHTML = `
@@ -499,9 +498,39 @@ async function refreshSessionStatus() {
 }
 
 /* =========================================================
-   ✅ عرض جلسات المادة
+   ✅ Force refresh لما الطالب يرجع للتاب أو يفتح النافذة
    ========================================================= */
-function selectSubjectForAttendance(subId, subName) {
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && currentStudent && typeof refreshSessionStatus === 'function') {
+        refreshSessionStatus();
+    }
+});
+
+window.addEventListener('focus', () => {
+    if (currentStudent && typeof refreshSessionStatus === 'function') {
+        refreshSessionStatus();
+    }
+});
+
+/* =========================================================
+   ✅ عرض جلسات المادة — مع جلب أحدث البيانات فوراً
+   ========================================================= */
+async function selectSubjectForAttendance(subId, subName) {
+    /* ✅ جلب أحدث البيانات من السيرفر قبل عرض النافذة */
+    try {
+        const res = await fetch(
+            `/api/student-init?year=${encodeURIComponent(currentStudent.year)}` +
+            `&dept=${encodeURIComponent(currentStudent.department)}` +
+            `&student_id=${encodeURIComponent(currentStudent.student_id)}`
+        );
+        const data = await res.json();
+        if (data.status === 'success') {
+            allSubjects = data.subjects || allSubjects;
+            allActiveSessions = data.sessions || [];
+            renderSubjectCards();
+        }
+    } catch (e) { /* silent */ }
+
     const filtered = allActiveSessions.filter(s => s.subject_id === subId);
 
     if(filtered.length === 0) {

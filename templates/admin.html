@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Nexus Core · Admin Panel</title>
 
-    <!-- ✅ أيقونة التاب (Favicon) — دائرة BATU الذهبية -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3CradialGradient id='bg' cx='30%25' cy='25%25'%3E%3Cstop offset='0%25' stop-color='%231a2136'/%3E%3Cstop offset='100%25' stop-color='%230a0e18'/%3E%3C/radialGradient%3E%3ClinearGradient id='ring' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23FFD54F'/%3E%3Cstop offset='50%25' stop-color='%23FFB300'/%3E%3Cstop offset='100%25' stop-color='%23FF8F00'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='50' cy='50' r='47' fill='url(%23bg)' stroke='url(%23ring)' stroke-width='4'/%3E%3Ccircle cx='50' cy='50' r='39' fill='none' stroke='%23FFB300' stroke-opacity='0.3' stroke-width='1'/%3E%3Ctext x='50' y='59' text-anchor='middle' font-family='Arial Black,Arial,sans-serif' font-weight='900' font-size='24' fill='%23FFB300' letter-spacing='0.5'%3EBATU%3C/text%3E%3C/svg%3E">
     <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%230a0e18'/%3E%3Ccircle cx='50' cy='50' r='45' fill='%230b0f1a' stroke='%23FFB300' stroke-width='4'/%3E%3Ctext x='50' y='60' text-anchor='middle' font-family='Arial Black,sans-serif' font-weight='900' font-size='24' fill='%23FFB300'%3EBATU%3C/text%3E%3C/svg%3E">
 
@@ -16,7 +15,7 @@
     <link rel="stylesheet" href="/static/style.css">
     <style>
         /* ==========================================================
-           NEXUS ADMIN · PREMIUM UI  ·  2026
+           NEXUS ADMIN · PREMIUM UI · 2026
            ========================================================== */
         :root {
             --nx-gold: #FFB300;
@@ -524,9 +523,7 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
-        /* ==========================================================
-           ✅ MOBILE HEADER
-           ========================================================== */
+        /* ---------- MOBILE HEADER ---------- */
         .mobile-header {
             display: none;
             background: rgba(20,26,40,0.85);
@@ -838,7 +835,6 @@
             background: rgba(255, 179, 0, 0.08) !important;
         }
 
-        /* ---------- EDIT TITLE BUTTON ---------- */
         .edit-title-btn {
             background: rgba(255,179,0,0.1);
             border: 1px solid rgba(255,179,0,0.3);
@@ -862,9 +858,7 @@
             transform: scale(1.1);
         }
 
-        /* ==========================================================
-           ✅ شارات نوع الجلسة
-           ========================================================== */
+        /* ---------- SESSION TYPE BADGES ---------- */
         .sess-type-badge {
             display: inline-flex;
             align-items: center;
@@ -894,9 +888,7 @@
             box-shadow: 0 0 12px rgba(59,130,246,0.12);
         }
 
-        /* ==========================================================
-           ✅ شارات حالة الجلسة
-           ========================================================== */
+        /* ---------- SESSION STATUS ---------- */
         .sess-status {
             display: inline-flex;
             align-items: center;
@@ -1034,9 +1026,7 @@
             transform: translateY(-1px);
         }
 
-        /* ==========================================================
-           ✅ FILTER TOOLBAR
-           ========================================================== */
+        /* ---------- FILTER TOOLBAR ---------- */
         .filter-toolbar-box {
             display: flex;
             justify-content: space-between;
@@ -1194,9 +1184,7 @@
             box-shadow: 0 0 10px #a78bfa !important;
         }
 
-        /* ==========================================================
-           ✅ ADMIN SUBJECTS GRID
-           ========================================================== */
+        /* ---------- ADMIN SUBJECTS GRID ---------- */
         .sessions-header-bar {
             display: flex;
             justify-content: space-between;
@@ -1321,7 +1309,6 @@
             border-radius: 8px;
         }
 
-        /* ---------- LOCKED SUBJECT FIELD ---------- */
         .locked-subject-field {
             display: flex;
             align-items: center;
@@ -1341,9 +1328,7 @@
         .locked-subject-field i { font-size: 15px; flex-shrink: 0; }
         .locked-subject-field span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-        /* ==========================================================
-           ✅ SUBSECTION TITLES
-           ========================================================== */
+        /* ---------- SUBSECTION TITLES ---------- */
         .subsection-title {
             display: flex;
             align-items: center;
@@ -1371,9 +1356,7 @@
             color: #9aa2b5;
         }
 
-        /* ==========================================================
-           ✅ LIVE BOX
-           ========================================================== */
+        /* ---------- LIVE BOX ---------- */
         .live-box {
             position: relative;
             background:
@@ -1644,9 +1627,7 @@
             #live-session-sub { font-size: 12px; }
         }
 
-        /* ==========================================================
-           ✅ STAFF TABLE
-           ========================================================== */
+        /* ---------- STAFF TABLE ---------- */
         .status-badge {
             display: inline-flex;
             align-items: center;
@@ -1720,45 +1701,61 @@
         }
 
         /* ==========================================================
-           MODAL (Session Attendance)
+           🔥 MODAL (Session Attendance) — BALANCED DESIGN 2026
            ========================================================== */
         .modal-screen {
             position: fixed;
             inset: 0;
-            background: rgba(5,7,15,0.85) !important;
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
+            background: rgba(5,7,15,0.9) !important;
+            backdrop-filter: blur(20px) saturate(140%);
+            -webkit-backdrop-filter: blur(20px) saturate(140%);
             z-index: 10000;
             display: none;
             flex-direction: column;
-            animation: nxFadeInModal .3s ease;
+            animation: nxFadeInModal .35s ease;
         }
         @keyframes nxFadeInModal { from { opacity: 0; } to { opacity: 1; } }
 
         .modal-header {
-            padding: 18px 26px;
-            background: rgba(15, 20, 33, 0.95);
-            backdrop-filter: blur(20px);
-            border-bottom: 1px solid var(--nx-line-strong);
+            padding: 16px 22px;
+            background: linear-gradient(180deg, rgba(20,26,40,0.98), rgba(15,20,33,0.95));
+            backdrop-filter: blur(24px);
+            border-bottom: 1px solid rgba(255,179,0,0.25);
             display: flex;
             justify-content: space-between;
             align-items: center;
             gap: 12px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+            position: relative;
+        }
+        .modal-header::after {
+            content: "";
+            position: absolute;
+            bottom: -1px; left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #FFB300, #7C3AED, #06B6D4, transparent);
+            background-size: 200% 100%;
+            animation: nxShimmerLine 4s linear infinite;
         }
         #sess-modal-title {
             font-family: 'Cairo', sans-serif;
-            color: var(--nx-gold);
+            color: #fff;
             font-size: 17px;
             font-weight: 900;
+            letter-spacing: 0.3px;
+            text-shadow: 0 2px 10px rgba(255,179,0,0.3);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         .modal-close {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: rgba(239,68,68,0.1);
-            border: 1px solid rgba(239,68,68,0.3);
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, rgba(239,68,68,0.15), rgba(239,68,68,0.05));
+            border: 1px solid rgba(239,68,68,0.4);
             color: #f87171;
-            font-size: 15px;
+            font-size: 16px;
             cursor: pointer;
             display: flex;
             align-items: center;
@@ -1767,11 +1764,13 @@
             flex-shrink: 0;
         }
         .modal-close:hover {
-            background: #EF4444;
+            background: linear-gradient(135deg, #EF4444, #DC2626);
             color: #fff;
-            transform: rotate(90deg) scale(1.1);
-            box-shadow: 0 0 28px rgba(239,68,68,0.6);
+            transform: rotate(90deg) scale(1.08);
+            box-shadow: 0 0 28px rgba(239,68,68,0.7);
+            border-color: #EF4444;
         }
+
         .modal-body {
             flex: 1;
             overflow-y: auto;
@@ -1780,150 +1779,388 @@
             padding: 18px;
         }
         .modal-body::-webkit-scrollbar { width: 6px; }
-        .modal-body::-webkit-scrollbar-thumb { background: rgba(255,179,0,0.35); border-radius: 6px; }
+        .modal-body::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, #FFB300, #FF8F00);
+            border-radius: 6px;
+            box-shadow: 0 0 10px rgba(255,179,0,0.5);
+        }
 
+        /* 🔥 CONTROL BAR */
         .sess-control-bar {
             display: flex;
             flex-direction: column;
-            gap: 8px;
-            margin-bottom: 10px;
-            background: linear-gradient(165deg, rgba(30,41,59,0.8), rgba(15,20,33,0.9));
-            backdrop-filter: blur(14px);
-            padding: 10px;
-            border-radius: 16px;
-            border: 1px solid var(--nx-line-strong);
-            box-shadow: 0 8px 22px rgba(0,0,0,0.3);
+            gap: 12px;
+            margin-bottom: 16px;
+            background:
+                radial-gradient(600px circle at 100% 0%, rgba(255,179,0,0.08), transparent 55%),
+                linear-gradient(165deg, rgba(30,41,59,0.9), rgba(15,20,33,0.95));
+            backdrop-filter: blur(20px) saturate(140%);
+            padding: 14px;
+            border-radius: 18px;
+            border: 1px solid rgba(255,255,255,0.12);
+            box-shadow:
+                0 20px 50px rgba(0,0,0,0.5),
+                inset 0 1px 0 rgba(255,255,255,0.06);
+            position: relative;
+            overflow: hidden;
+        }
+        .sess-control-bar::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #FFB300, #FFD54F, #FFB300, transparent);
+            background-size: 200% 100%;
+            animation: nxShimmerLine 3s linear infinite;
         }
 
+        /* 🔍 SEARCH */
+        .search-input-glass {
+            background: rgba(0, 0, 0, 0.6);
+            border: 1.5px solid rgba(255,255,255,0.15);
+            color: #fff;
+            padding: 13px 18px 13px 46px;
+            border-radius: 14px;
+            font-size: 15px;
+            font-family: 'Cairo', sans-serif;
+            font-weight: 700;
+            width: 100%;
+            outline: none;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            letter-spacing: 0.3px;
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23FFB300' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='8'/><path d='m21 21-4.35-4.35'/></svg>");
+            background-repeat: no-repeat;
+            background-position: right 16px center;
+            background-size: 20px;
+        }
+        .search-input-glass::placeholder {
+            color: #8b93a7;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        .search-input-glass:focus {
+            border-color: #FFB300;
+            background-color: rgba(0,0,0,0.75);
+            box-shadow:
+                0 0 0 3px rgba(255,179,0,0.15),
+                0 0 24px rgba(255,179,0,0.25);
+            transform: translateY(-1px);
+        }
+
+        /* 📊 BAR ROW */
         .sess-bar-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 8px;
+            gap: 12px;
+            flex-wrap: wrap;
         }
 
-        .sess-stats { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
-        .sess-stats-icon { font-size: 16px; line-height: 1; }
+        /* 👥 STATS */
+        .sess-stats {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, rgba(255,179,0,0.18), rgba(255,179,0,0.06));
+            border: 1.5px solid rgba(255,179,0,0.45);
+            box-shadow:
+                0 0 22px rgba(255,179,0,0.22),
+                inset 0 1px 0 rgba(255,255,255,0.1);
+            flex-shrink: 0;
+            position: relative;
+            overflow: hidden;
+        }
+        .sess-stats::before {
+            content: "";
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,179,0,0.2), transparent);
+            animation: nxIdShine 3s ease-in-out infinite;
+        }
+        .sess-stats-icon {
+            font-size: 22px;
+            line-height: 1;
+            filter: drop-shadow(0 0 10px rgba(255,179,0,0.6));
+            animation: nxPulseIcon 3s ease-in-out infinite;
+        }
         .sess-stats-count {
-            font-size: 20px;
+            font-size: 26px;
             font-weight: 900;
-            color: var(--nx-gold);
+            background: linear-gradient(180deg, #fff 30%, #FFB300 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
             font-family: 'Plus Jakarta Sans', sans-serif;
             line-height: 1;
+            letter-spacing: 1px;
         }
-        .sess-stats-label { font-size: 11px; color: var(--text-muted); font-weight: 700; }
+        .sess-stats-label {
+            font-size: 14px;
+            color: #FFD54F;
+            font-weight: 800;
+            font-family: 'Cairo', sans-serif;
+            letter-spacing: 0.3px;
+        }
 
+        /* ⚡ ACTIONS */
         .sess-actions {
             display: flex;
-            gap: 6px;
+            gap: 8px;
             flex: 1;
             justify-content: flex-end;
+            flex-wrap: wrap;
         }
         .sess-actions .btn {
-            padding: 8px 12px !important;
-            font-size: 11.5px !important;
-            border-radius: 10px;
-            flex-shrink: 0;
+            padding: 11px 18px !important;
+            font-size: 13.5px !important;
+            border-radius: 12px !important;
+            font-weight: 900 !important;
+            letter-spacing: 0.3px;
+            min-height: 44px;
+            box-shadow:
+                0 8px 20px rgba(0,0,0,0.35),
+                inset 0 1px 0 rgba(255,255,255,0.2);
+            transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        .sess-actions .btn i {
+            font-size: 15px !important;
+        }
+        .sess-actions .btn::after {
+            content: "";
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            transition: left 0.6s ease;
+        }
+        .sess-actions .btn:hover::after { left: 100%; }
+        .sess-actions .btn:hover { transform: translateY(-2px) scale(1.02); }
+        .sess-actions .btn-green {
+            background: linear-gradient(135deg, #10B981 0%, #059669 100%) !important;
+            box-shadow:
+                0 8px 22px rgba(16,185,129,0.4),
+                inset 0 1px 0 rgba(255,255,255,0.25) !important;
+        }
+        .sess-actions .btn-gold {
+            background: linear-gradient(135deg, #FFB300 0%, #FFD54F 50%, #FFB300 100%) !important;
+            background-size: 200% 100% !important;
+            box-shadow:
+                0 8px 22px rgba(255,179,0,0.4),
+                inset 0 1px 0 rgba(255,255,255,0.4) !important;
         }
 
-        .search-input-glass {
-            background: rgba(0, 0, 0, 0.45);
-            border: 1px solid var(--nx-line-strong);
-            color: #fff;
-            padding: 10px 14px;
-            border-radius: 12px;
-            font-size: 12.5px;
-            font-family: 'Cairo', sans-serif;
-            width: 100%;
-            outline: none;
-            transition: 0.3s;
-        }
-        .search-input-glass:focus {
-            border-color: var(--nx-gold);
-            background: rgba(0,0,0,0.6);
-            box-shadow: 0 0 0 3px rgba(255,179,0,0.1);
-        }
-
+        /* ==========================================================
+           🔥 STUDENT CARD
+           ========================================================== */
         .glass-student-card {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-            padding: 10px 12px;
-            margin-bottom: 7px;
-            border-radius: 12px;
-            background: linear-gradient(150deg, rgba(30,41,59,0.75), rgba(15,20,33,0.88));
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--nx-line-strong);
-            border-right: 4px solid #10b981;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            transition: all 0.2s ease;
-            font-size: 12.5px;
-            white-space: nowrap;
+            gap: 14px;
+            padding: 14px 16px;
+            margin-bottom: 10px;
+            border-radius: 16px;
+            background:
+                radial-gradient(400px circle at 100% 50%, rgba(255,179,0,0.06), transparent 60%),
+                linear-gradient(150deg, rgba(34,46,65,0.92), rgba(15,20,33,0.98));
+            backdrop-filter: blur(16px) saturate(140%);
+            border: 1.5px solid rgba(255,255,255,0.12);
+            box-shadow:
+                0 8px 24px rgba(0,0,0,0.4),
+                inset 0 1px 0 rgba(255,255,255,0.06);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
             overflow: hidden;
+            animation: nxCardSlideIn 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+        }
+        @keyframes nxCardSlideIn {
+            from { opacity: 0; transform: translateY(15px) scale(0.97); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .glass-student-card::before {
+            content: "";
+            position: absolute;
+            top: 0; right: 0;
+            width: 5px; height: 100%;
+            background: linear-gradient(180deg, #10b981, #059669);
+            box-shadow: 0 0 20px rgba(16,185,129,0.75);
+        }
+        .glass-student-card.manual-entry::before {
+            background: linear-gradient(180deg, #f59e0b, #d97706);
+            box-shadow: 0 0 20px rgba(245,158,11,0.75);
         }
         .glass-student-card:hover {
-            background: linear-gradient(150deg, rgba(30,41,59,0.95), rgba(15,20,33,0.98));
-            border-color: rgba(255,179,0,0.35);
-            border-right-color: var(--nx-gold);
-            transform: translateX(-2px);
+            transform: translateX(-4px) scale(1.005);
+            border-color: rgba(255,179,0,0.5);
+            box-shadow:
+                0 14px 36px rgba(0,0,0,0.55),
+                0 0 0 1px rgba(255,179,0,0.25),
+                0 0 32px rgba(255,179,0,0.15);
         }
-        .glass-student-card.manual-entry { border-right-color: #f59e0b; }
-        .glass-student-card.auto-entry { border-right-color: #10b981; }
 
-        .gsc-main { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; overflow: hidden; }
-
-        .gsc-dot {
-            width: 6px;
-            height: 6px;
+        /* 👤 AVATAR */
+        .gsc-avatar {
+            width: 52px;
+            height: 52px;
             border-radius: 50%;
-            background: #10b981;
-            box-shadow: 0 0 8px #10b981;
-            flex-shrink: 0;
-        }
-        .manual-entry .gsc-dot { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
-
-        .gsc-name {
-            font-weight: 800;
-            color: #fff;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            font-size: 12.5px;
-            white-space: nowrap;
-        }
-
-        .gsc-sep { color: rgba(255,255,255,0.25); font-weight: 700; flex-shrink: 0; }
-
-        .gsc-id, .gsc-time, .gsc-type {
-            color: #9aa2b5;
-            font-family: 'Plus Jakarta Sans', monospace;
-            font-size: 11.5px;
-            font-weight: 700;
-            flex-shrink: 0;
-        }
-        .gsc-type { font-family: 'Cairo', sans-serif; }
-
-        .gsc-actions { display: flex; gap: 5px; flex-shrink: 0; }
-
-        .gsc-btn {
-            width: 30px;
-            height: 30px;
-            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            border: none;
-            background: rgba(255,255,255,0.05);
-            color: #9aa2b5;
-            cursor: pointer;
-            font-size: 12px;
-            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-            padding: 0;
+            font-family: 'Cairo', 'Plus Jakarta Sans', sans-serif;
+            font-size: 22px;
+            font-weight: 900;
+            color: #fff;
+            background: linear-gradient(135deg, #10B981, #059669);
+            box-shadow:
+                0 0 0 2px rgba(16,185,129,0.4),
+                0 0 20px rgba(16,185,129,0.55),
+                inset 0 2px 8px rgba(255,255,255,0.25);
+            flex-shrink: 0;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+            transition: all 0.3s ease;
+        }
+        .manual-entry .gsc-avatar {
+            background: linear-gradient(135deg, #F59E0B, #D97706);
+            box-shadow:
+                0 0 0 2px rgba(245,158,11,0.4),
+                0 0 20px rgba(245,158,11,0.55),
+                inset 0 2px 8px rgba(255,255,255,0.25);
+        }
+        .glass-student-card:hover .gsc-avatar {
+            transform: scale(1.06) rotate(-5deg);
         }
 
-        .gsc-btn-edit:hover { background: rgba(255, 179, 0, 0.15); color: var(--nx-gold); transform: translateY(-2px); }
-        .gsc-btn-del:hover { background: rgba(239, 68, 68, 0.15); color: #ef4444; transform: translateY(-2px); }
-        .gsc-btn-activate:hover { background: rgba(16, 185, 129, 0.15); color: #10b981; transform: translateY(-2px); }
+        /* 📝 BODY */
+        .gsc-body {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .gsc-name-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }
+        .gsc-name {
+            font-family: 'Cairo', sans-serif;
+            font-size: 17px;
+            font-weight: 900;
+            background: linear-gradient(120deg, #ffffff 30%, #ffd76a 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            letter-spacing: 0.3px;
+            line-height: 1.4;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+
+        /* 🏷️ CHIPS */
+        .gsc-meta-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 7px;
+            align-items: center;
+        }
+        .gsc-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 11px;
+            border-radius: 10px;
+            font-family: 'Cairo', 'Plus Jakarta Sans', sans-serif;
+            font-size: 12.5px;
+            font-weight: 800;
+            letter-spacing: 0.4px;
+            white-space: nowrap;
+            border: 1.5px solid rgba(255,255,255,0.15);
+            background: rgba(255,255,255,0.06);
+            color: #e2e8f0;
+            line-height: 1;
+            transition: all 0.25s ease;
+        }
+        .gsc-chip i { font-size: 12px; }
+
+        .gsc-chip-id {
+            font-family: 'Plus Jakarta Sans', monospace;
+            color: #22d3ee;
+            border-color: rgba(34,211,238,0.5);
+            background: linear-gradient(135deg, rgba(6,182,212,0.15), rgba(6,182,212,0.05));
+            letter-spacing: 1.2px;
+            font-weight: 900;
+            font-size: 13.5px;
+            box-shadow:
+                0 0 14px rgba(6,182,212,0.25),
+                inset 0 1px 0 rgba(255,255,255,0.08);
+        }
+        .gsc-chip-time {
+            color: #FFD54F;
+            border-color: rgba(255,179,0,0.5);
+            background: linear-gradient(135deg, rgba(255,179,0,0.15), rgba(255,179,0,0.05));
+            font-family: 'Plus Jakarta Sans', monospace;
+            font-weight: 900;
+            font-size: 13.5px;
+            box-shadow:
+                0 0 14px rgba(255,179,0,0.25),
+                inset 0 1px 0 rgba(255,255,255,0.08);
+        }
+
+        /* ⚡ ACTIONS */
+        .gsc-actions {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+        .gsc-btn {
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1.5px solid rgba(255,255,255,0.15);
+            background: rgba(255,255,255,0.06);
+            color: #cbd5e1;
+            cursor: pointer;
+            font-size: 15px;
+            transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+            padding: 0;
+            position: relative;
+            overflow: hidden;
+        }
+        .gsc-btn::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at center, rgba(255,255,255,0.3), transparent 70%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .gsc-btn:hover::after { opacity: 1; }
+        .gsc-btn-edit:hover {
+            background: linear-gradient(135deg, rgba(255,179,0,0.28), rgba(255,179,0,0.12));
+            border-color: #FFB300;
+            color: #FFD54F;
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 10px 24px rgba(255,179,0,0.4);
+        }
+        .gsc-btn-del:hover {
+            background: linear-gradient(135deg, rgba(239,68,68,0.28), rgba(239,68,68,0.12));
+            border-color: #EF4444;
+            color: #f87171;
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 10px 24px rgba(239,68,68,0.4);
+        }
 
         .pass-toggle-wrap {
             position: relative;
@@ -1982,10 +2219,7 @@
             box-shadow: 0 0 0 3px rgba(255,179,0,0.15) !important;
         }
 
-        /* ==========================================================
-           ✅ SUB-NAME-TEXT — Bulletproof (لا يوجد background-clip)
-           ✅ لون أبيض صريح + direction ltr + ellipsis
-           ========================================================== */
+        /* ---------- SUB-NAME-TEXT (Bulletproof) ---------- */
         .sub-name-text {
             display: block !important;
             color: #ffffff !important;
@@ -2022,7 +2256,6 @@
             background-image: none !important;
         }
 
-        /* شريط التمرير للقائمة */
         .subjects-list-container::-webkit-scrollbar {
             width: 5px;
         }
@@ -2039,14 +2272,12 @@
             background: linear-gradient(180deg, #FFD54F, #FFB300);
         }
 
-        /* تأثير Hover على كارت المادة */
         .sub-block:hover {
             border-color: rgba(255, 179, 0, 0.35) !important;
             box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 179, 0, 0.1);
             transform: translateY(-1px);
         }
 
-        /* Sub block checked state */
         .sub-block:has(.sub-checkbox:checked) {
             background: linear-gradient(145deg, rgba(255,179,0,0.05), rgba(11,15,26,0.96)) !important;
             border-color: rgba(255, 179, 0, 0.25) !important;
@@ -2073,7 +2304,7 @@
         }
 
         /* ==========================================================
-           RESPONSIVE — MOBILE
+           RESPONSIVE — MOBILE (768px)
            ========================================================== */
         @media (max-width: 768px) {
             .main-content { padding: 14px 12px 40px; }
@@ -2134,33 +2365,51 @@
                 margin-top: 18px;
             }
 
-            .modal-header { padding: 10px 14px; gap: 8px; }
-            #sess-modal-title {
-                font-size: 12.5px;
-                line-height: 1.3;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-            }
-            .modal-close { width: 32px; height: 32px; font-size: 12px; }
-            .modal-body { padding: 8px; }
+            .modal-header { padding: 14px 16px; gap: 10px; }
+            #sess-modal-title { font-size: 14.5px; }
+            .modal-close { width: 38px; height: 38px; font-size: 14px; border-radius: 10px; }
+            .modal-body { padding: 12px; }
 
-            .sess-control-bar {
-                padding: 8px;
-                gap: 6px;
+            .sess-control-bar { padding: 12px; border-radius: 16px; gap: 10px; margin-bottom: 12px; }
+            .search-input-glass {
+                padding: 12px 16px 12px 42px;
+                font-size: 14px;
+                border-radius: 12px;
+                background-size: 18px;
+                background-position: right 14px center;
+            }
+            .search-input-glass::placeholder { font-size: 13px; }
+
+            .sess-stats { padding: 8px 16px; gap: 8px; border-radius: 12px; }
+            .sess-stats-icon { font-size: 18px; }
+            .sess-stats-count { font-size: 22px; }
+            .sess-stats-label { font-size: 12px; }
+
+            .sess-actions { gap: 8px; width: 100%; justify-content: stretch; }
+            .sess-actions .btn {
+                padding: 10px 14px !important;
+                font-size: 12.5px !important;
+                min-height: 40px;
+                border-radius: 10px !important;
+                flex: 1;
+            }
+            .sess-actions .btn i { font-size: 13px !important; }
+
+            .glass-student-card {
+                padding: 12px 14px;
+                gap: 12px;
                 border-radius: 14px;
                 margin-bottom: 8px;
             }
-            .sess-stats-icon { font-size: 14px; }
-            .sess-stats-count { font-size: 18px; }
-            .sess-stats-label { font-size: 10.5px; }
-            .sess-actions .btn { padding: 7px 10px !important; font-size: 11px !important; gap: 4px; }
-            .search-input-glass { padding: 9px 12px; font-size: 12px; }
-
-            .glass-student-card { padding: 9px 11px; font-size: 12px; margin-bottom: 6px; }
-            .gsc-name { font-size: 12px; max-width: 120px; }
-            .gsc-id, .gsc-time { font-size: 11px; }
-            .gsc-btn { width: 28px; height: 28px; font-size: 10px; }
+            .gsc-avatar { width: 46px; height: 46px; font-size: 19px; }
+            .gsc-body { gap: 7px; }
+            .gsc-name { font-size: 15.5px; }
+            .gsc-chip { padding: 4px 10px; font-size: 11.5px; gap: 5px; border-radius: 8px; }
+            .gsc-chip i { font-size: 10.5px; }
+            .gsc-chip-id { font-size: 12.5px; letter-spacing: 1px; }
+            .gsc-chip-time { font-size: 12.5px; }
+            .gsc-btn { width: 38px; height: 38px; font-size: 13px; border-radius: 10px; }
+            .gsc-actions { gap: 7px; }
 
             .login-card {
                 padding: 32px 22px 26px !important;
@@ -2204,6 +2453,9 @@
             .status-badge { font-size: 10px; padding: 3px 9px; }
         }
 
+        /* ==========================================================
+           📱 RESPONSIVE — MOBILE (480px) — نسخة محسّنة
+           ========================================================== */
         @media (max-width: 480px) {
             .welcome-icon-wrap { width: 44px; height: 44px; border-radius: 12px; }
             .welcome-icon-wrap i { font-size: 18px; }
@@ -2214,15 +2466,108 @@
             table th { padding: 10px 8px; font-size: 11px; }
             table td { padding: 9px 6px; font-size: 11px; }
 
-            .sess-control-bar { padding: 7px; gap: 5px; }
-            .sess-stats-icon { font-size: 13px; }
-            .sess-stats-count { font-size: 17px; }
-            .sess-actions .btn { padding: 6px 9px !important; font-size: 10.5px !important; }
-            .glass-student-card { padding: 8px 10px; }
-            .gsc-name { font-size: 11.5px; max-width: 95px; }
-            .gsc-id, .gsc-time { font-size: 10.5px; }
-            .gsc-hide-xs { display: none; }
-            .gsc-btn { width: 26px; height: 26px; font-size: 9.5px; }
+            .modal-header { padding: 12px 12px; gap: 8px; }
+            #sess-modal-title {
+                font-size: 13px;
+                max-width: 180px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .modal-close { width: 34px; height: 34px; font-size: 12px; border-radius: 9px; }
+            .modal-body { padding: 10px; }
+
+            .sess-control-bar { padding: 10px; gap: 9px; border-radius: 14px; margin-bottom: 10px; }
+            .search-input-glass {
+                padding: 11px 14px 11px 38px;
+                font-size: 13.5px;
+                border-radius: 11px;
+                background-size: 16px;
+                background-position: right 12px center;
+            }
+            .search-input-glass::placeholder { font-size: 12.5px; }
+
+            .sess-stats { padding: 7px 14px; gap: 6px; border-radius: 10px; }
+            .sess-stats-icon { font-size: 16px; }
+            .sess-stats-count { font-size: 20px; letter-spacing: 0.5px; }
+            .sess-stats-label { font-size: 11.5px; }
+
+            .sess-actions { gap: 6px; }
+            .sess-actions .btn {
+                padding: 9px 12px !important;
+                font-size: 11.5px !important;
+                min-height: 38px;
+                border-radius: 9px !important;
+                gap: 4px;
+            }
+            .sess-actions .btn i { font-size: 12px !important; }
+
+            /* 🔥 STUDENT CARD — صف واحد مضغوط */
+            .glass-student-card {
+                padding: 10px 10px;
+                gap: 8px;
+                border-radius: 12px;
+                margin-bottom: 6px;
+                flex-wrap: nowrap;
+                align-items: center;
+            }
+            .gsc-avatar {
+                width: 36px;
+                height: 36px;
+                font-size: 15px;
+                box-shadow:
+                    0 0 0 2px rgba(16,185,129,0.4),
+                    0 0 14px rgba(16,185,129,0.5),
+                    inset 0 1px 6px rgba(255,255,255,0.25);
+            }
+            .manual-entry .gsc-avatar {
+                box-shadow:
+                    0 0 0 2px rgba(245,158,11,0.4),
+                    0 0 14px rgba(245,158,11,0.5),
+                    inset 0 1px 6px rgba(255,255,255,0.25);
+            }
+            .gsc-body {
+                gap: 5px;
+                flex-basis: auto;
+                order: 0;
+                min-width: 0;
+            }
+            .gsc-name {
+                font-size: 13px;
+                line-height: 1.3;
+            }
+            .gsc-meta-row {
+                gap: 4px;
+                flex-wrap: wrap;
+            }
+            .gsc-chip {
+                padding: 3px 7px;
+                font-size: 9.5px;
+                gap: 3px;
+                border-radius: 6px;
+                border-width: 1px;
+            }
+            .gsc-chip i { font-size: 8.5px; }
+            .gsc-chip-id {
+                font-size: 10px;
+                letter-spacing: 0.5px;
+            }
+            .gsc-chip-time {
+                font-size: 10px;
+            }
+            .gsc-actions {
+                gap: 4px;
+                order: 0;
+                margin-right: 0;
+                flex-shrink: 0;
+            }
+            .gsc-btn {
+                width: 30px;
+                height: 30px;
+                font-size: 11px;
+                border-radius: 8px;
+                border-width: 1px;
+            }
 
             .admin-subjects-grid {
                 grid-template-columns: repeat(2, 1fr) !important;
@@ -2241,6 +2586,38 @@
             .mobile-header .logo { font-size: 17px; letter-spacing: 2px; left: 55% !important; }
             .mobile-header .logo i { font-size: 17px; }
             .menu-toggle { width: 36px; height: 36px; font-size: 15px; left: 10px !important; }
+        }
+
+        /* 📱 شاشات صغيرة جداً (380px وأقل) */
+        @media (max-width: 380px) {
+            #sess-modal-title { max-width: 140px; font-size: 12px; }
+
+            .sess-stats { padding: 6px 12px; gap: 5px; }
+            .sess-stats-icon { font-size: 14px; }
+            .sess-stats-count { font-size: 18px; }
+            .sess-stats-label { font-size: 10.5px; }
+
+            .sess-actions .btn {
+                font-size: 10.5px !important;
+                padding: 8px 10px !important;
+                min-height: 34px;
+            }
+
+            .glass-student-card {
+                padding: 9px 9px;
+                gap: 7px;
+            }
+            .gsc-avatar {
+                width: 32px;
+                height: 32px;
+                font-size: 13px;
+            }
+            .gsc-name { font-size: 12px; }
+            .gsc-chip { padding: 3px 6px; font-size: 9px; gap: 3px; }
+            .gsc-chip i { font-size: 8px; }
+            .gsc-chip-id { font-size: 9.5px; letter-spacing: 0.3px; }
+            .gsc-chip-time { font-size: 9.5px; }
+            .gsc-btn { width: 28px; height: 28px; font-size: 10px; }
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -2384,9 +2761,6 @@
                         </button>
                     </div>
 
-                    <!-- ============================================================
-                         ✅ LIVE BOX — QR فوق + كود يدوي تحت + زر ملء الشاشة
-                         ============================================================ -->
                     <div id="live-box" class="live-box" style="display:none;">
                         <div class="live-header">
                             <h3 id="live-session-title"></h3>
@@ -2444,9 +2818,6 @@
                         </div>
                     </div>
 
-                    <!-- ============================================================
-                         ✅ جدول الجلسات (محاضرات للدكتور / سكاشن للمعيد)
-                         ============================================================ -->
                     <div class="subsection-title subsection-lectures">
                         <i class="fas fa-chalkboard-teacher"></i>
                         <span id="lectures-section-title">المحاضرات</span>
@@ -2469,9 +2840,6 @@
                         </table>
                     </div>
 
-                    <!-- ============================================================
-                         ✅ قسم الفصول (Classes)
-                         ============================================================ -->
                     <div id="classes-section" style="display:none;">
                         <div class="subsection-title subsection-classes">
                             <i class="fas fa-layer-group"></i>

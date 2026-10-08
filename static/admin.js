@@ -10,6 +10,8 @@ let currentSessionRecords = [];
 let currentSessionsFilter = null;
 let currentAdminRole = 'super_admin';
 let currentAdminUsername = '';
+let lastQrCodeRendered = null;
+let manualCodeVisible = false;
 
 /* =========================================================
    🖥️ شاشات التحكم
@@ -269,6 +271,9 @@ function backToSubjects() {
     renderAdminSubjectsGrid();
 }
 
+/* =========================================================
+   ✅ جدول الجلسات — الشارة نفسها زر لتغيير الحالة
+   ========================================================= */
 function renderFilteredSessionsTable(subId) {
     const filtered = allData.sessions.filter(s => s.subject_id === subId);
     const tbody = document.getElementById('sessions-table-body');
@@ -290,13 +295,20 @@ function renderFilteredSessionsTable(subId) {
         <tr class="clickable-row" ondblclick="openSessionAttendanceModal('${s.session_id}')" title="اضغط مرتين لفتح كشف الطلاب المسجلين">
             <td>${s.type === 'Lecture' ? 'محاضرة' : 'سكشن'}</td>
             <td><b>${s.title}</b></td>
-            <td>${s.is_open ? '<span style="color:#10B981; font-weight:bold;">مفتوح 🟢</span>' : '<span style="color:#EF4444; font-weight:bold;">مغلق 🔴</span>'}</td>
+            <td>
+                <button type="button" 
+                    class="sess-status ${s.is_open ? 'sess-status-open' : 'sess-status-closed'}" 
+                    onclick="event.stopPropagation(); toggleSession('${s.session_id}', ${!s.is_open})"
+                    title="${s.is_open ? 'اضغط لإغلاق الجلسة' : 'اضغط لفتح الجلسة'}">
+                    <i class="fas fa-circle"></i> 
+                    ${s.is_open ? 'مفتوحة' : 'مغلقة'}
+                </button>
+            </td>
             <td style="color:#fff; font-size:13px;">${s.created_by || 'الآدمن الرئيسي'}</td>
             <td style="color:var(--text-muted); font-size:11px;">${s.created_at || ''}</td>
             <td>
                 <div style="display:flex; justify-content:center; gap:6px; align-items:center; flex-wrap:wrap;">
                     <button class="btn btn-gold" style="padding:6px 12px; font-size:12px;" onclick="event.stopPropagation(); startLiveBroadcast('${s.session_id}', '${s.title}', '${s.subject_name}')"><i class="fas fa-qrcode"></i> بث</button>
-                    <button class="btn ${s.is_open ? 'btn-red':'btn-green'}" style="padding:6px 12px; font-size:12px;" onclick="event.stopPropagation(); toggleSession('${s.session_id}', ${!s.is_open})">${s.is_open ? 'إغلاق':'فتح'}</button>
                     <button class="btn btn-red" style="padding:6px 10px;" onclick="event.stopPropagation(); deleteSession('${s.session_id}')" title="حذف"><i class="fas fa-trash"></i></button>
                 </div>
             </td>
@@ -380,9 +392,21 @@ function renderGlassStudentCards(records, sessionId) {
 
     container.innerHTML = records.map(r => {
         const isManual = r.is_manual || (r.ip && r.ip.includes("ADMIN"));
+        const scanType = r.scan_type || '';
         const entryClass = isManual ? 'manual-entry' : 'auto-entry';
-        const entryIcon = isManual ? '✍️' : '🖥️';
-        const entryLabel = isManual ? 'يدوي' : 'QR';
+
+        let entryIcon = '🖥️';
+        let entryLabel = 'QR';
+        if (isManual) {
+            entryIcon = '✍️';
+            entryLabel = 'يدوي';
+        } else if (scanType === 'manual') {
+            entryIcon = '⌨️';
+            entryLabel = 'كود';
+        } else if (scanType === 'qr') {
+            entryIcon = '📷';
+            entryLabel = 'QR';
+        }
 
         let timeShort = r.timestamp || '';
         const m = timeShort.match(/(\d{1,2}:\d{2}):\d{2}\s*(AM|PM)/i);
@@ -470,17 +494,64 @@ async function editAttendanceRecordModal(sessionId, oldId, oldName) {
     }
 }
 
+/* =========================================================
+   ✅ حذف سجل حضور طالب
+   ========================================================= */
 async function deleteSessionAttendanceRecord(sessionId, studentId) {
-    if(!confirm(`هل تريد حذف تسجيل حضور الطالب (${studentId}) من هذه الجلسة؟`)) return;
+    const record = currentSessionRecords.find(r => r.student_id === studentId);
+    const studentName = record ? record.student_name : '';
+
+    const result = await Swal.fire({
+        ...swalDark,
+        icon: 'warning',
+        title: 'حذف سجل الحضور',
+        html: `
+            <div style="text-align:center; line-height:1.9; padding: 6px 0;">
+                <p style="color:#fff; margin-bottom:10px; font-size:14px;">هل تريد حذف تسجيل حضور هذا الطالب؟</p>
+                ${studentName ? `<p style="color:#FFB300; font-weight:900; font-size:15px; margin-bottom:6px;">${studentName}</p>` : ''}
+                <p style="color:#9CA3AF; font-family:monospace; font-size:13px; letter-spacing:1px; margin-bottom:12px;">${studentId}</p>
+                <p style="color:#9CA3AF; font-size:11.5px; margin-top:10px;">
+                    <i class="fas fa-info-circle"></i> لا يمكن التراجع عن هذا الإجراء
+                </p>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: '<i class="fas fa-trash"></i> حذف',
+        cancelButtonText: '<i class="fas fa-times"></i> إلغاء',
+        confirmButtonColor: '#EF4444',
+        cancelButtonColor: '#374151',
+        reverseButtons: true,
+        focusCancel: true
+    });
+
+    if (!result.isConfirmed) return;
+
+    Swal.fire({
+        title: 'جاري الحذف...',
+        background: '#161b26',
+        color: '#fff',
+        didOpen: () => Swal.showLoading(),
+        allowOutsideClick: false
+    });
+
     await fetch('/api/admin-action', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'delete_attendance_record', session_id: sessionId, student_id: studentId })
+    });
+
+    Swal.close();
+    Swal.fire({
+        ...swalDark,
+        icon: 'success',
+        title: 'تم حذف السجل',
+        timer: 1200,
+        showConfirmButton: false
     });
     openSessionAttendanceModal(sessionId);
 }
 
 /* =========================================================
-   ✅ فلترة المواد — نظام ذكي (سنة + قسم)
+   ✅ فلترة المواد
    ========================================================= */
 function filterSubjectsTab(yearValue, btnEl) {
     activeSubjectYear = yearValue;
@@ -491,7 +562,6 @@ function filterSubjectsTab(yearValue, btnEl) {
 
     const deptFilters = document.getElementById('dept-sub-filters');
 
-    // نظهر فلتر الأقسام بس لو اخترنا فرقة 3 أو 4
     if (yearValue === 'الفرقة الثالثة' || yearValue === 'الفرقة الرابعة') {
         deptFilters.style.display = 'flex';
         document.querySelectorAll('#dept-sub-filters .sub-btn').forEach(btn => btn.classList.remove('active'));
@@ -517,7 +587,6 @@ function renderSubjectsTable() {
     if (activeSubjectYear !== 'all') {
         filteredSubs = filteredSubs.filter(s => s.year === activeSubjectYear);
 
-        // لو فرقة 3 أو 4، نفلتر بالقسم كمان
         if (activeSubjectYear === 'الفرقة الثالثة' || activeSubjectYear === 'الفرقة الرابعة') {
             if (activeSubjectDept !== 'all') {
                 filteredSubs = filteredSubs.filter(s =>
@@ -565,27 +634,21 @@ function renderSubjectsTable() {
 }
 
 /* =========================================================
-   ✅ إضافة مادة جديدة — ذكية (تقرأ الفلتر الحالي)
+   ✅ إضافة مادة جديدة
    ========================================================= */
 async function addSubject() {
-    // ✅ نحدد الفرقة الافتراضية بناءً على الفلتر الحالي
     let defaultYear = 'الفرقة الأولى';
     if (activeSubjectYear !== 'all') {
         defaultYear = activeSubjectYear;
     }
 
-    // ✅ هل الفرقة 3 أو 4؟ (عندهم أقسام)
     const isYear34 = (defaultYear === 'الفرقة الثالثة' || defaultYear === 'الفرقة الرابعة');
-
-    // ✅ هل واقف على قسم معين في الفلتر؟
     const hasActiveDept = (activeSubjectDept !== 'all');
     const autoPickedDept = (isYear34 && hasActiveDept) ? activeSubjectDept : null;
 
-    // ✅ القسم الافتراضي: لو واقف على قسم نستخدمه، غير كده Software
     let defaultDept = 'Software';
     if (autoPickedDept) defaultDept = autoPickedDept;
 
-    // ✅ القفل: بيقفل بس في فرقة 1 و 2 (عام IT)
     const isYear12 = (defaultYear === 'الفرقة الأولى' || defaultYear === 'الفرقة الثانية');
     const finalDept = isYear12 ? 'عام (IT)' : defaultDept;
 
@@ -599,7 +662,6 @@ async function addSubject() {
         `<option value="${d}" ${d === finalDept ? 'selected' : ''}>${d}</option>`
     ).join('');
 
-    // ✅ الرسالة الأولية
     let initialHint;
     let initialHintColor;
     if (isYear12) {
@@ -651,12 +713,10 @@ async function addSubject() {
                     deptSel.style.opacity = '1';
                     deptSel.style.cursor = 'pointer';
 
-                    // ✅ لو اتفتح لأول مرة، نستخدم القسم اللي واقف عليه في الفلتر
                     if (deptSel.value === 'عام (IT)') {
                         deptSel.value = hasActiveDept ? activeSubjectDept : 'Software';
                     }
 
-                    // ✅ نغير الرسالة حسب الحالة
                     if (hasActiveDept) {
                         hint.innerHTML = `<i class="fas fa-wand-magic-sparkles"></i> تم اختيار ${deptSel.value} تلقائياً حسب الفلتر — يمكنك التغيير`;
                         hint.style.color = '#22d3ee';
@@ -704,7 +764,7 @@ async function addSubject() {
 }
 
 /* =========================================================
-   ✅ تعديل مادة — مع قفل القسم تلقائياً لفرقة 1 و 2
+   ✅ تعديل مادة
    ========================================================= */
 async function editSubject(id) {
     const sub = allData.subjects.find(s => s.id === id);
@@ -808,25 +868,99 @@ async function editSubject(id) {
     }
 }
 
+/* =========================================================
+   ✅ حذف مادة
+   ========================================================= */
 async function deleteSubject(id) {
-    if (!confirm("مسح هذه المادة وجميع جلساتها؟")) return;
+    const sub = allData.subjects.find(s => s.id === id);
+    const subName = sub ? sub.name : '';
+
+    const result = await Swal.fire({
+        ...swalDark,
+        icon: 'warning',
+        title: 'حذف المادة',
+        html: `
+            <div style="text-align:center; line-height:1.9; padding: 6px 0;">
+                <p style="color:#fff; margin-bottom:10px; font-size:14px;">هل تريد حذف هذه المادة؟</p>
+                ${subName ? `<p style="color:#FFB300; font-weight:900; font-size:15px; margin-bottom:12px;">${subName}</p>` : ''}
+                <div style="background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.35); border-radius:10px; padding:10px 14px; margin: 8px 0;">
+                    <p style="color:#f87171; font-size:13px; font-weight:800; margin:0;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        سيتم حذف جميع الجلسات وسجلات الحضور المرتبطة
+                    </p>
+                </div>
+                <p style="color:#9CA3AF; font-size:11.5px; margin-top:12px;">
+                    <i class="fas fa-info-circle"></i> لا يمكن التراجع عن هذا الإجراء
+                </p>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: '<i class="fas fa-trash"></i> حذف نهائي',
+        cancelButtonText: '<i class="fas fa-times"></i> إلغاء',
+        confirmButtonColor: '#EF4444',
+        cancelButtonColor: '#374151',
+        reverseButtons: true,
+        focusCancel: true
+    });
+
+    if (!result.isConfirmed) return;
+
+    Swal.fire({
+        title: 'جاري الحذف...',
+        background: '#161b26',
+        color: '#fff',
+        didOpen: () => Swal.showLoading(),
+        allowOutsideClick: false
+    });
+
     await fetch('/api/admin-action', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'manage_subject', sub: 'delete', id: id })
+    });
+
+    Swal.close();
+    Swal.fire({
+        ...swalDark,
+        icon: 'success',
+        title: 'تم حذف المادة بنجاح',
+        timer: 1500,
+        showConfirmButton: false
     });
     loadAdminData();
 }
 
 /* =========================================================
-   البث المباشر
+   ✅ البث المباشر — QR فوق + كود يدوي تحته
    ========================================================= */
 function startLiveBroadcast(sessId, title, subName) {
     activeLiveSession = sessId;
-    document.getElementById('live-box').style.display = 'block';
+    lastQrCodeRendered = null;
+    manualCodeVisible = false;
+
+    const box = document.getElementById('live-box');
+    box.style.display = 'block';
+
     document.getElementById('live-session-title').innerText = title;
     document.getElementById('live-session-sub').innerText = subName;
     document.getElementById('qr-canvas').innerHTML = '';
-    qrGenerator = new QRCode(document.getElementById("qr-canvas"), { width: 220, height: 220 });
+
+    // ✅ توليد QR بدقة عالية — العرض يتحكم فيه CSS
+    qrGenerator = new QRCode(document.getElementById("qr-canvas"), {
+        width: 600,
+        height: 600,
+        correctLevel: QRCode.CorrectLevel.H
+    });
+
+    const manualSection = document.getElementById('live-manual-section');
+    const toggleBtn = document.getElementById('toggle-manual-btn');
+    if (manualSection) manualSection.style.display = 'none';
+    if (toggleBtn) toggleBtn.innerHTML = '<i class="fas fa-keyboard"></i> إظهار الكود اليدوي';
+
+    // إعادة تعيين زر الـ fullscreen
+    const fsBtn = document.getElementById('fullscreen-btn');
+    if (fsBtn && !document.fullscreenElement) {
+        fsBtn.innerHTML = '<i class="fas fa-expand"></i> ملء الشاشة';
+    }
 
     clearInterval(liveCodeInterval);
     fetchLiveCode();
@@ -834,10 +968,80 @@ function startLiveBroadcast(sessId, title, subName) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function closeLiveScreen() {
-    clearInterval(liveCodeInterval);
+/* ✅ إظهار / إخفاء الكود اليدوي */
+function toggleManualCode() {
+    manualCodeVisible = !manualCodeVisible;
+
+    const manualSection = document.getElementById('live-manual-section');
+    const toggleBtn = document.getElementById('toggle-manual-btn');
+
+    if (manualSection) {
+        manualSection.style.display = manualCodeVisible ? 'flex' : 'none';
+    }
+    if (toggleBtn) {
+        toggleBtn.innerHTML = manualCodeVisible
+            ? '<i class="fas fa-eye-slash"></i> إخفاء الكود اليدوي'
+            : '<i class="fas fa-keyboard"></i> إظهار الكود اليدوي';
+    }
+}
+
+/* ✅ ملء الشاشة */
+function toggleLiveFullscreen() {
     const box = document.getElementById('live-box');
-    if (box) box.style.display = 'none';
+    if (!document.fullscreenElement) {
+        if (box.requestFullscreen) {
+            box.requestFullscreen().catch(() => {
+                Swal.fire({...swalDark, icon: 'error', text: 'لا يمكن تفعيل وضع ملء الشاشة في هذا المتصفح'});
+            });
+        } else if (box.webkitRequestFullscreen) {
+            box.webkitRequestFullscreen();
+        } else if (box.msRequestFullscreen) {
+            box.msRequestFullscreen();
+        } else {
+            Swal.fire({...swalDark, icon: 'error', text: 'المتصفح لا يدعم وضع ملء الشاشة'});
+        }
+    } else {
+        if (document.exitFullscreen) {
+            document.exitFullscreen().catch(() => {});
+        } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+        } else if (document.msExitFullscreen) {
+            document.msExitFullscreen();
+        }
+    }
+}
+
+/* ✅ تحديث نص زر الـ fullscreen عند التغيير */
+document.addEventListener('fullscreenchange', () => {
+    const btn = document.getElementById('fullscreen-btn');
+    if (!btn) return;
+    if (document.fullscreenElement) {
+        btn.innerHTML = '<i class="fas fa-compress"></i> إنهاء ملء الشاشة';
+    } else {
+        btn.innerHTML = '<i class="fas fa-expand"></i> ملء الشاشة';
+    }
+});
+document.addEventListener('webkitfullscreenchange', () => {
+    const btn = document.getElementById('fullscreen-btn');
+    if (!btn) return;
+    if (document.webkitFullscreenElement) {
+        btn.innerHTML = '<i class="fas fa-compress"></i> إنهاء ملء الشاشة';
+    } else {
+        btn.innerHTML = '<i class="fas fa-expand"></i> ملء الشاشة';
+    }
+});
+
+function closeLiveScreen() {
+    if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+    }
+    clearInterval(liveCodeInterval);
+    lastQrCodeRendered = null;
+    manualCodeVisible = false;
+    const box = document.getElementById('live-box');
+    if (box) {
+        box.style.display = 'none';
+    }
     activeLiveSession = null;
 }
 
@@ -845,10 +1049,34 @@ async function fetchLiveCode() {
     if (!activeLiveSession) return;
     const res = await fetch(`/api/live-code?session_id=${activeLiveSession}`);
     const data = await res.json();
-    document.getElementById('live-code-display').innerText = data.code;
-    qrGenerator.clear();
-    qrGenerator.makeCode(data.code);
-    document.getElementById('live-timer-bar').style.width = ((data.remaining / data.interval) * 100) + '%';
+
+    // ⏱️ الكود اليدوي (10 ثواني)
+    const manualCodeEl = document.getElementById('live-code-display');
+    if (manualCodeEl) manualCodeEl.innerText = data.manual_code || data.code || '------';
+
+    const manualBar = document.getElementById('live-timer-bar');
+    if (manualBar) {
+        const interval = data.manual_interval || data.interval || 10;
+        const remaining = (data.manual_remaining !== undefined) ? data.manual_remaining : data.remaining;
+        manualBar.style.width = ((remaining / interval) * 100) + '%';
+    }
+
+    // ⏱️ كود QR (3 ثواني)
+    const qrCode = data.qr_code || data.code;
+    if (qrCode && qrCode !== lastQrCodeRendered && qrGenerator) {
+        lastQrCodeRendered = qrCode;
+        try {
+            qrGenerator.clear();
+            qrGenerator.makeCode(qrCode);
+        } catch (e) { /* تجاهل */ }
+    }
+
+    // شريط تقدم QR
+    const qrBar = document.getElementById('qr-timer-bar');
+    if (qrBar && data.qr_remaining !== undefined) {
+        const qInterval = data.qr_interval || 3;
+        qrBar.style.width = ((data.qr_remaining / qInterval) * 100) + '%';
+    }
 }
 
 async function toggleSession(id, isOpen) {
@@ -859,11 +1087,59 @@ async function toggleSession(id, isOpen) {
     loadAdminData();
 }
 
+/* =========================================================
+   ✅ حذف جلسة
+   ========================================================= */
 async function deleteSession(id) {
-    if(!confirm("حذف هذه الجلسة وجميع سجلات الحضور الخاصة بها؟")) return;
+    const result = await Swal.fire({
+        ...swalDark,
+        icon: 'warning',
+        title: 'حذف الجلسة',
+        html: `
+            <div style="text-align:center; line-height:1.9; padding: 6px 0;">
+                <p style="color:#fff; margin-bottom:10px; font-size:14px;">هل تريد حذف هذه الجلسة نهائياً؟</p>
+                <div style="background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.35); border-radius:10px; padding:10px 14px; margin: 8px 0;">
+                    <p style="color:#f87171; font-size:13px; font-weight:800; margin:0;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        سيتم حذف جميع سجلات الحضور المرتبطة بها
+                    </p>
+                </div>
+                <p style="color:#9CA3AF; font-size:11.5px; margin-top:12px;">
+                    <i class="fas fa-info-circle"></i> لا يمكن التراجع عن هذا الإجراء
+                </p>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: '<i class="fas fa-trash"></i> حذف نهائي',
+        cancelButtonText: '<i class="fas fa-times"></i> إلغاء',
+        confirmButtonColor: '#EF4444',
+        cancelButtonColor: '#374151',
+        reverseButtons: true,
+        focusCancel: true
+    });
+
+    if (!result.isConfirmed) return;
+
+    Swal.fire({
+        title: 'جاري الحذف...',
+        background: '#161b26',
+        color: '#fff',
+        didOpen: () => Swal.showLoading(),
+        allowOutsideClick: false
+    });
+
     await fetch('/api/admin-action', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'delete_session', session_id: id })
+    });
+
+    Swal.close();
+    Swal.fire({
+        ...swalDark,
+        icon: 'success',
+        title: 'تم الحذف بنجاح',
+        timer: 1500,
+        showConfirmButton: false
     });
     loadAdminData();
 }
@@ -968,11 +1244,45 @@ async function createSessionModal() {
     });
 
     if (form) {
-        await fetch('/api/admin-action', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'create_session', session: form })
+        Swal.fire({
+            title: 'جاري إنشاء الجلسة...',
+            background: '#161b26',
+            color: '#fff',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
         });
-        loadAdminData();
+
+        try {
+            const res = await fetch('/api/admin-action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'create_session', session: form })
+            });
+            const data = await res.json();
+            Swal.close();
+
+            if (data.status === 'success') {
+                await loadAdminData();
+
+                Swal.fire({
+                    ...swalDark,
+                    icon: 'success',
+                    title: 'تم إنشاء الجلسة ✅',
+                    text: 'سيتم تحديث القائمة تلقائياً...',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+
+                setTimeout(() => {
+                    loadAdminData();
+                }, 5000);
+            } else {
+                Swal.fire({...swalDark, icon: 'error', title: 'خطأ', text: data.message || 'فشل إنشاء الجلسة'});
+            }
+        } catch (err) {
+            Swal.close();
+            Swal.fire({...swalDark, icon: 'error', title: 'خطأ', text: 'تعذر الاتصال بالسيرفر!'});
+        }
     }
 }
 
@@ -982,22 +1292,17 @@ async function createSessionModal() {
 
 function canEditStaff(targetUser) {
     if (!targetUser) return false;
-
     if (targetUser.username === currentAdminUsername) return false;
-
     if (currentAdminRole === 'super_admin') return true;
 
     if (currentAdminRole === 'doctor') {
         if (targetUser.role !== 'ta') return false;
-
         const mySubs = (allData.currentAdmin.allowed_subjects || []);
         const targetSubs = targetUser.allowed_subjects || [];
         const hasCommon = targetSubs.some(s => mySubs.includes(s));
         const createdByHim = (targetUser.created_by === currentAdminUsername);
-
         return hasCommon || createdByHim;
     }
-
     return false;
 }
 
@@ -1291,31 +1596,75 @@ async function changeMyPassword() {
     }
 }
 
+/* =========================================================
+   ✅ حذف عضو من الطاقم
+   ========================================================= */
 async function deleteStaff(u) {
     const member = allData.staff.find(s => s.username === u);
     if (member && !canEditStaff(member)) {
         return Swal.fire({...swalDark, icon:'error', text:'غير مصرح لك بحذف هذا العضو!'});
     }
 
+    const memberName = member ? member.name : u;
+
     const confirm = await Swal.fire({
         ...swalDark,
         icon: 'warning',
         title: 'تأكيد الحذف',
-        html: `سيتم حذف العضو نهائياً.<br><span style="color:#FFB300; font-size:12px;">💡 نصيحة: استخدم "إيقاف الحساب" بدلاً من الحذف لو ممكن يرجع لاحقاً</span>`,
+        html: `
+            <div style="text-align:center; line-height:1.9; padding: 6px 0;">
+                <p style="color:#fff; margin-bottom:10px; font-size:14px;">سيتم حذف هذا العضو نهائياً</p>
+                <p style="color:#FFB300; font-weight:900; font-size:15px; margin-bottom:12px;">${memberName}</p>
+                <div style="background:rgba(255,179,0,0.1); border:1px solid rgba(255,179,0,0.3); border-radius:10px; padding:10px 14px; margin: 8px 0;">
+                    <p style="color:#FFB300; font-size:12.5px; font-weight:700; margin:0;">
+                        <i class="fas fa-lightbulb"></i>
+                        نصيحة: استخدم "إيقاف الحساب" بدلاً من الحذف لو ممكن يرجع لاحقاً
+                    </p>
+                </div>
+                <p style="color:#9CA3AF; font-size:11.5px; margin-top:12px;">
+                    <i class="fas fa-info-circle"></i> لا يمكن التراجع عن هذا الإجراء
+                </p>
+            </div>
+        `,
         showCancelButton: true,
-        confirmButtonText: 'حذف نهائي',
-        cancelButtonText: 'إلغاء',
-        confirmButtonColor: '#EF4444'
+        confirmButtonText: '<i class="fas fa-trash"></i> حذف نهائي',
+        cancelButtonText: '<i class="fas fa-times"></i> إلغاء',
+        confirmButtonColor: '#EF4444',
+        cancelButtonColor: '#374151',
+        reverseButtons: true,
+        focusCancel: true
     });
+
     if (!confirm.isConfirmed) return;
+
+    Swal.fire({
+        title: 'جاري الحذف...',
+        background: '#161b26',
+        color: '#fff',
+        didOpen: () => Swal.showLoading(),
+        allowOutsideClick: false
+    });
 
     const res = await fetch('/api/admin-action', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'manage_staff', sub: 'delete', username: u })
     });
     const data = await res.json();
-    if(data.status === 'success') loadAdminData();
-    else Swal.fire({...swalDark, icon:'error', text: data.message});
+
+    Swal.close();
+
+    if(data.status === 'success') {
+        Swal.fire({
+            ...swalDark,
+            icon: 'success',
+            title: 'تم حذف العضو بنجاح',
+            timer: 1500,
+            showConfirmButton: false
+        });
+        loadAdminData();
+    } else {
+        Swal.fire({...swalDark, icon:'error', text: data.message});
+    }
 }
 
 async function wipeDatabase() {

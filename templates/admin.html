@@ -24,6 +24,7 @@
             --nx-purple: #7C3AED;
             --nx-cyan: #06B6D4;
             --nx-emerald: #10B981;
+            --nx-blue: #3B82F6;
             --nx-ink: #05070f;
             --nx-line: rgba(255, 255, 255, 0.08);
             --nx-line-strong: rgba(255, 255, 255, 0.14);
@@ -234,7 +235,6 @@
             pointer-events: none;
         }
 
-        /* ✅ الدايرة الكبيرة — حجم متزايد */
         .nx-logo-wrap {
             position: relative;
             width: 150px;
@@ -799,7 +799,7 @@
         table {
             width: 100%;
             border-collapse: collapse;
-            min-width: 780px;
+            min-width: 700px;
         }
         table thead {
             background: rgba(0,0,0,0.35);
@@ -838,8 +838,64 @@
             background: rgba(255, 179, 0, 0.08) !important;
         }
 
+        /* ---------- EDIT TITLE BUTTON ---------- */
+        .edit-title-btn {
+            background: rgba(255,179,0,0.1);
+            border: 1px solid rgba(255,179,0,0.3);
+            color: var(--nx-gold);
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 10px;
+            margin-right: 6px;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            vertical-align: middle;
+        }
+        .edit-title-btn:hover {
+            background: var(--nx-gold);
+            color: #0a0e17;
+            transform: scale(1.1);
+        }
+
         /* ==========================================================
-           ✅ شارات حالة الجلسة — قابلة للضغط لتغيير الحالة
+           ✅ شارات نوع الجلسة
+           ========================================================== */
+        .sess-type-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 13px;
+            border-radius: 10px;
+            font-size: 11.5px;
+            font-weight: 800;
+            font-family: 'Cairo', sans-serif;
+            letter-spacing: 0.3px;
+            white-space: nowrap;
+            transition: all .25s ease;
+        }
+        .sess-type-badge i { font-size: 11px; }
+
+        .sess-type-badge.type-lecture {
+            color: #FFB300;
+            background: linear-gradient(135deg, rgba(255,179,0,0.15), rgba(255,179,0,0.05));
+            border: 1px solid rgba(255,179,0,0.4);
+            box-shadow: 0 0 12px rgba(255,179,0,0.12);
+        }
+
+        .sess-type-badge.type-section {
+            color: #3B82F6;
+            background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(59,130,246,0.05));
+            border: 1px solid rgba(59,130,246,0.4);
+            box-shadow: 0 0 12px rgba(59,130,246,0.12);
+        }
+
+        /* ==========================================================
+           ✅ شارات حالة الجلسة
            ========================================================== */
         .sess-status {
             display: inline-flex;
@@ -858,12 +914,8 @@
             position: relative;
             outline: none;
         }
+        .sess-status i { font-size: 6px; }
 
-        .sess-status i {
-            font-size: 6px;
-        }
-
-        /* زر مفتوحة */
         .sess-status-open {
             color: #34d399;
             background: linear-gradient(135deg, rgba(16,185,129,0.18), rgba(16,185,129,0.06));
@@ -877,35 +929,24 @@
         .sess-status-open:hover {
             background: linear-gradient(135deg, rgba(16,185,129,0.3), rgba(16,185,129,0.12));
             border-color: #10B981;
-            color: #34d399;
             transform: translateY(-2px) scale(1.05);
             box-shadow: 0 6px 20px rgba(16,185,129,0.4), inset 0 0 16px rgba(16,185,129,0.15);
         }
-        .sess-status-open:hover i {
-            animation: none;
-            opacity: 1;
-        }
+        .sess-status-open:hover i { animation: none; opacity: 1; }
 
-        /* زر مغلقة */
         .sess-status-closed {
             color: #9CA3AF;
             background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01));
             border: 1px solid rgba(255,255,255,0.1);
         }
-        .sess-status-closed i {
-            color: #6b7280;
-            opacity: 0.6;
-        }
+        .sess-status-closed i { color: #6b7280; opacity: 0.6; }
         .sess-status-closed:hover {
             background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.04));
             border-color: rgba(255,255,255,0.25);
             color: #e6eaf2;
             transform: translateY(-2px) scale(1.05);
-            box-shadow: 0 6px 20px rgba(255,255,255,0.08);
         }
-        .sess-status-closed:hover i {
-            opacity: 1;
-        }
+        .sess-status-closed:hover i { opacity: 1; }
 
         @keyframes sessStatusPulse {
             0%, 100% { opacity: 1; }
@@ -1106,7 +1147,6 @@
                 0 8px 20px rgba(0, 0, 0, 0.4),
                 0 0 0 1px rgba(255, 179, 0, 0.15);
         }
-
         .com-btn:hover::before { opacity: 1; }
 
         .com-btn.active {
@@ -1302,7 +1342,37 @@
         .locked-subject-field span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
         /* ==========================================================
-           ✅ LIVE BOX — عمود واحد: QR فوق + كود يدوي تحت
+           ✅ SUBSECTION TITLES
+           ========================================================== */
+        .subsection-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 22px 0 10px;
+            padding: 8px 0;
+            font-family: 'Cairo', sans-serif;
+            font-size: 15px;
+            font-weight: 900;
+            color: #fff;
+            border-bottom: 2px dashed rgba(255,255,255,0.08);
+        }
+        .subsection-title i {
+            font-size: 16px;
+        }
+        .subsection-title.subsection-lectures i { color: var(--nx-gold); }
+        .subsection-title.subsection-classes i { color: #22d3ee; }
+        .subsection-title .count-badge {
+            margin-right: auto;
+            font-size: 11.5px;
+            font-weight: 800;
+            padding: 3px 10px;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.05);
+            color: #9aa2b5;
+        }
+
+        /* ==========================================================
+           ✅ LIVE BOX
            ========================================================== */
         .live-box {
             position: relative;
@@ -1349,7 +1419,6 @@
             margin: 0;
         }
 
-        /* ═══ عمود واحد — QR فوق + الكود اليدوي تحته ═══ */
         .live-body {
             display: flex;
             flex-direction: column;
@@ -1379,7 +1448,6 @@
             max-width: 480px;
         }
 
-        /* QR canvas */
         #qr-canvas {
             background: #fff;
             padding: 12px;
@@ -1397,7 +1465,6 @@
             image-rendering: crisp-edges;
         }
 
-        /* ✅ الكود اليدوي — حجم متوسط مو كبير */
         .code-display {
             font-family: 'Plus Jakarta Sans', monospace;
             font-size: 34px;
@@ -1486,7 +1553,6 @@
             margin-top: 14px;
         }
 
-        /* ===== شاشات لابتوب فأعلى ===== */
         @media (min-width: 1024px) {
             .live-box {
                 max-width: 720px;
@@ -1508,7 +1574,6 @@
             .live-col-manual { max-width: 420px; }
         }
 
-        /* ===== شاشات عرض 1600+ ===== */
         @media (min-width: 1600px) {
             .live-box {
                 max-width: 820px;
@@ -1524,9 +1589,6 @@
             .live-col-manual { max-width: 460px; }
         }
 
-        /* ==========================================================
-           ✅ FULLSCREEN MODE — QR فوق + كود تحت
-           ========================================================== */
         #live-box:fullscreen {
             max-width: 100vw !important;
             width: 100vw !important;
@@ -1544,84 +1606,39 @@
             overflow-y: auto;
         }
         #live-box:fullscreen::before { display: none; }
-
-        #live-box:fullscreen .live-header {
-            margin-bottom: 26px;
-            text-align: center;
-            width: 100%;
-        }
+        #live-box:fullscreen .live-header { margin-bottom: 26px; text-align: center; width: 100%; }
         #live-box:fullscreen #live-session-title { font-size: 30px; }
         #live-box:fullscreen #live-session-sub { font-size: 18px; }
-
-        #live-box:fullscreen .live-body {
-            width: 100%;
-            max-width: 900px;
-            margin: 0 auto;
-            align-content: center;
-            gap: 24px;
-        }
-
-        #live-box:fullscreen .live-col-qr {
-            padding: 26px 24px;
-            border-radius: 24px;
-        }
-        #live-box:fullscreen .live-col-manual {
-            padding: 20px 24px;
-            border-radius: 20px;
-            max-width: 560px;
-        }
-
-        #live-box:fullscreen #qr-canvas {
-            padding: 20px;
-            border-radius: 22px;
-        }
+        #live-box:fullscreen .live-body { width: 100%; max-width: 900px; margin: 0 auto; gap: 24px; }
+        #live-box:fullscreen .live-col-qr { padding: 26px 24px; border-radius: 24px; }
+        #live-box:fullscreen .live-col-manual { padding: 20px 24px; border-radius: 20px; max-width: 560px; }
+        #live-box:fullscreen #qr-canvas { padding: 20px; border-radius: 22px; }
         #live-box:fullscreen #qr-canvas img,
         #live-box:fullscreen #qr-canvas canvas {
             width: 360px !important;
             height: 360px !important;
         }
-
         #live-box:fullscreen .live-section-header i { font-size: 19px; }
         #live-box:fullscreen .live-section-header span.live-title { font-size: 17px; }
         #live-box:fullscreen .live-badge-timer { font-size: 13px; padding: 5px 14px; }
-
-        /* ✅ الكود اليدوي — حجم متوسط مناسب */
-        #live-box:fullscreen .code-display {
-            font-size: 62px;
-            letter-spacing: 14px;
-            margin: 12px 0;
-        }
-
-        #live-box:fullscreen .timer-track {
-            max-width: 380px;
-            height: 12px;
-        }
+        #live-box:fullscreen .code-display { font-size: 62px; letter-spacing: 14px; margin: 12px 0; }
+        #live-box:fullscreen .timer-track { max-width: 380px; height: 12px; }
         #live-box:fullscreen .live-hint { font-size: 13.5px; }
 
-        /* شاشات 1920px+ */
         @media (min-width: 1900px) {
             #live-box:fullscreen #qr-canvas img,
             #live-box:fullscreen #qr-canvas canvas {
                 width: 400px !important;
                 height: 400px !important;
             }
-            #live-box:fullscreen .code-display {
-                font-size: 72px;
-                letter-spacing: 16px;
-            }
+            #live-box:fullscreen .code-display { font-size: 72px; letter-spacing: 16px; }
         }
 
-        #live-box:fullscreen .live-actions {
-            margin-top: 24px;
-        }
+        #live-box:fullscreen .live-actions { margin-top: 24px; }
 
-        /* شاشات صغيرة جداً */
         @media (max-width: 480px) {
             .live-box { padding: 20px 14px; }
-            #qr-canvas img, #qr-canvas canvas {
-                width: 170px !important;
-                height: 170px !important;
-            }
+            #qr-canvas img, #qr-canvas canvas { width: 170px !important; height: 170px !important; }
             .code-display { font-size: 28px; letter-spacing: 6px; }
             #live-session-title { font-size: 16px; }
             #live-session-sub { font-size: 12px; }
@@ -1785,12 +1802,7 @@
             gap: 8px;
         }
 
-        .sess-stats {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            flex-shrink: 0;
-        }
+        .sess-stats { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
         .sess-stats-icon { font-size: 16px; line-height: 1; }
         .sess-stats-count {
             font-size: 20px;
@@ -1799,11 +1811,7 @@
             font-family: 'Plus Jakarta Sans', sans-serif;
             line-height: 1;
         }
-        .sess-stats-label {
-            font-size: 11px;
-            color: var(--text-muted);
-            font-weight: 700;
-        }
+        .sess-stats-label { font-size: 11px; color: var(--text-muted); font-weight: 700; }
 
         .sess-actions {
             display: flex;
@@ -1863,14 +1871,7 @@
         .glass-student-card.manual-entry { border-right-color: #f59e0b; }
         .glass-student-card.auto-entry { border-right-color: #10b981; }
 
-        .gsc-main {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            flex: 1;
-            min-width: 0;
-            overflow: hidden;
-        }
+        .gsc-main { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; overflow: hidden; }
 
         .gsc-dot {
             width: 6px;
@@ -1880,10 +1881,7 @@
             box-shadow: 0 0 8px #10b981;
             flex-shrink: 0;
         }
-        .manual-entry .gsc-dot {
-            background: #f59e0b;
-            box-shadow: 0 0 8px #f59e0b;
-        }
+        .manual-entry .gsc-dot { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
 
         .gsc-name {
             font-weight: 800;
@@ -1894,11 +1892,7 @@
             white-space: nowrap;
         }
 
-        .gsc-sep {
-            color: rgba(255,255,255,0.25);
-            font-weight: 700;
-            flex-shrink: 0;
-        }
+        .gsc-sep { color: rgba(255,255,255,0.25); font-weight: 700; flex-shrink: 0; }
 
         .gsc-id, .gsc-time, .gsc-type {
             color: #9aa2b5;
@@ -1909,11 +1903,7 @@
         }
         .gsc-type { font-family: 'Cairo', sans-serif; }
 
-        .gsc-actions {
-            display: flex;
-            gap: 5px;
-            flex-shrink: 0;
-        }
+        .gsc-actions { display: flex; gap: 5px; flex-shrink: 0; }
 
         .gsc-btn {
             width: 30px;
@@ -1931,21 +1921,9 @@
             padding: 0;
         }
 
-        .gsc-btn-edit:hover {
-            background: rgba(255, 179, 0, 0.15);
-            color: var(--nx-gold);
-            transform: translateY(-2px);
-        }
-        .gsc-btn-del:hover {
-            background: rgba(239, 68, 68, 0.15);
-            color: #ef4444;
-            transform: translateY(-2px);
-        }
-        .gsc-btn-activate:hover {
-            background: rgba(16, 185, 129, 0.15);
-            color: #10b981;
-            transform: translateY(-2px);
-        }
+        .gsc-btn-edit:hover { background: rgba(255, 179, 0, 0.15); color: var(--nx-gold); transform: translateY(-2px); }
+        .gsc-btn-del:hover { background: rgba(239, 68, 68, 0.15); color: #ef4444; transform: translateY(-2px); }
+        .gsc-btn-activate:hover { background: rgba(16, 185, 129, 0.15); color: #10b981; transform: translateY(-2px); }
 
         .pass-toggle-wrap {
             position: relative;
@@ -1967,9 +1945,7 @@
             z-index: 3;
             padding: 6px;
         }
-        #toggle-admin-pass-icon:hover {
-            color: var(--nx-gold);
-        }
+        #toggle-admin-pass-icon:hover { color: var(--nx-gold); }
 
         /* ---------- SWEETALERT OVERRIDES ---------- */
         .swal2-popup {
@@ -2036,11 +2012,7 @@
                 padding: 16px 18px;
                 gap: 12px;
             }
-            .welcome-icon-wrap {
-                width: 50px;
-                height: 50px;
-                border-radius: 14px;
-            }
+            .welcome-icon-wrap { width: 50px; height: 50px; border-radius: 14px; }
             .welcome-icon-wrap i { font-size: 20px; }
             .welcome-greet { font-size: 11px; }
             #welcome-name { font-size: 17px; }
@@ -2071,7 +2043,7 @@
             .dept-filters::before { display: none; }
 
             .table-container { padding: 4px; border-radius: 16px; }
-            table { min-width: 640px; }
+            table { min-width: 580px; }
             table th { padding: 11px 9px; font-size: 11.5px; }
             table td { padding: 10px 8px; font-size: 11.5px; }
             table td .btn { padding: 6px 10px; font-size: 11px; }
@@ -2082,10 +2054,17 @@
                 gap: 5px;
             }
 
-            .modal-header {
-                padding: 10px 14px;
-                gap: 8px;
+            .sess-type-badge {
+                font-size: 10px;
+                padding: 4px 10px;
             }
+
+            .subsection-title {
+                font-size: 13.5px;
+                margin-top: 18px;
+            }
+
+            .modal-header { padding: 10px 14px; gap: 8px; }
             #sess-modal-title {
                 font-size: 12.5px;
                 line-height: 1.3;
@@ -2093,11 +2072,7 @@
                 text-overflow: ellipsis;
                 white-space: nowrap;
             }
-            .modal-close {
-                width: 32px;
-                height: 32px;
-                font-size: 12px;
-            }
+            .modal-close { width: 32px; height: 32px; font-size: 12px; }
             .modal-body { padding: 8px; }
 
             .sess-control-bar {
@@ -2109,21 +2084,10 @@
             .sess-stats-icon { font-size: 14px; }
             .sess-stats-count { font-size: 18px; }
             .sess-stats-label { font-size: 10.5px; }
-            .sess-actions .btn {
-                padding: 7px 10px !important;
-                font-size: 11px !important;
-                gap: 4px;
-            }
-            .search-input-glass {
-                padding: 9px 12px;
-                font-size: 12px;
-            }
+            .sess-actions .btn { padding: 7px 10px !important; font-size: 11px !important; gap: 4px; }
+            .search-input-glass { padding: 9px 12px; font-size: 12px; }
 
-            .glass-student-card {
-                padding: 9px 11px;
-                font-size: 12px;
-                margin-bottom: 6px;
-            }
+            .glass-student-card { padding: 9px 11px; font-size: 12px; margin-bottom: 6px; }
             .gsc-name { font-size: 12px; max-width: 120px; }
             .gsc-id, .gsc-time { font-size: 11px; }
             .gsc-btn { width: 28px; height: 28px; font-size: 10px; }
@@ -2135,7 +2099,6 @@
             .login-title { font-size: 21px !important; }
             .login-subtitle { font-size: 12px !important; margin-bottom: 20px !important; }
 
-            /* ✅ الدايرة على الموبايل */
             .nx-logo-wrap { width: 120px; height: 120px; margin-bottom: 24px; }
             .nx-logo-core { width: 102px; height: 102px; font-size: 20px; }
 
@@ -2151,73 +2114,33 @@
                 gap: 12px !important;
                 margin-top: 15px !important;
             }
-            .admin-subject-card {
-                padding: 22px 12px 18px !important;
-                border-radius: 20px !important;
-            }
+            .admin-subject-card { padding: 22px 12px 18px !important; border-radius: 20px !important; }
             .admin-subject-card img {
                 width: 140px !important;
                 height: 140px !important;
                 padding: 7px !important;
                 margin-bottom: 10px !important;
             }
-            .admin-subject-card h3 {
-                font-size: 15px !important;
-                margin-bottom: 4px !important;
-            }
-            .admin-subject-card p {
-                font-size: 11px !important;
-                padding: 4px 10px;
-                margin-top: 4px !important;
-            }
+            .admin-subject-card h3 { font-size: 15px !important; margin-bottom: 4px !important; }
+            .admin-subject-card p { font-size: 11px !important; padding: 4px 10px; margin-top: 4px !important; }
 
-            .mobile-header {
-                height: 56px;
-                padding: 0 14px;
-            }
-            .mobile-header .logo {
-                font-size: 18px;
-                letter-spacing: 2.5px;
-                left: 55% !important;
-            }
+            .mobile-header { height: 56px; padding: 0 14px; }
+            .mobile-header .logo { font-size: 18px; letter-spacing: 2.5px; left: 55% !important; }
             .mobile-header .logo i { font-size: 18px; }
-            .menu-toggle {
-                width: 38px;
-                height: 38px;
-                font-size: 16px;
-                left: 12px !important;
-            }
+            .menu-toggle { width: 38px; height: 38px; font-size: 16px; left: 12px !important; }
 
-            .staff-actions {
-                flex-direction: row;
-                gap: 4px;
-            }
-            .staff-actions .gsc-btn {
-                width: 30px;
-                height: 30px;
-                font-size: 11px;
-            }
-            .status-badge {
-                font-size: 10px;
-                padding: 3px 9px;
-            }
+            .staff-actions { flex-direction: row; gap: 4px; }
+            .staff-actions .gsc-btn { width: 30px; height: 30px; font-size: 11px; }
+            .status-badge { font-size: 10px; padding: 3px 9px; }
         }
 
-        /* Very small phones */
         @media (max-width: 480px) {
-            .welcome-icon-wrap {
-                width: 44px;
-                height: 44px;
-                border-radius: 12px;
-            }
+            .welcome-icon-wrap { width: 44px; height: 44px; border-radius: 12px; }
             .welcome-icon-wrap i { font-size: 18px; }
             #welcome-name { font-size: 15px; }
-            .welcome-role-badge {
-                padding: 5px 10px;
-                font-size: 10px;
-            }
+            .welcome-role-badge { padding: 5px 10px; font-size: 10px; }
 
-            table { min-width: 580px; }
+            table { min-width: 520px; }
             table th { padding: 10px 8px; font-size: 11px; }
             table td { padding: 9px 6px; font-size: 11px; }
 
@@ -2242,27 +2165,12 @@
                 padding: 6px !important;
             }
             .admin-subject-card h3 { font-size: 14px !important; }
-            .admin-subject-card p {
-                font-size: 10.5px !important;
-                padding: 3px 8px;
-            }
+            .admin-subject-card p { font-size: 10.5px !important; padding: 3px 8px; }
 
-            .mobile-header {
-                height: 54px;
-                padding: 0 12px;
-            }
-            .mobile-header .logo {
-                font-size: 17px;
-                letter-spacing: 2px;
-                left: 55% !important;
-            }
+            .mobile-header { height: 54px; padding: 0 12px; }
+            .mobile-header .logo { font-size: 17px; letter-spacing: 2px; left: 55% !important; }
             .mobile-header .logo i { font-size: 17px; }
-            .menu-toggle {
-                width: 36px;
-                height: 36px;
-                font-size: 15px;
-                left: 10px !important;
-            }
+            .menu-toggle { width: 36px; height: 36px; font-size: 15px; left: 10px !important; }
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -2401,8 +2309,8 @@
                             </button>
                             <h2 id="sessions-subject-title" style="font-size:17px; font-weight:900; margin:0; color:var(--nx-gold);"></h2>
                         </div>
-                        <button class="btn btn-gold" onclick="createSessionModal()" style="padding: 10px 16px; font-size: 12.5px;">
-                            <i class="fas fa-plus"></i> جلسة جديدة
+                        <button id="btn-new-session" class="btn btn-gold" onclick="createSessionModal()" style="padding: 10px 16px; font-size: 12.5px;">
+                            <i class="fas fa-plus"></i> <span id="btn-new-session-text">محاضرة جديدة</span>
                         </button>
                     </div>
 
@@ -2416,7 +2324,6 @@
                         </div>
 
                         <div class="live-body">
-                            <!-- عمود QR (الأساسي) -->
                             <div class="live-col live-col-qr">
                                 <div class="live-section-header">
                                     <i class="fas fa-qrcode"></i>
@@ -2435,7 +2342,6 @@
                                 </p>
                             </div>
 
-                            <!-- عمود الكود اليدوي (مخفي افتراضياً - تحت الـ QR) -->
                             <div class="live-col live-col-manual" id="live-manual-section" style="display:none;">
                                 <div class="live-section-header">
                                     <i class="fas fa-keyboard"></i>
@@ -2468,6 +2374,15 @@
                         </div>
                     </div>
 
+                    <!-- ============================================================
+                         ✅ جدول الجلسات (محاضرات للدكتور / سكاشن للمعيد)
+                         ============================================================ -->
+                    <div class="subsection-title subsection-lectures">
+                        <i class="fas fa-chalkboard-teacher"></i>
+                        <span id="lectures-section-title">المحاضرات</span>
+                        <span class="count-badge" id="sessions-count-badge">0</span>
+                    </div>
+
                     <div class="table-container">
                         <table>
                             <thead>
@@ -2475,7 +2390,7 @@
                                     <th>النوع</th>
                                     <th>العنوان</th>
                                     <th>الحالة</th>
-                                    <th>المحاضر</th>
+                                    <th>المنشئ</th>
                                     <th>التاريخ</th>
                                     <th>إجراء</th>
                                 </tr>
@@ -2483,6 +2398,36 @@
                             <tbody id="sessions-table-body"></tbody>
                         </table>
                     </div>
+
+                    <!-- ============================================================
+                         ✅ قسم الفصول (Classes)
+                         ============================================================ -->
+                    <div id="classes-section" style="display:none;">
+                        <div class="subsection-title subsection-classes">
+                            <i class="fas fa-layer-group"></i>
+                            <span>الفصول (Classes)</span>
+                            <span class="count-badge" id="classes-count-badge">0</span>
+                            <button id="btn-add-class" type="button" class="btn btn-green" onclick="addClass()"
+                                    style="padding:6px 14px; font-size:12px; margin-right:auto; margin-left:8px;">
+                                <i class="fas fa-plus"></i> إضافة فصل جديد
+                            </button>
+                        </div>
+
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>الفصل</th>
+                                        <th>المعيدون</th>
+                                        <th>إجراء</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="classes-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
                 </div>
             </div>
 
@@ -2532,9 +2477,6 @@
                     <button type="button" class="btn btn-green staff-manager-only" onclick="addStaff()" style="padding: 12px 18px; font-size: 13px;">
                         <i class="fas fa-user-plus"></i> إضافة عضو جديد
                     </button>
-                    <button type="button" class="btn btn-gold staff-manager-only" onclick="assignExistingTA()" style="padding: 12px 18px; font-size: 13px;">
-                        <i class="fas fa-user-tag"></i> تعيين معيد مسجل
-                    </button>
                     <button type="button" class="btn-change-pw" onclick="changeMyPassword()" style="padding: 12px 18px; font-size: 13px;">
                         <i class="fas fa-key"></i> تغيير كلمة المرور
                     </button>
@@ -2545,7 +2487,7 @@
                             <tr>
                                 <th>الاسم</th>
                                 <th>اسم الدخول</th>
-                                <th>المواد المسموحة</th>
+                                <th>المواد والفصول</th>
                                 <th>الصفة</th>
                                 <th>الحالة</th>
                                 <th>إجراء</th>

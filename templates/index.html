@@ -1,1212 +1,1761 @@
-import os
-import time
-import hmac
-import hashlib
-import io
-import csv
-import urllib.parse
-from datetime import datetime, timedelta
-from collections import defaultdict
-import pytz
-from flask import Flask, render_template, request, jsonify, session, Response, redirect
-from pymongo import MongoClient, UpdateOne
-from werkzeug.security import generate_password_hash, check_password_hash
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>BATU · Attendance</title>
 
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-PARENT_DIR = os.path.abspath(os.path.join(BASE_DIR, '..'))
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3CradialGradient id='bg' cx='30%25' cy='25%25'%3E%3Cstop offset='0%25' stop-color='%231a2136'/%3E%3Cstop offset='100%25' stop-color='%230a0e18'/%3E%3C/radialGradient%3E%3ClinearGradient id='ring' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23FFD54F'/%3E%3Cstop offset='50%25' stop-color='%23FFB300'/%3E%3Cstop offset='100%25' stop-color='%23FF8F00'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='50' cy='50' r='47' fill='url(%23bg)' stroke='url(%23ring)' stroke-width='4'/%3E%3Ccircle cx='50' cy='50' r='39' fill='none' stroke='%23FFB300' stroke-opacity='0.3' stroke-width='1'/%3E%3Ctext x='50' y='59' text-anchor='middle' font-family='Arial Black,Arial,sans-serif' font-weight='900' font-size='24' fill='%23FFB300' letter-spacing='0.5'%3EBATU%3C/text%3E%3C/svg%3E">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%230a0e18'/%3E%3Ccircle cx='50' cy='50' r='45' fill='%230b0f1a' stroke='%23FFB300' stroke-width='4'/%3E%3Ctext x='50' y='60' text-anchor='middle' font-family='Arial Black,sans-serif' font-weight='900' font-size='24' fill='%23FFB300'%3EBATU%3C/text%3E%3C/svg%3E">
 
-TEMPLATE_DIR = os.path.join(PARENT_DIR, 'templates') if os.path.exists(os.path.join(PARENT_DIR, 'templates')) else os.path.join(BASE_DIR, 'templates')
-STATIC_DIR = os.path.join(PARENT_DIR, 'static') if os.path.exists(os.path.join(PARENT_DIR, 'static')) else os.path.join(BASE_DIR, 'static')
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        /* ==========================================================
+           BATU · PREMIUM STUDENT UI  ·  2026
+           ========================================================== */
 
-app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR, static_url_path='/static')
-app.secret_key = os.environ.get("SECRET_KEY", "Nexus_Attendance_Super_Key_2026_Fixed")
-app.permanent_session_lifetime = timedelta(days=7)
-
-limiter = Limiter(
-    get_remote_address,
-    app=app,
-    default_limits=["3000 per day", "800 per hour"],
-    storage_uri="memory://"
-)
-
-# ----------------- MongoDB Atlas -----------------
-username = urllib.parse.quote_plus('ahmedattia20041120_db_user')
-password = urllib.parse.quote_plus('wjXYBO8Pbj5GijfS')
-DEFAULT_MONGO_URI = f"mongodb+srv://{username}:{password}@cluster0.yimrrnh.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-
-MONGO_URI = os.environ.get("MONGO_URI", DEFAULT_MONGO_URI)
-client = MongoClient(MONGO_URI)
-db = client['nexus_attendance_system']
-
-users_col = db['users']
-subjects_col = db['subjects']
-sessions_col = db['sessions']
-attendance_col = db['attendance']
-students_col = db['students']
-classes_col = db['classes']
-
-try:
-    users_col.create_index("username", unique=True)
-    students_col.create_index("student_id", unique=True)
-    attendance_col.create_index([("student_id", 1), ("session_id", 1)], unique=True)
-    sessions_col.create_index("session_id", unique=True)
-    classes_col.create_index([("subject_id", 1), ("class_number", 1)], unique=True)
-    classes_col.create_index("class_id", unique=True)
-except Exception:
-    pass
-
-# تثبيت حساب الآدمن الرئيسي
-users_col.update_one(
-    {"username": "Nexus_Admin_Core#2026"},
-    {"$set": {
-        "username": "Nexus_Admin_Core#2026",
-        "role": "super_admin",
-        "name": "الآدمن الرئيسي",
-        "is_active": True,
-        "password": generate_password_hash("Nx!99@bATU#xK82_Secured")
-    }},
-    upsert=True
-)
-
-# ============================================================
-#  🔐 إعدادات التشفير
-# ============================================================
-SECRET_SALT = b"NEXUS_ATTENDANCE_CORE_SECRET_2026_PROD"
-QR_SECRET_SALT = b"NEXUS_QR_ATTENDANCE_SECRET_2026_PROD"
-BASE32_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-
-MANUAL_STEP_INTERVAL = 10
-QR_STEP_INTERVAL = 3
-GRACE_PERIOD = 2.0
-
-
-def _generate_code(secret_salt: bytes, step: int, session_id: str) -> str:
-    key = secret_salt + session_id.encode('utf-8')
-    digest = hmac.new(key, str(step).encode('utf-8'), hashlib.sha256).digest()
-    num = int.from_bytes(digest[:5], 'big')
-    code = ""
-    for _ in range(6):
-        code += BASE32_CHARS[num % len(BASE32_CHARS)]
-        num //= len(BASE32_CHARS)
-    return code
-
-
-def get_step_code(step: int, session_id: str) -> str:
-    return _generate_code(SECRET_SALT, step, session_id)
-
-
-def get_qr_step_code(step: int, session_id: str) -> str:
-    return _generate_code(QR_SECRET_SALT, step, session_id)
-
-
-def verify_manual_code(user_code: str, session_id: str) -> bool:
-    clean = user_code.strip().upper()
-    if not clean or len(clean) != 6:
-        return False
-    now = time.time()
-    current_step = int(now // MANUAL_STEP_INTERVAL)
-    if clean == get_step_code(current_step, session_id):
-        return True
-    elapsed = now - (current_step * MANUAL_STEP_INTERVAL)
-    if elapsed < GRACE_PERIOD:
-        if clean == get_step_code(current_step - 1, session_id):
-            return True
-    return False
-
-
-def verify_qr_code(user_code: str, session_id: str) -> bool:
-    clean = user_code.strip().upper()
-    if not clean or len(clean) != 6:
-        return False
-    now = time.time()
-    current_step = int(now // QR_STEP_INTERVAL)
-    return clean == get_qr_step_code(current_step, session_id)
-
-
-@app.after_request
-def set_security_headers(response):
-    response.headers['X-Content-Type-Options'] = 'nosniff'
-    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
-    response.headers['X-XSS-Protection'] = '1; mode=block'
-    return response
-
-
-@app.errorhandler(429)
-def ratelimit_handler(e):
-    return jsonify({"status": "error", "message": "تم تجاوز عدد المحاولات! انتظر قليلاً."}), 429
-
-
-# ----------------- مسارات الواجهات -----------------
-@app.route('/')
-def student_ui():
-    return render_template('index.html')
-
-
-@app.route('/secure-auth-gateway-2026-x9v2-pl7q-a84m')
-def admin_ui():
-    return render_template('admin.html')
-
-
-@app.route('/logout-gateway-vip-x9v2-pL7q-2026')
-def logout():
-    session.clear()
-    return redirect('/secure-auth-gateway-2026-x9v2-pl7q-a84m')
-
-
-# ----------------- مسارات بوابة الطلاب -----------------
-@app.route('/api/student-login', methods=['POST'])
-@limiter.limit("30 per minute")
-def student_login():
-    data = request.get_json(force=True, silent=True) or {}
-    s_name = str(data.get('student_name', '')).strip()
-    s_id = str(data.get('student_id', '')).strip()
-    year = str(data.get('year', '')).strip()
-    dept = str(data.get('department', 'عام (IT)')).strip()
-    class_number = str(data.get('class_number', '')).strip()   # ✅ جديد
-
-    if len(s_name) < 3:
-        return jsonify({"status": "error", "message": "يرجى كتابة اسم الطالب بشكل صحيح!"}), 400
-    if len(s_id) != 7 or not s_id.isdigit():
-        return jsonify({"status": "error", "message": "كود الطالب يجب أن يتكون من 7 أرقام!"}), 400
-    if not year:
-        return jsonify({"status": "error", "message": "يرجى اختيار الفرقة الدراسية!"}), 400
-    if not class_number:
-        return jsonify({"status": "error", "message": "يرجى اختيار الفصل (Class)!"}), 400
-
-    # ✅ تحقق أن الفصل موجود فعلاً في فصول المواد المتاحة لهذه الفرقة/القسم
-    sub_query = {"year": year}
-    if dept:
-        sub_query["department"] = {"$in": [dept, "عام (IT)"]}
-    subject_ids = [s['id'] for s in subjects_col.find(sub_query, {"id": 1, "_id": 0})]
-
-    if subject_ids:
-        exists = classes_col.find_one({
-            "subject_id": {"$in": subject_ids},
-            "class_number": int(class_number)
-        })
-        if not exists:
-            return jsonify({"status": "error", "message": "هذا الفصل غير متاح لفرقتك/قسمك!"}), 400
-
-    students_col.update_one(
-        {"student_id": s_id},
-        {"$set": {
-            "student_id": s_id,
-            "name": s_name,
-            "email": f"{s_id}@batechu.com",
-            "year": year,
-            "department": dept,
-            "class_number": class_number,   # ✅ الفصل العام
-            "last_active": datetime.now(pytz.timezone('Africa/Cairo')).strftime("%Y-%m-%d %I:%M %p")
-        }},
-        upsert=True
-    )
-
-    return jsonify({
-        "status": "success",
-        "student": {
-            "student_id": s_id, "name": s_name,
-            "email": f"{s_id}@batechu.com",
-            "year": year, "department": dept,
-            "class_number": class_number
+        :root {
+            --nx-gold: #FFB300;
+            --nx-gold-2: #FFD54F;
+            --nx-gold-3: #FF8F00;
+            --nx-purple: #7C3AED;
+            --nx-cyan: #06B6D4;
+            --nx-emerald: #10B981;
+            --nx-ink: #05070f;
+            --nx-line: rgba(255, 255, 255, 0.08);
+            --nx-line-strong: rgba(255, 255, 255, 0.14);
         }
-    })
 
-
-# ✅ جديد: جلب الفصول المتاحة (من الفصول اللي أنشأها الدكاترة) لفرقة/قسم معين
-@app.route('/api/available-classes')
-def available_classes():
-    year = request.args.get('year', '').strip()
-    dept = request.args.get('dept', '').strip()
-
-    if not year:
-        return jsonify({"status": "success", "classes": []})
-
-    sub_query = {"year": year}
-    if dept:
-        sub_query["department"] = {"$in": [dept, "عام (IT)"]}
-
-    subject_ids = [s['id'] for s in subjects_col.find(sub_query, {"id": 1, "_id": 0})]
-
-    if not subject_ids:
-        return jsonify({"status": "success", "classes": []})
-
-    raw = classes_col.distinct("class_number", {"subject_id": {"$in": subject_ids}})
-    nums = sorted({int(c) for c in raw if str(c).isdigit()})
-
-    return jsonify({"status": "success", "classes": nums})
-
-
-@app.route('/api/student-init')
-def student_init():
-    year = request.args.get('year', '')
-    dept = request.args.get('dept', '')
-    s_id = request.args.get('student_id', '').strip()
-
-    query = {}
-    if year:
-        query["year"] = year
-        if dept:
-            query["department"] = {"$in": [dept, "عام (IT)"]}
-
-    subs = list(subjects_col.find(query, {"_id": 0}))
-
-    # ✅ فصل الطالب العام
-    student = students_col.find_one({"student_id": s_id}) if s_id else None
-    student_class = str(student.get('class_number', '')) if student else ''
-
-    subject_ids = [s['id'] for s in subs]
-
-    # ✅ فلترة الجلسات المفتوحة
-    all_sessions = list(sessions_col.find({"is_open": True}, {"_id": 0}))
-    filtered = []
-    for s in all_sessions:
-        if s.get('subject_id') not in subject_ids:
-            continue
-
-        # محاضرة → تظهر للكل
-        if s.get('type') == 'Lecture':
-            filtered.append(s)
-            continue
-
-        # سكشن → يظهر فقط لو فصل الطالب مطابق
-        if s.get('type') == 'Section':
-            if student_class and str(s.get('class_number', '')) == student_class:
-                filtered.append(s)
-
-    return jsonify({
-        "status": "success",
-        "subjects": subs,
-        "sessions": filtered,
-        "student_class": student_class
-    })
-
-
-@app.route('/api/student-history', methods=['POST'])
-def student_history():
-    data = request.get_json(force=True, silent=True) or {}
-    s_id = str(data.get('student_id', '')).strip()
-    records = list(attendance_col.find({"student_id": s_id}, {"_id": 0}).sort("timestamp", -1))
-    return jsonify({"status": "success", "history": records})
-
-
-@app.route('/api/submit-attendance', methods=['POST'])
-@limiter.limit("40 per minute")
-def submit_attendance():
-    data = request.get_json(force=True, silent=True) or {}
-    s_id = str(data.get('student_id', '')).strip()
-    s_name = str(data.get('student_name', '')).strip()
-    session_id = str(data.get('session_id', '')).strip()
-    code = str(data.get('code', '')).strip().upper()
-    device_token = str(data.get('device_token', '')).strip()
-    scan_type = str(data.get('scan_type', 'manual')).strip().lower()
-
-    if len(s_id) != 7 or not s_id.isdigit():
-        return jsonify({"status": "error", "message": "رقم الـ ID غير صحيح!"}), 400
-
-    sess = sessions_col.find_one({"session_id": session_id, "is_open": True})
-    if not sess:
-        return jsonify({"status": "error", "message": "عفواً، هذه الجلسة مغلقة حالياً أو انتهت!"}), 400
-
-    # ✅ فحص إضافي: لو الجلسة سكشن، لازم فصل الطالب يكون مطابق
-    if sess.get('type') == 'Section':
-        st = students_col.find_one({"student_id": s_id})
-        st_class = str(st.get('class_number', '')) if st else ''
-        if st_class and str(sess.get('class_number', '')) != st_class:
-            return jsonify({"status": "error", "message": "هذه الجلسة ليست لفصلك!"}), 403
-
-    if scan_type == 'qr':
-        is_valid = verify_qr_code(code, session_id)
-    else:
-        is_valid = verify_manual_code(code, session_id)
-
-    if not is_valid:
-        if scan_type == 'qr':
-            return jsonify({"status": "error", "message": "كود QR انتهت صلاحيته!"}), 400
-        return jsonify({"status": "error", "message": "الرمز السري غير صحيح أو انتهت صلاحيته!"}), 400
-
-    if device_token:
-        dup_dev = attendance_col.find_one({"session_id": session_id, "device_token": device_token})
-        if dup_dev and dup_dev.get('student_id') != s_id:
-            return jsonify({"status": "error", "message": "ممنوع الغش! تم تسجيل حضور طالب آخر من هذا الجهاز."}), 403
-
-    if attendance_col.find_one({"student_id": s_id, "session_id": session_id}):
-        return jsonify({"status": "error", "message": "لقد قمت بتسجيل الحضور مسبقاً!"}), 409
-
-    st_record = students_col.find_one({"student_id": s_id})
-    year = st_record.get('year', '') if st_record else ''
-    dept = st_record.get('department', '') if st_record else ''
-
-    cairo_now = datetime.now(pytz.timezone('Africa/Cairo')).strftime("%Y-%m-%d %I:%M:%S %p")
-    ip = request.headers.get('x-forwarded-for', request.remote_addr).split(',')[0].strip()
-
-    attendance_col.insert_one({
-        "student_id": s_id,
-        "student_name": s_name,
-        "year": year,
-        "department": dept,
-        "subject_id": sess['subject_id'],
-        "subject_name": sess['subject_name'],
-        "session_id": session_id,
-        "session_title": sess['title'],
-        "session_type": sess.get('type', 'Lecture'),
-        "class_number": sess.get('class_number', ''),
-        "timestamp": cairo_now,
-        "device_token": device_token,
-        "ip": ip,
-        "is_manual": False,
-        "scan_type": scan_type
-    })
-
-    return jsonify({"status": "success", "message": f"تم تأكيد حضورك في ({sess['subject_name']} - {sess['title']})"})
-
-
-# ----------------- مسارات لوحة تحكم الإدارة -----------------
-@app.route('/api/admin-login', methods=['POST'])
-def admin_login():
-    data = request.get_json(force=True, silent=True) or {}
-    username = str(data.get('username', '')).strip()
-    password = str(data.get('password', '')).strip()
-
-    if username == 'Nexus_Admin_Core#2026' and password == 'Nx!99@bATU#xK82_Secured':
-        session.permanent = True
-        session['admin'] = {
-            "username": "Nexus_Admin_Core#2026",
-            "name": "الآدمن الرئيسي",
-            "role": "super_admin",
-            "allowed_subjects": [],
-            "allowed_classes": []
+        html, body {
+            background: var(--nx-ink) !important;
+            color: #e6eaf2;
+            overflow-x: hidden;
         }
-        return jsonify({"status": "success", "admin": session['admin']})
 
-    user = users_col.find_one({"username": {"$regex": f"^{username}$", "$options": "i"}})
-    if user:
-        if user.get('is_active', True) == False:
-            return jsonify({"status": "error", "message": "هذا الحساب موقوف حالياً."}), 403
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 1;
+            background-image: radial-gradient(rgba(255,255,255,0.035) 1px, transparent 1px);
+            background-size: 24px 24px;
+            mask-image: radial-gradient(ellipse at center, #000 25%, transparent 75%);
+            -webkit-mask-image: radial-gradient(ellipse at center, #000 25%, transparent 75%);
+        }
 
-        if check_password_hash(user.get('password', ''), password) or user.get('password') == password:
-            session.permanent = True
-            session['admin'] = {
-                "username": user['username'],
-                "name": user.get('name', user['username']),
-                "role": user.get('role', 'doctor'),
-                "allowed_subjects": user.get('allowed_subjects', []),
-                "allowed_classes": user.get('allowed_classes', [])
+        /* ---------- AURORA BACKGROUND ---------- */
+        .nx-aurora {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        .nx-aurora .blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(130px);
+            opacity: 0.5;
+            will-change: transform;
+        }
+        .nx-aurora .b1 {
+            width: 560px; height: 560px;
+            background: radial-gradient(circle, #FFB300, transparent 70%);
+            top: -200px; right: -140px;
+            animation: nxFloat1 24s ease-in-out infinite;
+        }
+        .nx-aurora .b2 {
+            width: 480px; height: 480px;
+            background: radial-gradient(circle, #7C3AED, transparent 70%);
+            bottom: -180px; left: -140px;
+            animation: nxFloat2 28s ease-in-out infinite;
+        }
+        .nx-aurora .b3 {
+            width: 400px; height: 400px;
+            background: radial-gradient(circle, #06B6D4, transparent 70%);
+            top: 45%; left: 45%;
+            animation: nxFloat3 32s ease-in-out infinite;
+            opacity: 0.28;
+        }
+        @keyframes nxFloat1 {
+            0%,100% { transform: translate(0,0) scale(1); }
+            50%     { transform: translate(-80px, 70px) scale(1.15); }
+        }
+        @keyframes nxFloat2 {
+            0%,100% { transform: translate(0,0) scale(1); }
+            50%     { transform: translate(70px, -60px) scale(1.12); }
+        }
+        @keyframes nxFloat3 {
+            0%,100% { transform: translate(-50%,-50%) scale(1); }
+            50%     { transform: translate(-55%,-45%) scale(1.18); }
+        }
+
+        /* ---------- PARTICLES ---------- */
+        .nx-particles {
+            position: fixed;
+            inset: 0;
+            z-index: 1;
+            pointer-events: none;
+            overflow: hidden;
+        }
+        .nx-particle {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            background: var(--nx-gold);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--nx-gold), 0 0 20px rgba(255,179,0,0.5);
+            opacity: 0;
+            animation: nxRise linear infinite;
+        }
+        @keyframes nxRise {
+            0%   { transform: translateY(100vh) scale(0.6); opacity: 0; }
+            10%  { opacity: 0.9; }
+            90%  { opacity: 0.9; }
+            100% { transform: translateY(-20vh) scale(1); opacity: 0; }
+        }
+
+        /* ---------- LOADING SCREEN ---------- */
+        #loading-screen {
+            background: radial-gradient(circle at center, #0d1220 0%, #05070f 100%) !important;
+            backdrop-filter: blur(12px);
+            z-index: 99999;
+            gap: 22px;
+        }
+        .nx-load-logo {
+            position: relative;
+            width: 100px; height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .nx-load-ring {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            border-top-color: var(--nx-gold);
+            border-right-color: var(--nx-gold-2);
+            animation: nxSpin 1.2s cubic-bezier(.5,.1,.5,.9) infinite;
+            filter: drop-shadow(0 0 12px rgba(255,179,0,0.6));
+        }
+        .nx-load-ring.ring-2 {
+            inset: 14px;
+            border-top-color: var(--nx-purple);
+            border-right-color: var(--nx-cyan);
+            animation: nxSpin 1.8s cubic-bezier(.5,.1,.5,.9) infinite reverse;
+        }
+        .nx-load-core {
+            width: 56px; height: 56px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at 30% 25%, #1a2136, #0a0e18);
+            border: 1px solid rgba(255,179,0,0.4);
+            box-shadow: 0 0 40px rgba(255,179,0,0.4);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-weight: 900;
+            font-size: 15px;
+            letter-spacing: 1px;
+            color: var(--nx-gold);
+            animation: nxPulse 1.6s ease-in-out infinite;
+        }
+        @keyframes nxPulse {
+            0%,100% { transform: scale(1); box-shadow: 0 0 40px rgba(255,179,0,0.4); }
+            50%     { transform: scale(1.06); box-shadow: 0 0 60px rgba(255,179,0,0.6); }
+        }
+        @keyframes nxSpin { to { transform: rotate(360deg); } }
+
+        #loading-screen h3 {
+            font-family: 'Plus Jakarta Sans', sans-serif !important;
+            font-size: 13px !important;
+            font-weight: 800 !important;
+            letter-spacing: 3px;
+            color: #8b93a7 !important;
+            text-transform: uppercase;
+        }
+
+        /* ==========================================================
+           AUTH SCREEN
+           ========================================================== */
+        #auth-screen {
+            background: transparent !important;
+            z-index: 2;
+            padding: 24px;
+        }
+
+        .auth-card {
+            position: relative;
+            background: linear-gradient(165deg, rgba(24,30,48,0.82), rgba(11,15,26,0.94));
+            backdrop-filter: blur(30px) saturate(160%);
+            -webkit-backdrop-filter: blur(30px) saturate(160%);
+            border: 1px solid var(--nx-line-strong) !important;
+            border-radius: 28px !important;
+            padding: 44px 34px 34px !important;
+            max-width: 460px !important;
+            box-shadow:
+                0 35px 90px rgba(0,0,0,0.8),
+                inset 0 1px 0 rgba(255,255,255,0.06),
+                0 0 0 1px rgba(255,179,0,0.07) !important;
+            animation: nxCardIn 0.8s cubic-bezier(.2,.8,.2,1) both;
+        }
+        @keyframes nxCardIn {
+            from { opacity: 0; transform: translateY(35px) scale(0.94); }
+            to   { opacity: 1; transform: translateY(0)   scale(1); }
+        }
+
+        .auth-card::before {
+            content: "";
+            position: absolute;
+            inset: -1px;
+            border-radius: 29px;
+            padding: 1px;
+            background: linear-gradient(140deg, rgba(255,179,0,0.55), transparent 30%, transparent 70%, rgba(124,58,237,0.45));
+            -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            -webkit-mask-composite: xor;
+                    mask-composite: exclude;
+            pointer-events: none;
+        }
+
+        /* ✅ الدايرة الكبيرة — حجم متزايد */
+        .nx-logo-wrap {
+            position: relative;
+            width: 150px;
+            height: 150px;
+            margin: 0 auto 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .nx-logo-ring {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            background: conic-gradient(from 0deg, transparent 0deg, var(--nx-gold) 120deg, var(--nx-purple) 240deg, transparent 360deg);
+            animation: nxSpin 6s linear infinite;
+            filter: blur(0.5px);
+        }
+        .nx-logo-ring::after {
+            content: "";
+            position: absolute;
+            inset: 5px;
+            border-radius: 50%;
+            background: #0b0f1a;
+        }
+        .nx-logo-core {
+            position: relative;
+            z-index: 2;
+            width: 128px; height: 128px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            background: radial-gradient(circle at 30% 25%, #1a2136, #0a0e18);
+            border: 1px solid rgba(255,179,0,0.35);
+            box-shadow:
+                0 0 60px rgba(255,179,0,0.35),
+                inset 0 0 30px rgba(255,179,0,0.18);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 26px;
+            font-weight: 900;
+            color: var(--nx-gold);
+            letter-spacing: 2px;
+        }
+
+        .auth-title {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 28px !important;
+            font-weight: 900 !important;
+            letter-spacing: 0.5px;
+            background: linear-gradient(180deg, #fff 30%, #b8c0d4 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent !important;
+            margin-bottom: 6px !important;
+            text-align: center;
+        }
+        .auth-subtitle {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 12px !important;
+            font-weight: 800 !important;
+            letter-spacing: 9px !important;
+            text-align: center;
+            background: linear-gradient(90deg, var(--nx-gold), var(--nx-gold-2));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent !important;
+            margin-bottom: 30px !important;
+            padding-right: 9px;
+        }
+
+        .auth-input,
+        .custom-select {
+            background: rgba(0,0,0,0.45) !important;
+            border: 1px solid var(--nx-line-strong) !important;
+            border-radius: 14px !important;
+            font-family: 'Cairo', sans-serif !important;
+            font-weight: 600;
+            transition: all .25s ease !important;
+        }
+        .auth-input {
+            padding: 15px 18px !important;
+            font-size: 14.5px !important;
+            margin-bottom: 14px !important;
+            color: #fff !important;
+            width: 100%;
+            outline: none;
+        }
+        .auth-input::placeholder { color: #6b7385; font-weight: 500; }
+
+        .ltr-input {
+            direction: ltr !important;
+            text-align: left !important;
+            font-family: 'Plus Jakarta Sans', monospace !important;
+            font-size: 15.5px !important;
+            letter-spacing: 3px !important;
+            font-weight: 700 !important;
+            color: var(--nx-gold) !important;
+        }
+        .ltr-input::placeholder {
+            color: #6b7385 !important;
+            letter-spacing: 1px !important;
+            font-weight: 500 !important;
+        }
+
+        /* ✅ حقل رقمي: الـ placeholder على اليمين + الأرقام فقط */
+        .numeric-input {
+            direction: rtl !important;
+            text-align: right !important;
+            font-family: 'Plus Jakarta Sans', monospace !important;
+            font-size: 15.5px !important;
+            letter-spacing: 3px !important;
+            font-weight: 700 !important;
+            color: var(--nx-gold) !important;
+        }
+        .numeric-input::placeholder {
+            color: #6b7385 !important;
+            letter-spacing: 0 !important;
+            font-weight: 500 !important;
+            font-family: 'Cairo', sans-serif !important;
+            text-align: right !important;
+            direction: rtl !important;
+        }
+
+        .auth-input:focus,
+        .custom-select:focus {
+            border-color: var(--nx-gold) !important;
+            background: rgba(0,0,0,0.62) !important;
+            box-shadow: 0 0 0 4px rgba(255,179,0,0.1), 0 0 28px rgba(255,179,0,0.14) !important;
+            transform: translateY(-1px);
+        }
+
+        .custom-select {
+            padding: 14px 18px !important;
+            font-size: 14px !important;
+            margin-bottom: 14px !important;
+            color: #dfe4ee !important;
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            width: 100%;
+            outline: none;
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23FFB300' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>") !important;
+            background-repeat: no-repeat !important;
+            background-position: left 18px center !important;
+            background-size: 14px !important;
+            padding-left: 44px !important;
+        }
+        .custom-select option { background: #0a0e18; color: #fff; }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #FFB300 0%, #FFD54F 50%, #FFB300 100%) !important;
+            background-size: 200% 100% !important;
+            color: #0a0e17 !important;
+            font-family: 'Cairo', sans-serif !important;
+            font-weight: 900 !important;
+            letter-spacing: 0.3px;
+            border-radius: 14px !important;
+            padding: 15px 20px !important;
+            font-size: 15.5px !important;
+            box-shadow:
+                0 12px 28px rgba(255,179,0,0.32),
+                inset 0 1px 0 rgba(255,255,255,0.5) !important;
+            position: relative;
+            overflow: hidden;
+            transition: all .3s ease;
+            cursor: pointer;
+            border: none;
+            width: 100%;
+        }
+        .btn-primary::after {
+            content: "";
+            position: absolute;
+            top: 0; left: -60%;
+            width: 60%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent);
+            transform: skewX(-25deg);
+            transition: left .75s ease;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 18px 40px rgba(255,179,0,0.5), inset 0 1px 0 rgba(255,255,255,0.6) !important;
+        }
+        .btn-primary:hover::after { left: 130%; }
+        .btn-primary:active { transform: translateY(0); }
+
+        /* ✅ زر التالي (أزرق سماوي) */
+        .btn-next {
+            background: linear-gradient(135deg, #06B6D4 0%, #22d3ee 50%, #06B6D4 100%) !important;
+            background-size: 200% 100% !important;
+            color: #0a0e17 !important;
+            font-family: 'Cairo', sans-serif !important;
+            font-weight: 900 !important;
+            border-radius: 14px !important;
+            padding: 15px 20px !important;
+            font-size: 15.5px !important;
+            box-shadow:
+                0 12px 28px rgba(6,182,212,0.35),
+                inset 0 1px 0 rgba(255,255,255,0.5) !important;
+            position: relative;
+            overflow: hidden;
+            transition: all .3s ease;
+            cursor: pointer;
+            border: none;
+            width: 100%;
+        }
+        .btn-next::after {
+            content: "";
+            position: absolute;
+            top: 0; left: -60%;
+            width: 60%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent);
+            transform: skewX(-25deg);
+            transition: left .75s ease;
+        }
+        .btn-next:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 18px 40px rgba(6,182,212,0.5), inset 0 1px 0 rgba(255,255,255,0.6) !important;
+        }
+        .btn-next:hover::after { left: 130%; }
+
+        /* ✅ زر الرجوع (نص بسيط) */
+        .back-link {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-family: 'Cairo', sans-serif;
+            font-size: 12.5px;
+            font-weight: 700;
+            cursor: pointer;
+            padding: 10px;
+            margin-top: 6px;
+            width: 100%;
+            transition: color 0.25s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        .back-link:hover { color: var(--nx-gold); }
+
+        /* ==========================================================
+           MAIN UI
+           ========================================================== */
+        #main-ui {
+            position: relative;
+            z-index: 2;
+            min-height: 100vh;
+            display: none;
+            flex-direction: column;
+        }
+
+        /* ==========================================================
+           ✅ NAVBAR — BATU يمين شوية + الأزرار على اليسار
+           ========================================================== */
+        .navbar {
+            background: rgba(10, 14, 23, 0.75) !important;
+            backdrop-filter: blur(20px) saturate(170%);
+            -webkit-backdrop-filter: blur(20px) saturate(170%);
+            border-bottom: 1px solid var(--nx-line) !important;
+            height: 72px !important;
+            padding: 0 26px !important;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+            display: flex !important;
+            align-items: center !important;
+            justify-content: flex-end !important;
+            position: relative;
+        }
+
+        .navbar .logo {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 12px;
+            font-family: 'Plus Jakarta Sans', sans-serif !important;
+            font-size: 22px !important;
+            font-weight: 900 !important;
+            color: #fff !important;
+            letter-spacing: 2px;
+            line-height: 1 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            height: 100% !important;
+            text-align: initial !important;
+
+            /* ✅ التمركز البصري — يمين شوية */
+            position: absolute !important;
+            left: 58% !important;
+            top: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            pointer-events: none;
+            z-index: 1;
+        }
+        .navbar .logo i {
+            color: var(--nx-gold);
+            font-size: 22px;
+            line-height: 1 !important;
+            display: inline-flex;
+            align-items: center;
+            filter: drop-shadow(0 0 14px rgba(255,179,0,0.7));
+            animation: nxPulseIcon 3s ease-in-out infinite;
+        }
+        .navbar .logo span {
+            background: linear-gradient(120deg, #fff 40%, var(--nx-gold) 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            letter-spacing: 3px;
+            display: inline-flex;
+            align-items: center;
+            line-height: 1 !important;
+        }
+        @keyframes nxPulseIcon {
+            0%,100% { filter: drop-shadow(0 0 10px rgba(255,179,0,0.5)); }
+            50%     { filter: drop-shadow(0 0 22px rgba(255,179,0,1)); }
+        }
+
+        /* ✅ مجموعة الأزرار */
+        .nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            position: relative;
+            z-index: 2;
+        }
+
+        /* ✅ تصميم فخم للأزرار */
+        .btn-outline, .btn-danger-outline {
+            position: relative;
+            overflow: hidden;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 11px 18px;
+            border-radius: 14px;
+            font-family: 'Cairo', sans-serif !important;
+            font-size: 13px !important;
+            font-weight: 800 !important;
+            letter-spacing: 0.3px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(.2,.8,.2,1);
+            white-space: nowrap;
+            line-height: 1;
+            border: 1px solid transparent;
+        }
+
+        .btn-outline::after, .btn-danger-outline::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
+            transition: left 0.6s ease;
+            pointer-events: none;
+        }
+        .btn-outline:hover::after,
+        .btn-danger-outline:hover::after {
+            left: 100%;
+        }
+
+        /* زر سجل حضوري — ذهبي */
+        .btn-outline {
+            background: linear-gradient(135deg, rgba(255,179,0,0.12), rgba(255,179,0,0.04));
+            border-color: rgba(255,179,0,0.45);
+            color: var(--nx-gold);
+            box-shadow:
+                0 0 18px rgba(255,179,0,0.08),
+                inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+        .btn-outline:hover {
+            background: linear-gradient(135deg, var(--nx-gold), var(--nx-gold-2));
+            border-color: var(--nx-gold);
+            color: #0a0e17;
+            transform: translateY(-2px);
+            box-shadow:
+                0 12px 28px rgba(255,179,0,0.45),
+                0 0 22px rgba(255,179,0,0.3);
+        }
+        .btn-outline i {
+            font-size: 14px;
+            transition: transform 0.35s cubic-bezier(.2,.8,.2,1);
+        }
+        .btn-outline:hover i {
+            transform: rotate(-15deg) scale(1.15);
+        }
+
+        /* زر خروج — أحمر */
+        .btn-danger-outline {
+            background: linear-gradient(135deg, rgba(239,68,68,0.12), rgba(239,68,68,0.04));
+            border-color: rgba(239,68,68,0.45);
+            color: #f87171;
+            box-shadow:
+                0 0 18px rgba(239,68,68,0.08),
+                inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+        .btn-danger-outline:hover {
+            background: linear-gradient(135deg, #EF4444, #DC2626);
+            border-color: #EF4444;
+            color: #fff;
+            transform: translateY(-2px);
+            box-shadow:
+                0 12px 28px rgba(239,68,68,0.45),
+                0 0 22px rgba(239,68,68,0.3);
+        }
+        .btn-danger-outline i {
+            font-size: 14px;
+            transition: transform 0.35s cubic-bezier(.2,.8,.2,1);
+        }
+        .btn-danger-outline:hover i {
+            transform: translateX(2px) scale(1.15);
+        }
+
+        .container {
+            padding: 32px 24px 60px !important;
+            max-width: 1240px !important;
+            margin: auto;
+        }
+
+        /* ==========================================================
+           HERO BANNER — النسخة الأصلية الكبيرة (بدون تغيير)
+           ========================================================== */
+        .student-info-banner {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 26px;
+            padding: 26px 30px !important;
+            margin-bottom: 38px !important;
+            border-radius: 26px !important;
+            overflow: hidden;
+            background:
+                radial-gradient(700px circle at 100% 0%, rgba(255,179,0,0.12), transparent 55%),
+                radial-gradient(600px circle at 0% 100%, rgba(124,58,237,0.12), transparent 55%),
+                linear-gradient(165deg, rgba(28,35,54,0.94), rgba(11,15,26,0.97)) !important;
+            backdrop-filter: blur(22px) saturate(150%);
+            -webkit-backdrop-filter: blur(22px) saturate(150%);
+            border: 1px solid var(--nx-line-strong) !important;
+            box-shadow:
+                0 30px 70px rgba(0,0,0,0.65),
+                inset 0 1px 0 rgba(255,255,255,0.06) !important;
+            animation: nxSlideUp .75s cubic-bezier(.2,.8,.2,1) both;
+        }
+
+        .student-info-banner::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #FFB300, #7C3AED, #06B6D4, transparent);
+            background-size: 200% 100%;
+            animation: nxShimmerLine 4s linear infinite;
+        }
+        @keyframes nxShimmerLine {
+            0%   { background-position: -200% 0; }
+            100% { background-position:  200% 0; }
+        }
+
+        .student-info-banner::after {
+            content: "";
+            position: absolute;
+            bottom: -100px; right: 25%;
+            width: 450px; height: 220px;
+            background: radial-gradient(ellipse, rgba(255,179,0,0.12), transparent 70%);
+            pointer-events: none;
+            filter: blur(30px);
+        }
+
+        @keyframes nxSlideUp {
+            from { opacity: 0; transform: translateY(24px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .banner-identity {
+            display: flex;
+            align-items: center;
+            gap: 22px;
+            flex: 1;
+            min-width: 0;
+            position: relative;
+            z-index: 2;
+        }
+
+        .banner-avatar-wrap {
+            position: relative;
+            width: 88px;
+            height: 88px;
+            flex-shrink: 0;
+        }
+        .banner-avatar-ring {
+            position: absolute;
+            inset: -3px;
+            border-radius: 50%;
+            background: conic-gradient(from 0deg, var(--nx-gold), #7C3AED, #06B6D4, var(--nx-gold));
+            animation: nxSpin 6s linear infinite;
+            box-shadow: 0 0 30px rgba(255,179,0,0.35);
+        }
+        .banner-avatar-ring::after {
+            content: "";
+            position: absolute;
+            inset: 3px;
+            border-radius: 50%;
+            background: #0b0f1a;
+        }
+        .banner-avatar {
+            position: absolute;
+            inset: 3px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at 30% 25%, #232b42, #0d1220);
+            z-index: 2;
+            font-family: 'Cairo', sans-serif;
+            font-size: 28px;
+            font-weight: 900;
+            color: var(--nx-gold);
+            letter-spacing: 1px;
+            text-shadow: 0 0 25px rgba(255,179,0,0.55);
+            padding-top: 2px;
+        }
+        .banner-status-dot {
+            position: absolute;
+            bottom: 3px; left: 3px;
+            width: 17px; height: 17px;
+            border-radius: 50%;
+            background: var(--nx-emerald);
+            border: 3px solid #0b0f1a;
+            box-shadow: 0 0 14px var(--nx-emerald);
+            z-index: 3;
+            animation: nxPulseDot 2s ease-in-out infinite;
+        }
+        @keyframes nxPulseDot {
+            0%,100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.65), 0 0 14px var(--nx-emerald); }
+            70%     { box-shadow: 0 0 0 12px rgba(16,185,129,0), 0 0 14px var(--nx-emerald); }
+        }
+
+        .banner-text {
+            flex: 1;
+            min-width: 0;
+            text-align: right;
+        }
+        .banner-greeting {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 12.5px;
+            font-weight: 700;
+            color: #8b93a7;
+            margin-bottom: 5px;
+            letter-spacing: 0.3px;
+        }
+        .banner-greeting i {
+            color: var(--nx-gold);
+            font-size: 12px;
+            animation: nxWave 2.5s ease-in-out infinite;
+        }
+        @keyframes nxWave {
+            0%,100% { transform: rotate(0); }
+            25%     { transform: rotate(-12deg); }
+            75%     { transform: rotate(12deg); }
+        }
+        .banner-name {
+            font-family: 'Cairo', sans-serif;
+            font-size: 25px;
+            font-weight: 900;
+            line-height: 1.2;
+            margin: 0 0 12px;
+            background: linear-gradient(120deg, #ffffff 20%, #ffd76a 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent !important;
+            letter-spacing: 0.2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .banner-chips {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 13px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0.2px;
+            white-space: nowrap;
+            transition: all .25s ease;
+            cursor: default;
+        }
+        .chip-gold {
+            background: rgba(255,179,0,0.12);
+            color: var(--nx-gold);
+            border: 1px solid rgba(255,179,0,0.32);
+            box-shadow: 0 0 16px rgba(255,179,0,0.08);
+        }
+        .chip-gold:hover {
+            background: rgba(255,179,0,0.2);
+            box-shadow: 0 0 22px rgba(255,179,0,0.22);
+            transform: translateY(-1px);
+        }
+        .chip-cyan {
+            background: rgba(6,182,212,0.10);
+            color: #22d3ee;
+            border: 1px solid rgba(6,182,212,0.32);
+            box-shadow: 0 0 16px rgba(6,182,212,0.08);
+        }
+        .chip-cyan:hover {
+            background: rgba(6,182,212,0.2);
+            box-shadow: 0 0 22px rgba(6,182,212,0.22);
+            transform: translateY(-1px);
+        }
+        .chip-purple {
+            background: rgba(124,58,237,0.12);
+            color: #a78bfa;
+            border: 1px solid rgba(124,58,237,0.32);
+            box-shadow: 0 0 16px rgba(124,58,237,0.08);
+        }
+        .chip-purple:hover {
+            background: rgba(124,58,237,0.2);
+            box-shadow: 0 0 22px rgba(124,58,237,0.22);
+            transform: translateY(-1px);
+        }
+        .chip i { font-size: 11px; }
+
+        .banner-actions {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 2;
+        }
+
+        .id-card {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+            padding: 12px 24px;
+            border-radius: 16px;
+            background: rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,179,0,0.3);
+            box-shadow:
+                inset 0 0 24px rgba(255,179,0,0.07),
+                0 0 26px rgba(255,179,0,0.12);
+            overflow: hidden;
+        }
+        .id-card::before {
+            content: "";
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,179,0,0.14), transparent);
+            animation: nxIdShine 3.5s ease-in-out infinite;
+        }
+        @keyframes nxIdShine {
+            0%      { left: -100%; }
+            50%,100%{ left:  100%; }
+        }
+        .id-card-label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 10px;
+            color: #8b93a7;
+            font-weight: 800;
+            letter-spacing: 1.8px;
+            text-transform: uppercase;
+        }
+        .id-card-label i {
+            color: var(--nx-gold);
+            font-size: 10px;
+        }
+        .id-card-value {
+            font-family: 'Plus Jakarta Sans', monospace;
+            font-size: 21px;
+            font-weight: 900;
+            letter-spacing: 3px;
+            color: #fff;
+            text-shadow: 0 0 20px rgba(255,179,0,0.4);
+            padding-right: 3px;
+            direction: ltr;
+        }
+
+        .container > h2 {
+            font-family: 'Cairo', sans-serif !important;
+            font-size: 22px !important;
+            font-weight: 900 !important;
+            color: #fff;
+            margin-bottom: 4px !important;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .container > h2 i {
+            color: var(--nx-gold);
+            filter: drop-shadow(0 0 12px rgba(255,179,0,0.5));
+        }
+
+        .grid-layout {
+            display: grid !important;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)) !important;
+            gap: 22px !important;
+            margin-top: 22px !important;
+        }
+
+        .subject-card {
+            position: relative;
+            background:
+                linear-gradient(165deg, rgba(28,35,54,0.9), rgba(11,15,26,0.95)) !important;
+            border: 1px solid var(--nx-line-strong) !important;
+            border-radius: 24px !important;
+            padding: 32px 22px 24px !important;
+            cursor: pointer;
+            overflow: hidden;
+            transition: transform .35s cubic-bezier(.2,.8,.2,1), border-color .35s, box-shadow .35s !important;
+            box-shadow:
+                0 10px 32px rgba(0,0,0,0.5),
+                inset 0 1px 0 rgba(255,255,255,0.04) !important;
+            animation: nxCardIn .55s cubic-bezier(.2,.8,.2,1) both;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            transform-style: preserve-3d;
+            will-change: transform;
+        }
+        .subject-card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(600px circle at var(--mx, 50%) var(--my, 50%), rgba(255,179,0,0.18), transparent 45%);
+            opacity: 0;
+            transition: opacity .4s ease;
+            pointer-events: none;
+            z-index: 1;
+        }
+        .subject-card::after {
+            content: "";
+            position: absolute;
+            top: 14px; right: 14px;
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: var(--nx-gold);
+            box-shadow: 0 0 14px var(--nx-gold);
+            opacity: 0.55;
+            transition: all .35s ease;
+            z-index: 2;
+        }
+        .subject-card:hover {
+            border-color: rgba(255,179,0,0.55) !important;
+            box-shadow:
+                0 25px 55px rgba(0,0,0,0.65),
+                0 0 0 1px rgba(255,179,0,0.3),
+                0 0 50px rgba(255,179,0,0.14) !important;
+        }
+        .subject-card:hover::before { opacity: 1; }
+        .subject-card:hover::after {
+            opacity: 1;
+            transform: scale(1.8);
+            box-shadow: 0 0 26px var(--nx-gold), 0 0 55px rgba(255,179,0,0.6);
+        }
+
+        .subject-card > * {
+            position: relative;
+            z-index: 2;
+        }
+
+        .subject-card img {
+            width: 155px !important;
+            height: 155px !important;
+            object-fit: contain;
+            margin-bottom: 12px !important;
+            padding: 8px !important;
+            background: radial-gradient(circle at 30% 25%, rgba(255,255,255,0.09), rgba(255,255,255,0.02));
+            border-radius: 50%;
+            border: 1px solid rgba(255,179,0,0.28);
+            box-shadow:
+                0 12px 28px rgba(0,0,0,0.5),
+                inset 0 0 20px rgba(255,179,0,0.08);
+            filter: drop-shadow(0 0 16px rgba(255,179,0,0.22));
+            transition: all .35s ease;
+        }
+        .subject-card:hover img {
+            transform: scale(1.08) rotate(-4deg) translateZ(20px);
+            border-color: rgba(255,179,0,0.65);
+            box-shadow:
+                0 16px 38px rgba(0,0,0,0.6),
+                0 0 42px rgba(255,179,0,0.32),
+                inset 0 0 24px rgba(255,179,0,0.16);
+        }
+
+        .sub-title {
+            font-family: 'Cairo', sans-serif !important;
+            font-size: 18px !important;
+            font-weight: 900 !important;
+            background: linear-gradient(120deg, #ffffff 30%, #ffd76a 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent !important;
+            margin-bottom: 2px !important;
+            line-height: 1.4;
+        }
+
+        /* ==========================================================
+           ✅ شارة حالة الجلسة (تحديث تلقائي)
+           ========================================================== */
+        .session-status-badge {
+            display: flex;
+            justify-content: center;
+            margin-top: 4px;
+            min-height: 28px;
+            transition: all .3s ease;
+        }
+
+        .badge-open {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 5px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 800;
+            color: #10B981;
+            background: rgba(16, 185, 129, 0.18);
+            border: 1px solid #10B981;
+            box-shadow: 0 0 16px rgba(16, 185, 129, 0.35);
+            animation: nxOpenPulse 2s ease-in-out infinite;
+        }
+        .badge-open i {
+            font-size: 7px;
+            animation: nxDotBlink 1.2s ease-in-out infinite;
+        }
+        @keyframes nxOpenPulse {
+            0%,100% { box-shadow: 0 0 16px rgba(16, 185, 129, 0.35); }
+            50%     { box-shadow: 0 0 26px rgba(16, 185, 129, 0.6); }
+        }
+        @keyframes nxDotBlink {
+            0%,100% { opacity: 1; }
+            50%     { opacity: 0.25; }
+        }
+
+        .badge-closed {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-muted);
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .session-status-badge.bump {
+            animation: nxBump 0.6s cubic-bezier(.2,.8,.2,1);
+        }
+        @keyframes nxBump {
+            0%   { transform: scale(1); }
+            40%  { transform: scale(1.18); }
+            100% { transform: scale(1); }
+        }
+
+        .empty-state {
+            background: rgba(20,26,40,0.55);
+            border: 1px dashed var(--nx-line-strong);
+            border-radius: 22px;
+            padding: 60px 20px !important;
+            backdrop-filter: blur(10px);
+            grid-column: 1 / -1;
+            text-align: center;
+        }
+
+        footer {
+            background: rgba(5,7,15,0.92) !important;
+            border-top: 1px solid var(--nx-line) !important;
+            padding: 26px 20px !important;
+            text-align: center;
+            position: relative;
+        }
+        footer h2 {
+            font-family: 'Plus Jakarta Sans', sans-serif !important;
+            background: linear-gradient(90deg, var(--nx-gold), var(--nx-gold-2), var(--nx-gold));
+            background-size: 200% 100%;
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent !important;
+            letter-spacing: 3px !important;
+            animation: nxShimmerText 4s linear infinite;
+            font-size: 16px !important;
+        }
+        @keyframes nxShimmerText {
+            0%   { background-position: 0% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* ==========================================================
+           ✅ MODALS — مع إصلاح زرار الإغلاق
+           ========================================================== */
+        .modal-screen {
+            background: rgba(5,7,15,0.8) !important;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            animation: nxFadeIn .3s ease;
+        }
+        @keyframes nxFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .modal-header {
+            background: rgba(15, 20, 33, 0.92) !important;
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--nx-line) !important;
+            padding: 18px 26px !important;
+            position: relative !important;
+            z-index: 100 !important;
+            padding-top: calc(18px + env(safe-area-inset-top, 0px)) !important;
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+        }
+        .modal-header h2 {
+            font-family: 'Cairo', sans-serif !important;
+            font-weight: 900 !important;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .modal-header h2 i { color: var(--nx-gold); }
+
+        .modal-close {
+            width: 44px !important;
+            height: 44px !important;
+            border-radius: 50% !important;
+            background: rgba(239,68,68,0.1);
+            border: 1px solid rgba(239,68,68,0.3) !important;
+            color: #f87171 !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px !important;
+            transition: all .3s ease;
+            cursor: pointer;
+            position: relative !important;
+            z-index: 101 !important;
+            pointer-events: auto !important;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            flex-shrink: 0;
+        }
+        .modal-close:hover,
+        .modal-close:active {
+            background: #EF4444 !important;
+            color: #fff !important;
+            transform: rotate(90deg) scale(1.1);
+            box-shadow: 0 0 28px rgba(239,68,68,0.6);
+        }
+
+        .modal-card {
+            background: linear-gradient(165deg, rgba(24,30,48,0.92), rgba(11,15,26,0.96)) !important;
+            border: 1px solid var(--nx-line-strong) !important;
+            border-radius: 24px !important;
+            box-shadow: 0 35px 90px rgba(0,0,0,0.8) !important;
+            padding: 32px 28px !important;
+            position: relative;
+            overflow: hidden;
+        }
+        .modal-card::before {
+            content: "";
+            position: absolute;
+            top: -40%; right: -20%;
+            width: 340px; height: 340px;
+            background: radial-gradient(circle, rgba(255,179,0,0.14), transparent 65%);
+            pointer-events: none;
+        }
+
+        #modal-sess-title {
+            font-family: 'Cairo', sans-serif !important;
+            font-size: 19px !important;
+            font-weight: 900 !important;
+            color: #fff !important;
+            position: relative;
+            z-index: 2;
+        }
+        #modal-sess-sub {
+            color: var(--nx-gold) !important;
+            font-weight: 800 !important;
+            font-size: 13.5px !important;
+            position: relative;
+            z-index: 2;
+        }
+
+        #reader {
+            border-radius: 16px !important;
+            overflow: hidden;
+            border: 2px solid rgba(255,179,0,0.35);
+            box-shadow: 0 0 35px rgba(255,179,0,0.18);
+            margin-bottom: 15px;
+        }
+
+        .code-box {
+            font-family: 'Plus Jakarta Sans', monospace !important;
+            font-size: 30px !important;
+            letter-spacing: 14px !important;
+            text-align: center !important;
+            color: var(--nx-gold) !important;
+            font-weight: 900 !important;
+            background: rgba(0,0,0,0.55) !important;
+            border: 2px solid rgba(255,179,0,0.35) !important;
+            border-radius: 16px !important;
+            padding: 18px 10px 18px 24px !important;
+            text-transform: uppercase;
+            box-shadow:
+                inset 0 0 30px rgba(255,179,0,0.08),
+                0 0 25px rgba(255,179,0,0.12) !important;
+            transition: all .3s ease;
+            width: 100%;
+            outline: none;
+            position: relative;
+            z-index: 2;
+        }
+        .code-box:focus {
+            border-color: var(--nx-gold) !important;
+            box-shadow:
+                inset 0 0 30px rgba(255,179,0,0.16),
+                0 0 45px rgba(255,179,0,0.32) !important;
+            transform: translateY(-1px);
+        }
+        .code-box::placeholder {
+            color: rgba(255,179,0,0.35);
+            letter-spacing: 14px;
+        }
+
+        .btn-secondary {
+            background: rgba(255,255,255,0.05) !important;
+            border: 1px solid var(--nx-line-strong) !important;
+            border-radius: 14px !important;
+            padding: 14px !important;
+            font-weight: 800 !important;
+            color: #dfe4ee !important;
+            transition: all .25s ease;
+            cursor: pointer;
+            width: 100%;
+            font-family: 'Cairo', sans-serif;
+            position: relative;
+            z-index: 2;
+        }
+        .btn-secondary:hover {
+            background: rgba(255,179,0,0.09) !important;
+            border-color: rgba(255,179,0,0.45) !important;
+            color: var(--nx-gold) !important;
+            transform: translateY(-2px);
+        }
+
+        .complaints-container {
+            max-width: 780px !important;
+            margin: 0 auto;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 14px !important;
+            padding-bottom: 20px;
+        }
+        .comp-card {
+            background: linear-gradient(150deg, rgba(24,30,48,0.88), rgba(11,15,26,0.96)) !important;
+            border: 1px solid var(--nx-line-strong) !important;
+            border-radius: 18px !important;
+            padding: 20px 22px !important;
+            transition: all .3s ease;
+            position: relative;
+            overflow: hidden;
+            animation: nxSlideUp .5s cubic-bezier(.2,.8,.2,1) both;
+            text-align: right;
+        }
+        .comp-card::before {
+            content: "";
+            position: absolute;
+            top: 0; right: 0;
+            width: 4px; height: 100%;
+            background: linear-gradient(180deg, var(--nx-gold), var(--nx-emerald));
+            border-radius: 4px;
+        }
+        .comp-card:hover {
+            transform: translateX(-4px);
+            border-color: rgba(255,179,0,0.35) !important;
+            box-shadow: 0 14px 34px rgba(0,0,0,0.55), 0 0 28px rgba(255,179,0,0.1);
+        }
+        .comp-header {
+            border-bottom: 1px dashed rgba(255,255,255,0.1) !important;
+            padding-bottom: 10px !important;
+            margin-bottom: 10px !important;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .comp-sub {
+            font-family: 'Cairo', sans-serif !important;
+            color: var(--nx-gold) !important;
+            font-size: 16.5px !important;
+            font-weight: 900 !important;
+        }
+        .badge-resolved {
+            background: rgba(16,185,129,0.15) !important;
+            color: #34d399 !important;
+            border: 1px solid rgba(16,185,129,0.4) !important;
+            padding: 5px 12px !important;
+            border-radius: 20px !important;
+            font-size: 11px !important;
+            font-weight: 800 !important;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            box-shadow: 0 0 16px rgba(16,185,129,0.18);
+        }
+
+        .swal2-popup {
+            background: linear-gradient(165deg, #1a2136, #0b0f1a) !important;
+            border: 1px solid var(--nx-line-strong) !important;
+            border-radius: 22px !important;
+            box-shadow: 0 35px 90px rgba(0,0,0,0.85) !important;
+            font-family: 'Cairo', sans-serif !important;
+        }
+        .swal2-title { font-family: 'Cairo', sans-serif !important; font-weight: 900 !important; }
+        .swal2-confirm {
+            background: linear-gradient(135deg, var(--nx-gold), var(--nx-gold-2)) !important;
+            color: #0a0e17 !important;
+            font-weight: 900 !important;
+            border-radius: 12px !important;
+            padding: 11px 26px !important;
+            box-shadow: 0 10px 26px rgba(255,179,0,0.35) !important;
+        }
+        .swal2-cancel {
+            background: rgba(255,255,255,0.06) !important;
+            border: 1px solid var(--nx-line-strong) !important;
+            border-radius: 12px !important;
+            font-weight: 700 !important;
+            padding: 11px 22px !important;
+        }
+
+        /* ==========================================================
+           RESPONSIVE
+           ========================================================== */
+        @media (max-width: 900px) {
+            .student-info-banner {
+                flex-direction: column;
+                align-items: stretch;
+                padding: 24px 20px !important;
+                gap: 22px;
             }
-            return jsonify({"status": "success", "admin": session['admin']})
-
-    return jsonify({"status": "error", "message": "اسم المستخدم أو كلمة المرور غير صحيحة!"}), 401
-
-
-@app.route('/api/admin-data')
-def get_admin_data():
-    if 'admin' not in session:
-        return jsonify({"status": "unauthorized"}), 401
-
-    role = session['admin']['role']
-    curr_username = session['admin']['username']
-    curr_admin = users_col.find_one({"username": curr_username})
-    allowed_subs = curr_admin.get('allowed_subjects', []) if curr_admin else []
-    allowed_classes = curr_admin.get('allowed_classes', []) if curr_admin else []
-
-    classes_list = []
-    subjects = []
-    sessions_list = []
-    staff_list = []
-
-    # ---------- SUPER ADMIN ----------
-    if role == 'super_admin':
-        subjects = list(subjects_col.find({}, {"_id": 0}))
-        sessions_list = list(sessions_col.find({}, {"_id": 0}).sort("created_at", -1))
-        staff_list = list(users_col.find({"role": {"$ne": "super_admin"}}, {"_id": 0, "password": 0}))
-        classes_list = list(classes_col.find({}, {"_id": 0}).sort([("subject_id", 1), ("class_number", 1)]))
-
-    # ---------- DOCTOR ----------
-    elif role == 'doctor':
-        subjects = list(subjects_col.find({"id": {"$in": allowed_subs}}, {"_id": 0}))
-        sessions_list = list(sessions_col.find({"subject_id": {"$in": allowed_subs}}, {"_id": 0}).sort("created_at", -1))
-        classes_list = list(classes_col.find({"subject_id": {"$in": allowed_subs}}, {"_id": 0}).sort([("subject_id", 1), ("class_number", 1)]))
-
-        all_tas = list(users_col.find({"role": "ta"}, {"_id": 0, "password": 0}))
-        filtered = []
-        for ta in all_tas:
-            ta_subs = ta.get('allowed_subjects', [])
-            has_common = any(s in allowed_subs for s in ta_subs)
-            created_by_him = (ta.get('created_by') == curr_username)
-            if has_common or created_by_him:
-                ta['allowed_subjects'] = [s for s in ta_subs if s in allowed_subs]
-                ta['allowed_classes'] = [c for c in ta.get('allowed_classes', [])
-                                         if c.split('|')[0] in allowed_subs]
-                filtered.append(ta)
-        staff_list = filtered
-
-    # ---------- TA ----------
-    elif role == 'ta':
-        subjects = list(subjects_col.find({"id": {"$in": allowed_subs}}, {"_id": 0}))
-
-        sessions_list = list(sessions_col.find({
-            "subject_id": {"$in": allowed_subs},
-            "type": "Section",
-            "created_by_username": curr_username
-        }, {"_id": 0}).sort("created_at", -1))
-
-        allowed_pairs = []
-        for item in allowed_classes:
-            parts = item.split('|')
-            if len(parts) == 2:
-                sub_id = parts[0]
-                try:
-                    cls_num_int = int((parts[1] or '').replace('Class', ''))
-                    allowed_pairs.append({"subject_id": sub_id, "class_number": cls_num_int})
-                except Exception:
-                    pass
-
-        if allowed_pairs:
-            classes_list = list(classes_col.find({"$or": allowed_pairs}, {"_id": 0}))
-
-        staff_list = []
-
-    return jsonify({
-        "status": "success",
-        "currentAdmin": {
-            "username": session['admin']['username'],
-            "name": session['admin']['name'],
-            "role": session['admin']['role'],
-            "allowed_subjects": allowed_subs,
-            "allowed_classes": allowed_classes
-        },
-        "subjects": subjects,
-        "sessions": sessions_list,
-        "staff": staff_list,
-        "classes": classes_list
-    })
-
-
-@app.route('/api/session-attendance')
-def get_session_attendance():
-    if 'admin' not in session:
-        return jsonify({"status": "unauthorized"}), 401
-
-    sess_id = request.args.get('session_id', '')
-    sess = sessions_col.find_one({"session_id": sess_id}, {"_id": 0})
-    if not sess:
-        return jsonify({"status": "error", "message": "الجلسة غير موجودة!"}), 404
-
-    role = session['admin']['role']
-    if role == 'ta':
-        curr_admin = users_col.find_one({"username": session['admin']['username']})
-        allowed_classes = curr_admin.get('allowed_classes', [])
-        key = f"{sess.get('subject_id')}|Class{sess.get('class_number', '')}"
-        if key not in allowed_classes or sess.get('type') != 'Section':
-            return jsonify({"status": "error", "message": "غير مصرح"}), 403
-
-    records = list(attendance_col.find({"session_id": sess_id}, {"_id": 0}).sort("timestamp", -1))
-    return jsonify({"status": "success", "session": sess, "records": records})
-
-
-@app.route('/api/class-tas')
-def get_class_tas():
-    """يرجع كل المعيدين المُعيَّنين لفصل معيّن + كل جلساتهم + عدد الحضور"""
-    if 'admin' not in session:
-        return jsonify({"status": "unauthorized"}), 401
-
-    class_id = request.args.get('class_id', '')
-    cls = classes_col.find_one({"class_id": class_id}, {"_id": 0})
-    if not cls:
-        return jsonify({"status": "error", "message": "الفصل غير موجود!"}), 404
-
-    role = session['admin']['role']
-    if role == 'doctor':
-        curr_admin = users_col.find_one({"username": session['admin']['username']})
-        if cls.get('subject_id') not in curr_admin.get('allowed_subjects', []):
-            return jsonify({"status": "error", "message": "غير مصرح"}), 403
-
-    class_key = f"{cls['subject_id']}|Class{cls['class_number']}"
-
-    all_sessions = list(sessions_col.find({
-        "subject_id": cls['subject_id'],
-        "class_number": str(cls['class_number']),
-        "type": "Section"
-    }, {"_id": 0}).sort("created_at", -1))
-
-    session_ids = [s['session_id'] for s in all_sessions]
-    counts_map = {}
-    if session_ids:
-        pipeline = [
-            {"$match": {"session_id": {"$in": session_ids}}},
-            {"$group": {"_id": "$session_id", "count": {"$sum": 1}}}
-        ]
-        counts_map = {d['_id']: d['count'] for d in attendance_col.aggregate(pipeline)}
-
-    sessions_by_ta = defaultdict(list)
-    for s in all_sessions:
-        s['attendance_count'] = counts_map.get(s['session_id'], 0)
-        sessions_by_ta[s.get('created_by_username')].append(s)
-
-    all_tas = list(users_col.find({"role": "ta"}, {"_id": 0, "password": 0}))
-    assigned_tas = []
-    for ta in all_tas:
-        if class_key in (ta.get('allowed_classes') or []):
-            ta['class_sessions'] = sessions_by_ta.get(ta['username'], [])
-            assigned_tas.append(ta)
-
-    return jsonify({
-        "status": "success",
-        "class": cls,
-        "tas": assigned_tas
-    })
-
-
-@app.route('/api/live-code')
-def get_live_code():
-    session_id = request.args.get('session_id', '')
-    now = time.time()
-
-    m_step = int(now // MANUAL_STEP_INTERVAL)
-    m_remaining = MANUAL_STEP_INTERVAL - (now - (m_step * MANUAL_STEP_INTERVAL))
-    manual_code = get_step_code(m_step, session_id)
-
-    q_step = int(now // QR_STEP_INTERVAL)
-    q_remaining = QR_STEP_INTERVAL - (now - (q_step * QR_STEP_INTERVAL))
-    qr_code = get_qr_step_code(q_step, session_id)
-
-    return jsonify({
-        "manual_code": manual_code,
-        "manual_remaining": m_remaining,
-        "manual_interval": MANUAL_STEP_INTERVAL,
-        "qr_code": qr_code,
-        "qr_remaining": q_remaining,
-        "qr_interval": QR_STEP_INTERVAL,
-        "code": manual_code,
-        "remaining": m_remaining,
-        "interval": MANUAL_STEP_INTERVAL
-    })
-
-
-@app.route('/api/admin-action', methods=['POST'])
-def admin_action():
-    if 'admin' not in session:
-        return jsonify({"status": "unauthorized"}), 401
-
-    curr_user = users_col.find_one({"username": session['admin']['username']})
-    role = session['admin']['role']
-    curr = session['admin']
-    data = request.get_json(force=True, silent=True) or {}
-    action = str(data.get('action', ''))
-
-    # ---------- CHANGE PASSWORD ----------
-    if action == 'change_my_password':
-        new_pw = generate_password_hash(str(data.get('new_password', '')))
-        users_col.update_one({"username": curr['username']}, {"$set": {"password": new_pw}})
-        return jsonify({"status": "success"})
-
-    # ---------- CREATE CLASS ----------
-    elif action == 'create_class':
-        sub_id = str(data.get('subject_id', '')).strip()
-        try:
-            class_num = int(data.get('class_number', 0))
-        except:
-            class_num = 0
-
-        if not sub_id or class_num < 1:
-            return jsonify({"status": "error", "message": "بيانات ناقصة!"}), 400
-
-        if role == 'super_admin':
-            pass
-        elif role == 'doctor':
-            if sub_id not in curr_user.get('allowed_subjects', []):
-                return jsonify({"status": "error", "message": "غير مصرح لك بهذه المادة!"}), 403
-        else:
-            return jsonify({"status": "error", "message": "المعيد لا يمكنه إنشاء فصول!"}), 403
-
-        subject = subjects_col.find_one({"id": sub_id})
-        if not subject:
-            return jsonify({"status": "error", "message": "المادة غير موجودة!"}), 404
-
-        existing = classes_col.find_one({"subject_id": sub_id, "class_number": class_num})
-        if existing:
-            return jsonify({"status": "error", "message": f"Class {class_num} موجود بالفعل!"}), 409
-
-        class_id = f"CLS_{int(time.time() * 1000)}_{class_num}"
-        classes_col.insert_one({
-            "class_id": class_id,
-            "subject_id": sub_id,
-            "subject_name": subject.get('name', ''),
-            "class_number": class_num,
-            "created_by": curr['name'],
-            "created_by_username": curr['username'],
-            "created_at": datetime.now(pytz.timezone('Africa/Cairo')).strftime("%Y-%m-%d %I:%M %p")
-        })
-        return jsonify({
-            "status": "success",
-            "message": f"تم إنشاء Class {class_num}",
-            "class_id": class_id,
-            "class_number": class_num,
-            "subject_id": sub_id,
-            "subject_name": subject.get('name', '')
-        })
-
-    # ---------- DELETE CLASS ----------
-    elif action == 'delete_class':
-        class_id = str(data.get('class_id', '')).strip()
-        if not class_id:
-            return jsonify({"status": "error", "message": "بيانات ناقصة!"}), 400
-
-        cls = classes_col.find_one({"class_id": class_id})
-        if not cls:
-            return jsonify({"status": "error", "message": "الفصل غير موجود!"}), 404
-
-        if role == 'super_admin':
-            pass
-        elif role == 'doctor':
-            if cls.get('subject_id') not in curr_user.get('allowed_subjects', []):
-                return jsonify({"status": "error", "message": "غير مصرح!"}), 403
-        else:
-            return jsonify({"status": "error", "message": "غير مصرح!"}), 403
-
-        classes_col.delete_one({"class_id": class_id})
-
-        key = f"{cls['subject_id']}|Class{cls['class_number']}"
-        users_col.update_many(
-            {"role": "ta", "allowed_classes": key},
-            {"$pull": {"allowed_classes": key}}
-        )
-
-        return jsonify({"status": "success", "message": "تم حذف الفصل"})
-
-    # ---------- ASSIGN CLASS TAs ----------
-    elif action == 'assign_class_tas':
-        class_id = str(data.get('class_id', '')).strip()
-        ta_usernames = data.get('ta_usernames', [])
-
-        if not class_id:
-            return jsonify({"status": "error", "message": "بيانات ناقصة!"}), 400
-
-        if not isinstance(ta_usernames, list):
-            ta_usernames = []
-
-        cls = classes_col.find_one({"class_id": class_id})
-        if not cls:
-            return jsonify({"status": "error", "message": "الفصل غير موجود!"}), 404
-
-        if role == 'super_admin':
-            pass
-        elif role == 'doctor':
-            if cls.get('subject_id') not in curr_user.get('allowed_subjects', []):
-                return jsonify({"status": "error", "message": "غير مصرح!"}), 403
-        else:
-            return jsonify({"status": "error", "message": "غير مصرح!"}), 403
-
-        subject_id = cls['subject_id']
-        class_number = cls['class_number']
-        class_key = f"{subject_id}|Class{class_number}"
-        target_set = set(ta_usernames)
-
-        all_tas = list(users_col.find({"role": "ta"}))
-        operations = []
-
-        for ta in all_tas:
-            ta_username = ta.get('username')
-            current_classes = ta.get('allowed_classes', []) or []
-            has_subject = subject_id in (ta.get('allowed_subjects') or [])
-            should_have = has_subject and ta_username in target_set
-            has_now = class_key in current_classes
-
-            if should_have and not has_now:
-                operations.append(UpdateOne(
-                    {"username": ta_username},
-                    {"$addToSet": {"allowed_classes": class_key}}
-                ))
-            elif not should_have and has_now:
-                operations.append(UpdateOne(
-                    {"username": ta_username},
-                    {"$pull": {"allowed_classes": class_key}}
-                ))
-
-        if operations:
-            users_col.bulk_write(operations, ordered=False)
-
-        return jsonify({
-            "status": "success",
-            "message": f"تم التعيين ({len(target_set)} معيد)",
-            "updated": len(operations)
-        })
-
-    # ---------- CREATE SESSION ----------
-    elif action == 'create_session':
-        s_data = data.get('session', {})
-        sub_id = str(s_data.get('subject_id', ''))
-        session_type = str(s_data.get('type', 'Lecture'))
-        class_number = str(s_data.get('class_number', '')).strip()
-        custom_title = str(s_data.get('title', '')).strip()
-
-        if role == 'super_admin':
-            pass
-        elif role == 'doctor':
-            if sub_id not in curr_user.get('allowed_subjects', []):
-                return jsonify({"status": "error", "message": "غير مصرح لك بفتح جلسة في هذه المادة!"}), 403
-            if session_type != 'Lecture':
-                return jsonify({"status": "error", "message": "الدكتور يمكنه فتح محاضرات فقط!"}), 403
-        elif role == 'ta':
-            if session_type != 'Section':
-                return jsonify({"status": "error", "message": "المعيد يمكنه فتح سكاشن فقط!"}), 403
-            if not class_number:
-                return jsonify({"status": "error", "message": "يجب تحديد الفصل!"}), 400
-            key = f"{sub_id}|Class{class_number}"
-            if key not in curr_user.get('allowed_classes', []):
-                return jsonify({"status": "error", "message": f"غير مصرح لك بفتح جلسة في Class {class_number}!"}), 403
-        else:
-            return jsonify({"status": "error", "message": "غير مصرح"}), 403
-
-        sess_id = f"SESS_{int(time.time() * 1000)}"
-        new_session = {
-            "session_id": sess_id,
-            "subject_id": sub_id,
-            "subject_name": str(s_data.get('subject_name', '')),
-            "type": session_type,
-            "title": custom_title or str(s_data.get('title', 'عام')),
-            "is_open": True,
-            "created_by": curr['name'],
-            "created_by_username": curr['username'],
-            "created_at": datetime.now(pytz.timezone('Africa/Cairo')).strftime("%Y-%m-%d %I:%M %p")
-        }
-        if session_type == 'Section':
-            new_session['class_number'] = class_number
-
-        sessions_col.insert_one(new_session)
-
-        new_session.pop('_id', None)
-        return jsonify({"status": "success", "session": new_session})
-
-    # ---------- UPDATE SESSION TITLE ----------
-    elif action == 'update_session_title':
-        sess_id = str(data.get('session_id', '')).strip()
-        new_title = str(data.get('new_title', '')).strip()
-
-        if not sess_id or not new_title:
-            return jsonify({"status": "error", "message": "بيانات ناقصة!"}), 400
-
-        sess = sessions_col.find_one({"session_id": sess_id})
-        if not sess:
-            return jsonify({"status": "error", "message": "الجلسة غير موجودة!"}), 404
-
-        if role == 'doctor':
-            if sess.get('subject_id') not in curr_user.get('allowed_subjects', []):
-                return jsonify({"status": "error", "message": "غير مصرح!"}), 403
-        elif role == 'ta':
-            key = f"{sess.get('subject_id')}|Class{sess.get('class_number', '')}"
-            if key not in curr_user.get('allowed_classes', []):
-                return jsonify({"status": "error", "message": "غير مصرح!"}), 403
-
-        sessions_col.update_one({"session_id": sess_id}, {"$set": {"title": new_title}})
-        return jsonify({"status": "success", "message": "تم تحديث العنوان"})
-
-    # ---------- TOGGLE SESSION ----------
-    elif action == 'toggle_session':
-        sess_id = str(data.get('session_id', ''))
-        sess = sessions_col.find_one({"session_id": sess_id})
-        if not sess:
-            return jsonify({"status": "error", "message": "الجلسة غير موجودة!"}), 404
-
-        if role == 'doctor' and sess.get('subject_id') not in curr_user.get('allowed_subjects', []):
-            return jsonify({"status": "error", "message": "غير مصرح!"}), 403
-        if role == 'ta':
-            key = f"{sess.get('subject_id')}|Class{sess.get('class_number', '')}"
-            if key not in curr_user.get('allowed_classes', []) or sess.get('type') != 'Section':
-                return jsonify({"status": "error", "message": "غير مصرح!"}), 403
-
-        sessions_col.update_one({"session_id": sess_id}, {"$set": {"is_open": bool(data.get('is_open'))}})
-        return jsonify({"status": "success"})
-
-    # ---------- DELETE SESSION ----------
-    elif action == 'delete_session':
-        sess_id = str(data.get('session_id', ''))
-        sess = sessions_col.find_one({"session_id": sess_id})
-        if not sess:
-            return jsonify({"status": "error", "message": "الجلسة غير موجودة!"}), 404
-
-        if role == 'doctor' and sess.get('subject_id') not in curr_user.get('allowed_subjects', []):
-            return jsonify({"status": "error", "message": "غير مصرح!"}), 403
-        if role == 'ta':
-            key = f"{sess.get('subject_id')}|Class{sess.get('class_number', '')}"
-            if key not in curr_user.get('allowed_classes', []) or sess.get('type') != 'Section':
-                return jsonify({"status": "error", "message": "غير مصرح!"}), 403
-
-        sessions_col.delete_one({"session_id": sess_id})
-        attendance_col.delete_many({"session_id": sess_id})
-        return jsonify({"status": "success"})
-
-    # ---------- ADD MANUAL ATTENDANCE ----------
-    elif action == 'add_manual_attendance':
-        sess_id = str(data.get('session_id', '')).strip()
-        s_id = str(data.get('student_id', '')).strip()
-        s_name = str(data.get('student_name', '')).strip()
-
-        sess = sessions_col.find_one({"session_id": sess_id})
-        if not sess:
-            return jsonify({"status": "error", "message": "الجلسة غير موجودة!"}), 404
-
-        if role == 'ta':
-            key = f"{sess.get('subject_id')}|Class{sess.get('class_number', '')}"
-            if key not in curr_user.get('allowed_classes', []) or sess.get('type') != 'Section':
-                return jsonify({"status": "error", "message": "غير مصرح!"}), 403
-
-        if attendance_col.find_one({"student_id": s_id, "session_id": sess_id}):
-            return jsonify({"status": "error", "message": "الطالب مسجل حضوره بالفعل!"}), 409
-
-        st_record = students_col.find_one({"student_id": s_id})
-        year = st_record.get('year', '') if st_record else ''
-        dept = st_record.get('department', '') if st_record else ''
-
-        cairo_now = datetime.now(pytz.timezone('Africa/Cairo')).strftime("%Y-%m-%d %I:%M:%S %p")
-        record = {
-            "student_id": s_id,
-            "student_name": s_name,
-            "year": year,
-            "department": dept,
-            "subject_id": sess['subject_id'],
-            "subject_name": sess['subject_name'],
-            "session_id": sess_id,
-            "session_title": sess['title'],
-            "session_type": sess.get('type', 'Lecture'),
-            "class_number": sess.get('class_number', ''),
-            "timestamp": cairo_now,
-            "device_token": "MANUAL_BY_ADMIN",
-            "ip": "ADMIN",
-            "is_manual": True,
-            "scan_type": "admin"
-        }
-        attendance_col.insert_one(record)
-        record.pop('_id', None)
-        return jsonify({"status": "success", "message": "تم تحضير الطالب يدوياً بنجاح!", "record": record})
-
-    # ---------- EDIT ATTENDANCE ----------
-    elif action == 'edit_attendance_record':
-        sess_id = str(data.get('session_id', ''))
-        old_id = str(data.get('old_id', ''))
-        new_id = str(data.get('new_id', ''))
-        new_name = str(data.get('new_name', ''))
-
-        attendance_col.update_one(
-            {"session_id": sess_id, "student_id": old_id},
-            {"$set": {"student_id": new_id, "student_name": new_name}}
-        )
-        return jsonify({"status": "success"})
-
-    # ---------- DELETE ATTENDANCE ----------
-    elif action == 'delete_attendance_record':
-        attendance_col.delete_one({
-            "student_id": str(data.get('student_id', '')),
-            "session_id": str(data.get('session_id', ''))
-        })
-        return jsonify({"status": "success"})
-
-    # ---------- MANAGE SUBJECTS ----------
-    elif action == 'manage_subject' and role == 'super_admin':
-        sub_act = str(data.get('sub', ''))
-        if sub_act == 'add':
-            s_obj = data.get('subject', {})
-            sub_id = f"SUB_{int(time.time())}"
-            subjects_col.insert_one({
-                "id": sub_id,
-                "name": str(s_obj.get('name', '')),
-                "year": str(s_obj.get('year', '')),
-                "department": str(s_obj.get('department', '')),
-                "image": str(s_obj.get('image', '')),
-                "added_by": curr['name']
-            })
-        elif sub_act == 'edit':
-            sub_id = str(data.get('id', ''))
-            s_obj = data.get('subject', {})
-            target = subjects_col.find_one({"id": sub_id})
-            if not target:
-                return jsonify({"status": "error", "message": "المادة غير موجودة!"}), 404
-
-            new_name = str(s_obj.get('name', target.get('name', ''))).strip()
-            updates = {
-                "name": new_name,
-                "year": str(s_obj.get('year', target.get('year', ''))),
-                "department": str(s_obj.get('department', target.get('department', '')))
+            .banner-identity {
+                flex-direction: row;
+                align-items: center;
             }
-            if s_obj.get('image'):
-                updates['image'] = str(s_obj.get('image'))
+            .banner-text { text-align: right; }
+            .banner-name { font-size: 21px; white-space: normal; }
+            .banner-actions {
+                width: 100%;
+                justify-content: stretch;
+            }
+            .id-card {
+                flex: 1;
+                min-width: 0;
+            }
+        }
 
-            subjects_col.update_one({"id": sub_id}, {"$set": updates})
+        @media (max-width: 768px) {
+            .navbar {
+                height: 62px !important;
+                padding: 0 14px !important;
+            }
+            .navbar .logo {
+                font-size: 20px !important;
+                letter-spacing: 2.5px;
+                left: 60% !important;
+            }
+            .navbar .logo i {
+                font-size: 20px;
+            }
+            .nav-actions {
+                gap: 8px;
+            }
+            .nav-actions .btn-outline,
+            .nav-actions .btn-danger-outline {
+                padding: 10px 12px !important;
+                font-size: 12px !important;
+                border-radius: 12px;
+                gap: 6px;
+            }
+            .nav-actions .btn-outline span,
+            .nav-actions .btn-danger-outline span {
+                display: none;
+            }
+            .nav-actions .btn-outline i,
+            .nav-actions .btn-danger-outline i {
+                font-size: 15px;
+                margin: 0;
+            }
+            .container { padding: 20px 14px 40px !important; }
 
-            if new_name and new_name != target.get('name'):
-                sessions_col.update_many({"subject_id": sub_id}, {"$set": {"subject_name": new_name}})
-                attendance_col.update_many({"subject_id": sub_id}, {"$set": {"subject_name": new_name}})
-                classes_col.update_many({"subject_id": sub_id}, {"$set": {"subject_name": new_name}})
+            .banner-identity { gap: 14px; }
+            .banner-avatar-wrap { width: 70px; height: 70px; }
+            .banner-avatar { font-size: 22px; }
+            .banner-status-dot { width: 14px; height: 14px; bottom: 2px; left: 2px; }
+            .banner-name { font-size: 19px; }
+            .banner-greeting { font-size: 11px; }
+            .chip { font-size: 11px; padding: 5px 11px; }
 
-        elif sub_act == 'delete':
-            sub_id = str(data.get('id', ''))
-            subjects_col.delete_one({"id": sub_id})
-            sessions_col.delete_many({"subject_id": sub_id})
-            attendance_col.delete_many({"subject_id": sub_id})
-            classes_col.delete_many({"subject_id": sub_id})
+            .id-card { padding: 10px 18px; }
+            .id-card-value { font-size: 19px; letter-spacing: 2.5px; }
 
-        return jsonify({"status": "success"})
+            .grid-layout {
+                grid-template-columns: repeat(2, 1fr) !important;
+                gap: 12px !important;
+            }
+            .subject-card {
+                padding: 22px 12px 18px !important;
+                border-radius: 20px !important;
+            }
+            .subject-card img {
+                width: 120px !important;
+                height: 120px !important;
+                padding: 6px !important;
+                margin-bottom: 8px !important;
+            }
+            .sub-title {
+                font-size: 14px !important;
+                margin-bottom: 2px !important;
+            }
+            .session-status-badge { margin-top: 3px !important; }
+            .badge-open, .badge-closed {
+                font-size: 10.5px !important;
+                padding: 4px 10px !important;
+            }
 
-    # ---------- MANAGE STAFF ----------
-    elif action == 'manage_staff':
-        if role == 'ta':
-            return jsonify({"status": "error", "message": "المعيد ليس له صلاحية!"}), 403
+            .auth-card { padding: 36px 24px 28px !important; border-radius: 24px !important; }
+            .auth-title { font-size: 22px !important; }
+            .auth-subtitle { letter-spacing: 6px !important; font-size: 11px !important; }
 
-        sub_act = str(data.get('sub', ''))
-        staff_data = data.get('staff', {})
+            /* ✅ الدايرة على الموبايل */
+            .nx-logo-wrap { width: 120px; height: 120px; margin-bottom: 24px; }
+            .nx-logo-core { width: 102px; height: 102px; font-size: 20px; }
 
-        if sub_act == 'add':
-            new_role = str(staff_data.get('role', 'ta'))
-            allowed_subjects = staff_data.get('allowed_subjects', [])
-            allowed_classes = staff_data.get('allowed_classes', [])
+            .code-box {
+                font-size: 24px !important;
+                letter-spacing: 10px !important;
+                padding: 14px 8px 14px 18px !important;
+            }
+            .code-box::placeholder { letter-spacing: 10px; }
 
-            if role == 'doctor':
-                new_role = 'ta'
-                my_subs = curr_user.get('allowed_subjects', [])
-                if not all(s in my_subs for s in allowed_subjects):
-                    return jsonify({"status": "error", "message": "لا يمكنك منح صلاحية في مادة لا تدرسها!"}), 403
-                for cls_item in allowed_classes:
-                    cls_sub = cls_item.split('|')[0]
-                    if cls_sub not in my_subs:
-                        return jsonify({"status": "error", "message": "فصل لا يتبع لموادك!"}), 403
+            .modal-header {
+                padding: 14px 18px !important;
+                padding-top: calc(14px + env(safe-area-inset-top, 0px)) !important;
+            }
+            .modal-close {
+                width: 40px !important;
+                height: 40px !important;
+                font-size: 15px !important;
+            }
+        }
 
-            target_user = str(staff_data.get('username', '')).strip()
-            if users_col.find_one({"username": target_user}):
-                return jsonify({"status": "error", "message": "اسم المستخدم موجود مسبقاً!"}), 400
+        @media (max-width: 380px) {
+            .grid-layout { grid-template-columns: 1fr !important; }
+        }
 
-            users_col.insert_one({
-                "name": str(staff_data.get('name', '')).strip(),
-                "username": target_user,
-                "password": generate_password_hash(str(staff_data.get('password', ''))),
-                "role": new_role,
-                "allowed_subjects": allowed_subjects,
-                "allowed_classes": allowed_classes,
-                "is_active": True,
-                "created_by": curr['username']
-            })
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+    </style>
+</head>
+<body>
 
-        elif sub_act == 'delete':
-            target_username = str(data.get('username', ''))
-            if target_username == curr['username']:
-                return jsonify({"status": "error", "message": "لا يمكنك حذف حسابك!"}), 403
+    <!-- ===== AURORA BACKGROUND ===== -->
+    <div class="nx-aurora" aria-hidden="true">
+        <div class="blob b1"></div>
+        <div class="blob b2"></div>
+        <div class="blob b3"></div>
+    </div>
 
-            target = users_col.find_one({"username": target_username})
-            if not target:
-                return jsonify({"status": "error", "message": "العضو غير موجود!"}), 404
+    <!-- ===== PARTICLES ===== -->
+    <div class="nx-particles" id="nx-particles" aria-hidden="true"></div>
 
-            if role == 'doctor':
-                if target.get('role') != 'ta':
-                    return jsonify({"status": "error", "message": "يمكنك حذف المعيدين فقط!"}), 403
-                my_subs = curr_user.get('allowed_subjects', [])
-                target_subs = target.get('allowed_subjects', [])
-                has_common = any(s in my_subs for s in target_subs)
-                created_by_him = (target.get('created_by') == curr['username'])
-                if not (has_common or created_by_him):
-                    return jsonify({"status": "error", "message": "غير مصرح!"}), 403
+    <!-- ===== LOADING ===== -->
+    <div id="loading-screen" style="display:none; flex-direction:column; align-items:center; justify-content:center;">
+        <div class="nx-load-logo">
+            <div class="nx-load-ring"></div>
+            <div class="nx-load-ring ring-2"></div>
+            <div class="nx-load-core">BATU</div>
+        </div>
+        <h3>Loading</h3>
+    </div>
 
-            users_col.delete_one({"username": target_username})
+    <!-- ===== شاشة تسجيل البيانات (على خطوتين) ===== -->
+    <div id="auth-screen">
+        <div class="auth-card">
+            <div class="nx-logo-wrap">
+                <div class="nx-logo-ring"></div>
+                <div class="nx-logo-core">BATU</div>
+            </div>
 
-        elif sub_act == 'edit':
-            target_username = str(data.get('old_username', '')).strip()
-            target = users_col.find_one({"username": target_username})
-            if not target:
-                return jsonify({"status": "error", "message": "العضو غير موجود!"}), 404
+            <h2 class="auth-title">Attendance System</h2>
+            <p class="auth-subtitle">BATU</p>
 
-            new_subjects = staff_data.get('allowed_subjects', [])
-            new_classes = staff_data.get('allowed_classes', [])
+            <!-- ============ الخطوة 1: البيانات الأساسية ============ -->
+            <div id="auth-step-1">
+                <input type="text" id="login-name" class="auth-input" placeholder="اسم الطالب ثلاثي أو رباعي" autocomplete="off">
 
-            if role == 'super_admin':
-                users_col.update_one(
-                    {"username": target_username},
-                    {"$set": {"allowed_subjects": new_subjects, "allowed_classes": new_classes}}
-                )
-            elif role == 'doctor':
-                if target.get('role') != 'ta':
-                    return jsonify({"status": "error", "message": "يمكنك تعديل المعيدين فقط!"}), 403
-                my_subs = curr_user.get('allowed_subjects', [])
-                if not all(s in my_subs for s in new_subjects):
-                    return jsonify({"status": "error", "message": "يمكنك تعديل المواد التي تدرسها فقط!"}), 403
+                <input type="text" id="login-id" class="auth-input numeric-input" placeholder="كود الطالب (7 أرقام)" maxlength="7" inputmode="numeric" autocomplete="off" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
 
-                target_subs = target.get('allowed_subjects', [])
-                target_classes = target.get('allowed_classes', [])
-                other_subs = [s for s in target_subs if s not in my_subs]
-                other_classes = [c for c in target_classes if c.split('|')[0] not in my_subs]
+                <select id="login-year" class="custom-select">
+                    <option value="" disabled selected>اختر الفرقة الدراسية</option>
+                    <option value="الفرقة الأولى">الفرقة الأولى</option>
+                    <option value="الفرقة الثانية">الفرقة الثانية</option>
+                    <option value="الفرقة الثالثة">الفرقة الثالثة</option>
+                    <option value="الفرقة الرابعة">الفرقة الرابعة</option>
+                </select>
 
-                final_subs = list(set(other_subs + new_subjects))
-                final_classes = list(set(other_classes + new_classes))
+                <button type="button" id="next-step-btn" class="btn-next" style="margin-top: 8px;" onclick="goToClassStep()">
+                    التالي <i class="fas fa-arrow-left" style="margin-right:6px;"></i>
+                </button>
+            </div>
 
-                users_col.update_one(
-                    {"username": target_username},
-                    {"$set": {"allowed_subjects": final_subs, "allowed_classes": final_classes}}
-                )
-            else:
-                return jsonify({"status": "error", "message": "غير مصرح"}), 403
+            <!-- ============ الخطوة 2: القسم + الفصل ============ -->
+            <div id="auth-step-2" style="display:none;">
+                <div id="dept-group" style="display:none;">
+                    <select id="login-dept" class="custom-select">
+                        <option value="" disabled selected>اختر القسم / التخصص</option>
+                        <option value="Software">قسم Software</option>
+                        <option value="Network">قسم Network</option>
+                    </select>
+                </div>
 
-        return jsonify({"status": "success"})
+                <div id="class-group" style="display:none;"></div>
 
-    # ---------- EDIT STAFF ----------
-    elif action == 'edit_staff':
-        target_username = str(data.get('target_username', '')).strip()
-        if not target_username:
-            return jsonify({"status": "error", "message": "بيانات ناقصة"}), 400
+                <button type="button" id="login-submit-btn" class="btn-primary" style="display:none !important; margin-top: 8px;" onclick="loginStudent()">
+                    <i class="fas fa-shield-halved" style="margin-left:6px;"></i> دخول
+                </button>
 
-        target = users_col.find_one({"username": target_username})
-        if not target:
-            return jsonify({"status": "error", "message": "العضو غير موجود!"}), 404
+                <button type="button" class="back-link" onclick="backToStep1()">
+                    <i class="fas fa-arrow-right"></i> رجوع
+                </button>
+            </div>
+        </div>
+    </div>
 
-        if target_username == curr['username']:
-            return jsonify({"status": "error", "message": "لا يمكنك تعديل حسابك!"}), 403
+    <!-- ===== الواجهة الرئيسية ===== -->
+    <div id="main-ui" style="display: none; flex-direction: column; min-height: 100vh;">
+        <nav class="navbar">
+            <div class="logo">
+                <i class="fas fa-crown"></i>
+                <span>BATU</span>
+            </div>
+            <div class="nav-actions">
+                <button class="btn-danger-outline" onclick="logoutStudent()">
+                    <i class="fas fa-sign-out-alt"></i> <span>خروج</span>
+                </button>
+                <button class="btn-outline" onclick="openHistoryModal()">
+                    <i class="fas fa-history"></i> <span>سجل حضوري</span>
+                </button>
+            </div>
+        </nav>
 
-        staff_data = data.get('staff', {})
-        updates = {}
+        <div class="container">
 
-        if role == 'super_admin':
-            new_name = str(staff_data.get('name', target.get('name', ''))).strip()
-            new_role = str(staff_data.get('role', target.get('role', 'ta')))
-            new_subs = staff_data.get('allowed_subjects', target.get('allowed_subjects', []))
-            new_classes = staff_data.get('allowed_classes', target.get('allowed_classes', []))
+            <!-- ===================== HERO BANNER (الأصلي) ===================== -->
+            <div class="student-info-banner">
+                <div class="banner-identity">
+                    <div class="banner-avatar-wrap">
+                        <div class="banner-avatar-ring"></div>
+                        <div class="banner-avatar" id="display-avatar">•</div>
+                        <div class="banner-status-dot" title="متصل"></div>
+                    </div>
 
-            if new_name: updates['name'] = new_name
-            if new_role in ['doctor', 'ta']: updates['role'] = new_role
-            updates['allowed_subjects'] = new_subs
-            updates['allowed_classes'] = new_classes
+                    <div class="banner-text">
+                        <div class="banner-greeting">
+                            <i class="fas fa-hand-sparkles"></i>
+                            <span>مرحباً بك في تكنولوجيا المعلومات</span>
+                        </div>
+                        <h1 class="banner-name" id="display-name">...</h1>
+                        <div class="banner-chips">
+                            <span class="chip chip-gold">
+                                <i class="fas fa-graduation-cap"></i>
+                                <span id="display-year">...</span>
+                            </span>
+                            <span class="chip chip-cyan">
+                                <i class="fas fa-microchip"></i>
+                                <span id="display-dept">...</span>
+                            </span>
+                            <span class="chip chip-purple" id="display-class-chip" style="display:none;">
+                                <i class="fas fa-layer-group"></i>
+                                <span id="display-class">Class ...</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
 
-        elif role == 'doctor':
-            if target.get('role') != 'ta':
-                return jsonify({"status": "error", "message": "يمكنك تعديل المعيدين فقط!"}), 403
+                <div class="banner-actions">
+                    <div class="id-card">
+                        <div class="id-card-label">
+                            <i class="fas fa-id-badge"></i>
+                            <span>كود الطالب</span>
+                        </div>
+                        <div class="id-card-value" id="display-id">---</div>
+                    </div>
+                </div>
+            </div>
+            <!-- ===================== /HERO BANNER ===================== -->
 
-            my_subs = curr_user.get('allowed_subjects', [])
-            target_subs = target.get('allowed_subjects', [])
-            has_common = any(s in my_subs for s in target_subs)
-            created_by_him = (target.get('created_by') == curr['username'])
-            if not (has_common or created_by_him):
-                return jsonify({"status": "error", "message": "غير مصرح!"}), 403
+            <h2><i class="fas fa-book-open"></i> المقررات الدراسية</h2>
+            <p style="color:var(--text-muted); font-size:14px; margin-bottom: 5px;">
+                المقررات الخاصة بدفعتك وقسمك فقط. اضغط على أي مادة لتسجيل الحضور.
+            </p>
 
-            new_subs = staff_data.get('allowed_subjects', [])
-            new_classes = staff_data.get('allowed_classes', [])
-            if not all(s in my_subs for s in new_subs):
-                return jsonify({"status": "error", "message": "يمكنك تعديل المواد التي تدرسها فقط!"}), 403
+            <div id="subjects-container" class="grid-layout"></div>
+        </div>
 
-            target_classes = target.get('allowed_classes', [])
-            other_subs = [s for s in target_subs if s not in my_subs]
-            other_classes = [c for c in target_classes if c.split('|')[0] not in my_subs]
+        <footer>
+            <h2>BATU · 2026</h2>
+        </footer>
+    </div>
 
-            updates['allowed_subjects'] = list(set(other_subs + new_subs))
-            updates['allowed_classes'] = list(set(other_classes + new_classes))
+    <!-- ===== نافذة تأكيد الحضور ===== -->
+    <div id="verify-modal" class="modal-screen">
+        <div class="modal-header">
+            <h2 style="color:var(--nx-gold); font-size:16px;"><i class="fas fa-qrcode"></i> تأكيد الحضور المباشر</h2>
+            <button class="modal-close" onclick="closeVerifyModal()" aria-label="إغلاق"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <div class="modal-card">
+                <h3 id="modal-sess-title" style="text-align:center; margin-bottom:5px;">...</h3>
+                <p id="modal-sess-sub" style="text-align:center; margin-bottom:20px;">...</p>
 
-        else:
-            return jsonify({"status": "error", "message": "غير مصرح"}), 403
+                <button class="btn-secondary" style="margin-bottom:12px;" onclick="toggleQrReader()">
+                    <i class="fas fa-camera"></i> مسح الـ QR بكاميرا الهاتف
+                </button>
+                <div id="reader"></div>
 
-        if updates:
-            users_col.update_one({"username": target_username}, {"$set": updates})
+                <p style="text-align:right; color:var(--text-muted); font-size:12px; margin: 12px 0 8px; position:relative; z-index:2;">
+                    أو اكتب الرمز المتغير المعروض على الشاشة (6 خانات):
+                </p>
+                <input type="text" id="totp-input" class="input-dark code-box" placeholder="XXXXXX" maxlength="6" autocomplete="off">
 
-        return jsonify({"status": "success", "message": "تم التحديث"})
+                <button class="btn-primary" style="margin-top:16px;" onclick="submitAttendanceFinal()">
+                    تأكيد وتسجيل الحضور <i class="fas fa-check-circle"></i>
+                </button>
+            </div>
+        </div>
+    </div>
 
-    # ---------- TOGGLE STAFF STATUS ----------
-    elif action == 'toggle_staff_status':
-        target_username = str(data.get('target_username', '')).strip()
-        if not target_username:
-            return jsonify({"status": "error", "message": "بيانات ناقصة"}), 400
+    <!-- ===== سجل الحضور ===== -->
+    <div id="history-modal" class="modal-screen">
+        <div class="modal-header">
+            <h2 style="color:var(--nx-gold); font-size:16px;"><i class="fas fa-clipboard-check"></i> سجل حضورك السابق</h2>
+            <button class="modal-close" onclick="closeHistoryModal()" aria-label="إغلاق"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <div id="history-list-container" class="complaints-container"></div>
+        </div>
+    </div>
 
-        target = users_col.find_one({"username": target_username})
-        if not target:
-            return jsonify({"status": "error", "message": "العضو غير موجود!"}), 404
+    <script src="/static/student.js"></script>
 
-        if target_username == curr['username']:
-            return jsonify({"status": "error", "message": "لا يمكنك إيقاف حسابك!"}), 403
+    <!-- ============================================================
+         NEXUS INTERACTIONS
+         ============================================================ -->
+    <script>
+        /* ---------- PARTICLES GENERATOR ---------- */
+        (function () {
+            const container = document.getElementById('nx-particles');
+            if (!container) return;
+            const count = window.innerWidth < 768 ? 12 : 22;
+            for (let i = 0; i < count; i++) {
+                const p = document.createElement('div');
+                p.className = 'nx-particle';
+                p.style.left = Math.random() * 100 + '%';
+                p.style.animationDuration = (10 + Math.random() * 14) + 's';
+                p.style.animationDelay = (Math.random() * 14) + 's';
+                const s = 1.5 + Math.random() * 2.5;
+                p.style.width = s + 'px';
+                p.style.height = s + 'px';
+                if (Math.random() > 0.7) {
+                    p.style.background = '#7C3AED';
+                    p.style.boxShadow = '0 0 10px #7C3AED, 0 0 20px rgba(124,58,237,0.5)';
+                } else if (Math.random() > 0.5) {
+                    p.style.background = '#06B6D4';
+                    p.style.boxShadow = '0 0 10px #06B6D4, 0 0 20px rgba(6,182,212,0.5)';
+                }
+                container.appendChild(p);
+            }
+        })();
 
-        if role == 'doctor':
-            if target.get('role') != 'ta':
-                return jsonify({"status": "error", "message": "يمكنك التحكم في المعيدين فقط!"}), 403
-            my_subs = curr_user.get('allowed_subjects', [])
-            target_subs = target.get('allowed_subjects', [])
-            has_common = any(s in my_subs for s in target_subs)
-            created_by_him = (target.get('created_by') == curr['username'])
-            if not (has_common or created_by_him):
-                return jsonify({"status": "error", "message": "غير مصرح!"}), 403
-        elif role != 'super_admin':
-            return jsonify({"status": "error", "message": "غير مصرح"}), 403
+        /* ---------- SUBJECT CARD TILT + CURSOR GLOW ---------- */
+        function attachCardEffects() {
+            document.querySelectorAll('.subject-card').forEach(card => {
+                if (card.dataset.nxBound) return;
+                card.dataset.nxBound = '1';
 
-        new_status = bool(data.get('is_active', True))
-        users_col.update_one({"username": target_username}, {"$set": {"is_active": new_status}})
-        return jsonify({"status": "success", "message": "تم تنشيط الحساب" if new_status else "تم إيقاف الحساب"})
+                card.addEventListener('mousemove', (e) => {
+                    const r = card.getBoundingClientRect();
+                    const x = e.clientX - r.left;
+                    const y = e.clientY - r.top;
+                    card.style.setProperty('--mx', x + 'px');
+                    card.style.setProperty('--my', y + 'px');
 
-    # ---------- WIPE ----------
-    elif action == 'wipe_all' and role == 'super_admin':
-        provided_pw = str(data.get('admin_password', ''))
-        if provided_pw == 'Nx!99@bATU#xK82_Secured':
-            attendance_col.delete_many({})
-            sessions_col.delete_many({})
-            return jsonify({"status": "success", "message": "تم التصفير بنجاح"})
-        return jsonify({"status": "error", "message": "كلمة المرور غير صحيحة!"}), 403
+                    const cx = r.width / 2;
+                    const cy = r.height / 2;
+                    const rx = ((y - cy) / cy) * -6;
+                    const ry = ((x - cx) / cx) * 6;
+                    card.style.transform = `perspective(900px) rotateX(${rx}deg) rotateY(${ry}deg) translateY(-6px)`;
+                });
 
-    return jsonify({"status": "success"})
+                card.addEventListener('mouseleave', () => {
+                    card.style.transform = '';
+                });
+            });
+        }
 
-
-# ----------------- تصدير إكسل -----------------
-@app.route('/api/export-attendance-csv')
-def export_attendance_csv():
-    if 'admin' not in session:
-        return "Unauthorized", 401
-
-    role = session['admin']['role']
-    query = {}
-    sess_id = request.args.get('session_id')
-    raw_filename = "Attendance_Report"
-
-    if sess_id:
-        query["session_id"] = sess_id
-        sess = sessions_col.find_one({"session_id": sess_id})
-        if sess:
-            raw_filename = f"{sess['subject_name']}_{sess['title']}"
-
-    records = list(attendance_col.find(query, {"_id": 0}).sort("timestamp", -1))
-
-    output = io.StringIO()
-    output.write('\ufeff')
-    writer = csv.writer(output)
-    writer.writerow(['كود الطالب', 'اسم الطالب', 'الفرقة', 'القسم', 'المادة', 'نوع الجلسة', 'Class', 'عنوان الجلسة', 'توقيت الحضور', 'طريقة التسجيل', 'IP'])
-
-    for r in records:
-        scan_type = r.get('scan_type', '')
-        if r.get('is_manual') or 'ADMIN' in str(r.get('ip', '')):
-            method = 'يدوي (آدمن)'
-        elif scan_type == 'qr':
-            method = 'QR تلقائي'
-        else:
-            method = 'كود يدوي'
-        writer.writerow([
-            r.get('student_id', ''),
-            r.get('student_name', ''),
-            r.get('year', ''),
-            r.get('department', ''),
-            r.get('subject_name', ''),
-            r.get('session_type', ''),
-            r.get('class_number', ''),
-            r.get('session_title', ''),
-            r.get('timestamp', ''),
-            method,
-            r.get('ip', '')
-        ])
-
-    csv_data = output.getvalue()
-    safe_ascii_name = f"Attendance_{int(time.time())}.csv"
-    encoded_utf8_name = urllib.parse.quote(f"{raw_filename}_{int(time.time())}.csv")
-    disposition_header = f"attachment; filename=\"{safe_ascii_name}\"; filename*=UTF-8''{encoded_utf8_name}"
-
-    return Response(
-        csv_data,
-        mimetype="text/csv; charset=utf-8",
-        headers={"Content-Disposition": disposition_header}
-    )
-
-
-if __name__ == '__main__':
-    print("=" * 65)
-    print("🚀 سيرفر Nexus Attendance يعمل بنجاح!")
-    print("🔑 رابط لوحة الآدمن: http://127.0.0.1:8080/secure-auth-gateway-2026-x9v2-pl7q-a84m")
-    print("👤 اسم المستخدم: Nexus_Admin_Core#2026")
-    print("🔒 كلمة المرور: Nx!99@bATU#xK82_Secured")
-    print("=" * 65)
-    app.run(host='0.0.0.0', port=8080, debug=True)
+        const nxObserver = new MutationObserver(() => attachCardEffects());
+        document.addEventListener('DOMContentLoaded', () => {
+            attachCardEffects();
+            const target = document.getElementById('subjects-container');
+            if (target) nxObserver.observe(target, { childList: true, subtree: true });
+        });
+    </script>
+</body>
+</html>

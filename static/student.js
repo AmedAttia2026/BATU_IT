@@ -6,6 +6,7 @@ let selectedSession = null;
 let html5Qr = null;
 let dashboardRefreshInterval = null;
 let qrScannerStarting = false; // منع التشغيل المزدوج
+let qrAutoSubmitLocked = false; // ✅ لمنع الإرسال المزدوج بعد مسح QR
 
 /* =========================================================
    🔒 قفل الجهاز — جهاز واحد = طالب واحد فقط
@@ -63,7 +64,12 @@ window.onload = () => {
 
 async function loginStudent() {
     const name = document.getElementById('login-name').value.trim();
-    const id = document.getElementById('login-id').value.trim();
+
+    // ✅ تنظيف حقل الكود من أي حروف أو رموز (حماية إضافية بعد اللصق)
+    const idInput = document.getElementById('login-id');
+    idInput.value = idInput.value.replace(/[^0-9]/g, '');
+    const id = idInput.value.trim();
+
     const year = document.getElementById('login-year').value;
     let dept = 'عام (IT)';
 
@@ -291,6 +297,7 @@ function selectSubjectForAttendance(subId, subName) {
    ========================================================= */
 async function openVerifyModal(sessId, title, subName, type) {
     Swal.close();
+    qrAutoSubmitLocked = false; // ✅ تصفير القفل عند فتح نافذة جديدة
 
     /* فحص سريع: هل الطالب سجل في هذه الجلسة بالفعل؟ */
     try {
@@ -343,18 +350,18 @@ function closeVerifyModal() {
     if (inputEl) inputEl.value = '';
 
     selectedSession = null;
+    qrAutoSubmitLocked = false;
 }
 
 /* =========================================================
    📷 QR Scanner — نسخة محسّنة مع Fallback وحل المشاكل
+   ✅ عند المسح: يملأ الحقل ويُرسل تلقائياً
    ========================================================= */
 async function stopQrReader() {
     const r = document.getElementById('reader');
-    const wasVisible = r && r.style.display === 'block';
 
     if (html5Qr) {
         try {
-            // نوقف الكاميرا الأول
             const state = html5Qr.getState ? html5Qr.getState() : null;
             // 2 = SCANNING, 3 = PAUSED
             if (state === 2 || state === 3) {
@@ -419,10 +426,23 @@ async function toggleQrReader() {
             disableFlip: false
         };
 
+        // ✅ دالة نجاح المسح: تملأ الحقل + ترسل تلقائياً
         const onScanSuccess = (decodedText) => {
+            // 🛡️ منع الإرسال المزدوج لو نفس الكود اتقرأ مرتين
+            if (qrAutoSubmitLocked) return;
+            qrAutoSubmitLocked = true;
+
             const input = document.getElementById('totp-input');
-            if (input) input.value = (decodedText || '').trim().substring(0, 6);
+            const cleanCode = (decodedText || '').trim().substring(0, 6).toUpperCase();
+            if (input) input.value = cleanCode;
+
+            // إيقاف الكاميرا فوراً
             stopQrReader();
+
+            // ✅ إرسال فوري بعد 250ms
+            setTimeout(() => {
+                submitAttendanceFinal(true); // true = مسح QR
+            }, 250);
         };
 
         const onScanError = () => { /* تجاهل الأخطاء العادية */ };
@@ -526,9 +546,9 @@ async function toggleQrReader() {
 }
 
 /* =========================================================
-   ✅ إرسال الحضور — مع فحص قفل الجهاز
+   ✅ إرسال الحضور — يدعم وضع QR (تلقائي) و اليدوي
    ========================================================= */
-async function submitAttendanceFinal() {
+async function submitAttendanceFinal(fromQr = false) {
     const code = document.getElementById('totp-input').value.trim();
     if(code.length !== 6) return Swal.fire({...swalDark, icon:'warning', text:'الرمز السري يتكون من 6 خانات!'});
 
@@ -560,7 +580,8 @@ async function submitAttendanceFinal() {
             student_name: currentStudent.name,
             session_id: selectedSession,
             code: code,
-            device_token: getDeviceToken()
+            device_token: getDeviceToken(),
+            scan_type: fromQr ? 'qr' : 'manual'   // ✅ تحديد نوع الإدخال للسيرفر
         })
     });
     const data = await res.json();
@@ -578,6 +599,8 @@ async function submitAttendanceFinal() {
             }, 200);
         }
     } else {
+        // ✅ لو فشل الإرسال التلقائي بعد المسح، نفتح القفل للسماح بإعادة المحاولة
+        if (fromQr) qrAutoSubmitLocked = false;
         Swal.fire({...swalDark, icon:'error', title:'خطأ', text: data.message});
     }
 }

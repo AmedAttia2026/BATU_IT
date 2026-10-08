@@ -196,7 +196,7 @@ body:has(#main-app) {
 }
 .btn-red:hover { background: rgba(239, 68, 68, 0.3); transform: translateY(-1px); }
 
-/* زر تغيير كلمة المرور المريح للعين */
+/* زر تغيير كلمة المرور */
 .btn-change-pw {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 179, 0, 0.4);
@@ -585,7 +585,10 @@ table td {
 .empty-state { text-align: center; padding: 50px 20px; color: var(--text-muted); }
 footer { text-align: center; padding: 20px 15px; background: #0a0e17; border-top: 1px solid var(--border); margin-top: auto; }
 
-/* --- النوافذ المنبثقة (Modals) --- */
+/* ==========================================================
+   ⚠️ MODAL STYLES — للطالب فقط (بوابة index.html)
+   ⚠️ لا تعدل دي لو بتظبط admin.html — الـ admin عنده نسخته
+   ========================================================== */
 .modal-screen {
     position: fixed;
     inset: 0;
@@ -724,8 +727,6 @@ footer { text-align: center; padding: 20px 15px; background: #0a0e17; border-top
     .sidebar.open { transform: translateX(0); }
     .main-content { margin-right: 0; width: 100%; padding: 15px; }
     .mobile-header { display: flex; }
-    /* ✅ تم حذف .welcome-container { display: none; } */
-    /* عشان بانر الترحيب يظهر على التابلت والموبايل */
     .welcome-container { display: flex; }
     .committee-filters { max-width: 100%; }
 }

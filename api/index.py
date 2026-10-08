@@ -67,15 +67,21 @@ users_col.update_one(
     upsert=True
 )
 
+# ============================================================
+#  🔐 إعدادات التشفير — كودان منفصلان: QR + يدوي
+# ============================================================
 SECRET_SALT = b"NEXUS_ATTENDANCE_CORE_SECRET_2026_PROD"
+QR_SECRET_SALT = b"NEXUS_QR_ATTENDANCE_SECRET_2026_PROD"   # مفتاح منفصل لكود QR
 BASE32_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
-STEP_INTERVAL = 10
-GRACE_PERIOD = 2.0
+MANUAL_STEP_INTERVAL = 10   # ⏱️ الكود اليدوي: 10 ثواني
+QR_STEP_INTERVAL = 3        # ⏱️ كود QR: 3 ثواني (لا يقبل بعدها)
+GRACE_PERIOD = 2.0          # سماحية بسيطة للكود اليدوي فقط
 
 
-def get_step_code(step: int, session_id: str) -> str:
-    key = SECRET_SALT + session_id.encode('utf-8')
+def _generate_code(secret_salt: bytes, step: int, session_id: str) -> str:
+    """توليد كود من 6 خانات بناءً على المفتاح + رقم الخطوة + معرف الجلسة"""
+    key = secret_salt + session_id.encode('utf-8')
     digest = hmac.new(key, str(step).encode('utf-8'), hashlib.sha256).digest()
     num = int.from_bytes(digest[:5], 'big')
     code = ""
@@ -85,25 +91,44 @@ def get_step_code(step: int, session_id: str) -> str:
     return code
 
 
-def verify_totp(user_code: str, session_id: str) -> bool:
+def get_step_code(step: int, session_id: str) -> str:
+    """كود الكود اليدوي (10 ثواني)"""
+    return _generate_code(SECRET_SALT, step, session_id)
+
+
+def get_qr_step_code(step: int, session_id: str) -> str:
+    """كود QR (3 ثواني) — مفتاح منفصل تماماً"""
+    return _generate_code(QR_SECRET_SALT, step, session_id)
+
+
+def verify_manual_code(user_code: str, session_id: str) -> bool:
+    """التحقق من الكود اليدوي — نافذة 10 ثواني مع سماحية 2 ثانية"""
     clean = user_code.strip().upper()
     if not clean or len(clean) != 6:
         return False
 
     now = time.time()
-    current_step = int(now // STEP_INTERVAL)
+    current_step = int(now // MANUAL_STEP_INTERVAL)
 
-    current_code = get_step_code(current_step, session_id)
-    if clean == current_code:
+    if clean == get_step_code(current_step, session_id):
         return True
 
-    elapsed_in_current_step = now - (current_step * STEP_INTERVAL)
-    if elapsed_in_current_step < GRACE_PERIOD:
-        previous_code = get_step_code(current_step - 1, session_id)
-        if clean == previous_code:
+    elapsed = now - (current_step * MANUAL_STEP_INTERVAL)
+    if elapsed < GRACE_PERIOD:
+        if clean == get_step_code(current_step - 1, session_id):
             return True
-
     return False
+
+
+def verify_qr_code(user_code: str, session_id: str) -> bool:
+    """التحقق من كود QR — نافذة 3 ثواني فقط بدون أي سماحية"""
+    clean = user_code.strip().upper()
+    if not clean or len(clean) != 6:
+        return False
+
+    now = time.time()
+    current_step = int(now // QR_STEP_INTERVAL)
+    return clean == get_qr_step_code(current_step, session_id)
 
 
 @app.after_request
@@ -205,6 +230,7 @@ def submit_attendance():
     session_id = str(data.get('session_id', '')).strip()
     code = str(data.get('code', '')).strip().upper()
     device_token = str(data.get('device_token', '')).strip()
+    scan_type = str(data.get('scan_type', 'manual')).strip().lower()  # "qr" أو "manual"
 
     if len(s_id) != 7 or not s_id.isdigit():
         return jsonify({"status": "error", "message": "رقم الـ ID غير صحيح!"}), 400
@@ -213,7 +239,15 @@ def submit_attendance():
     if not sess:
         return jsonify({"status": "error", "message": "عفواً، هذه الجلسة مغلقة حالياً أو انتهت!"}), 400
 
-    if not verify_totp(code, session_id):
+    # ✅ التحقق من الكود حسب نوع الإدخال
+    if scan_type == 'qr':
+        is_valid = verify_qr_code(code, session_id)
+    else:
+        is_valid = verify_manual_code(code, session_id)
+
+    if not is_valid:
+        if scan_type == 'qr':
+            return jsonify({"status": "error", "message": "كود QR انتهت صلاحيته! امسح الكود الجديد من الشاشة."}), 400
         return jsonify({"status": "error", "message": "الرمز السري غير صحيح أو انتهت صلاحيته (انظر للشاشة وأعد المحاولة)!"}), 400
 
     if device_token:
@@ -244,7 +278,8 @@ def submit_attendance():
         "timestamp": cairo_now,
         "device_token": device_token,
         "ip": ip,
-        "is_manual": False
+        "is_manual": False,
+        "scan_type": scan_type
     })
 
     return jsonify({"status": "success", "message": f"تم تأكيد حضورك بنجاح في ({sess['subject_name']} - {sess['title']})"})
@@ -343,12 +378,36 @@ def get_session_attendance():
 
 @app.route('/api/live-code')
 def get_live_code():
+    """
+    يرجع كودين مختلفين:
+    - الكود اليدوي (10 ثواني)
+    - كود QR (3 ثواني)
+    """
     session_id = request.args.get('session_id', '')
     now = time.time()
-    step = int(now // STEP_INTERVAL)
-    remaining = STEP_INTERVAL - (now - (step * STEP_INTERVAL))
-    code = get_step_code(step, session_id)
-    return jsonify({"code": code, "remaining": remaining, "interval": STEP_INTERVAL})
+
+    # ⏱️ الكود اليدوي (10 ثواني)
+    m_step = int(now // MANUAL_STEP_INTERVAL)
+    m_remaining = MANUAL_STEP_INTERVAL - (now - (m_step * MANUAL_STEP_INTERVAL))
+    manual_code = get_step_code(m_step, session_id)
+
+    # ⏱️ كود QR (3 ثواني)
+    q_step = int(now // QR_STEP_INTERVAL)
+    q_remaining = QR_STEP_INTERVAL - (now - (q_step * QR_STEP_INTERVAL))
+    qr_code = get_qr_step_code(q_step, session_id)
+
+    return jsonify({
+        "manual_code": manual_code,
+        "manual_remaining": m_remaining,
+        "manual_interval": MANUAL_STEP_INTERVAL,
+        "qr_code": qr_code,
+        "qr_remaining": q_remaining,
+        "qr_interval": QR_STEP_INTERVAL,
+        # توافقية مع النسخة القديمة (لو فيه كود قديم لسه شغال)
+        "code": manual_code,
+        "remaining": m_remaining,
+        "interval": MANUAL_STEP_INTERVAL
+    })
 
 @app.route('/api/admin-action', methods=['POST'])
 def admin_action():
@@ -428,7 +487,8 @@ def admin_action():
             "timestamp": cairo_now,
             "device_token": "MANUAL_BY_ADMIN",
             "ip": "ADMIN",
-            "is_manual": True
+            "is_manual": True,
+            "scan_type": "admin"
         })
         return jsonify({"status": "success", "message": "تم تحضير الطالب يدوياً بنجاح!"})
 
@@ -481,7 +541,6 @@ def admin_action():
 
             subjects_col.update_one({"id": sub_id}, {"$set": updates})
 
-            # تحديث اسم المادة في الجلسات وسجلات الحضور (في حال تغيّر الاسم)
             if new_name and new_name != target.get('name'):
                 sessions_col.update_many(
                     {"subject_id": sub_id},
@@ -498,7 +557,6 @@ def admin_action():
             sessions_col.delete_many({"subject_id": sub_id})
             attendance_col.delete_many({"subject_id": sub_id})
 
-    # ✅ إدارة الطاقم — إضافة
     elif action == 'manage_staff':
         if role == 'ta':
             return jsonify({"status": "error", "message": "المعيد ليس له صلاحية إدارة الطاقم!"}), 403
@@ -672,7 +730,7 @@ def admin_action():
         if provided_pw == 'Nx!99@bATU#xK82_Secured':
             attendance_col.delete_many({})
             sessions_col.delete_many({})
-            return jsonify({"status": "success", "message": "تم تصفير كشوف الحضور والجلسات بنجاح"})
+            return jsonify({"status": "success", "message": "تم تصفير ككشوف الحضور والجلسات بنجاح"})
         return jsonify({"status": "error", "message": "كلمة المرور غير صحيحة!"}), 403
 
     return jsonify({"status": "success"})
@@ -704,6 +762,13 @@ def export_attendance_csv():
     writer.writerow(['كود الطالب', 'اسم الطالب', 'الفرقة', 'القسم', 'المادة', 'نوع الجلسة', 'عنوان الجلسة', 'توقيت الحضور', 'طريقة التسجيل', 'عنوان IP'])
 
     for r in records:
+        scan_type = r.get('scan_type', '')
+        if r.get('is_manual') or 'ADMIN' in str(r.get('ip', '')):
+            method = 'يدوي (آدمن)'
+        elif scan_type == 'qr':
+            method = 'QR تلقائي'
+        else:
+            method = 'كود يدوي'
         writer.writerow([
             r.get('student_id', ''),
             r.get('student_name', ''),
@@ -713,7 +778,7 @@ def export_attendance_csv():
             r.get('session_type', ''),
             r.get('session_title', ''),
             r.get('timestamp', ''),
-            'يدوي' if r.get('is_manual') or 'ADMIN' in str(r.get('ip', '')) else 'تلقائي (QR)',
+            method,
             r.get('ip', '')
         ])
 

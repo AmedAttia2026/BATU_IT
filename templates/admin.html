@@ -1983,6 +1983,76 @@
         }
 
         /* ==========================================================
+           ✅ SUB-NAME-TEXT — Bulletproof (لا يوجد background-clip)
+           ✅ لون أبيض صريح + direction ltr + ellipsis
+           ========================================================== */
+        .sub-name-text {
+            display: block !important;
+            color: #ffffff !important;
+            background: none !important;
+            background-image: none !important;
+            -webkit-background-clip: border-box !important;
+            background-clip: border-box !important;
+            -webkit-text-fill-color: #ffffff !important;
+            -webkit-text-stroke: 0 !important;
+            text-shadow: none !important;
+            font-family: 'Plus Jakarta Sans', 'Cairo', Arial, sans-serif !important;
+            font-weight: 700 !important;
+            font-size: 14px !important;
+            line-height: 1.6 !important;
+            padding: 3px 0 !important;
+            margin: 0 !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+            letter-spacing: 0.3px !important;
+            -webkit-font-smoothing: antialiased !important;
+            -moz-osx-font-smoothing: grayscale !important;
+            min-height: 22px !important;
+            direction: ltr !important;
+            text-align: left !important;
+        }
+
+        .sub-block {
+            overflow: visible !important;
+            min-height: 48px !important;
+        }
+        .sub-block label {
+            background: none !important;
+            background-image: none !important;
+        }
+
+        /* شريط التمرير للقائمة */
+        .subjects-list-container::-webkit-scrollbar {
+            width: 5px;
+        }
+        .subjects-list-container::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 5px;
+        }
+        .subjects-list-container::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, #FFB300, #FF8F00);
+            border-radius: 5px;
+            box-shadow: 0 0 8px rgba(255, 179, 0, 0.4);
+        }
+        .subjects-list-container::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(180deg, #FFD54F, #FFB300);
+        }
+
+        /* تأثير Hover على كارت المادة */
+        .sub-block:hover {
+            border-color: rgba(255, 179, 0, 0.35) !important;
+            box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 179, 0, 0.1);
+            transform: translateY(-1px);
+        }
+
+        /* Sub block checked state */
+        .sub-block:has(.sub-checkbox:checked) {
+            background: linear-gradient(145deg, rgba(255,179,0,0.05), rgba(11,15,26,0.96)) !important;
+            border-color: rgba(255, 179, 0, 0.25) !important;
+        }
+
+        /* ==========================================================
            RESPONSIVE — TABLET
            ========================================================== */
         @media (max-width: 1024px) {

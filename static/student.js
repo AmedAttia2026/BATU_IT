@@ -5,11 +5,11 @@ let allActiveSessions = [];
 let selectedSession = null;
 let html5Qr = null;
 let dashboardRefreshInterval = null;
-let qrScannerStarting = false; // منع التشغيل المزدوج
-let qrAutoSubmitLocked = false; // ✅ لمنع الإرسال المزدوج بعد مسح QR
+let qrScannerStarting = false;
+let qrAutoSubmitLocked = false;
 
 /* =========================================================
-   🔒 قفل الجهاز — جهاز واحد = طالب واحد فقط
+   🔒 قفل الجهاز
    ========================================================= */
 const DEVICE_OWNER_ID_KEY = 'nx_device_owner_id';
 const DEVICE_OWNER_NAME_KEY = 'nx_device_owner_name';
@@ -44,28 +44,204 @@ function getDeviceToken() {
     return t;
 }
 
-function handleYearChange() {
-    const yr = document.getElementById('login-year').value;
-    const deptGroup = document.getElementById('dept-group');
-    if (yr === 'الفرقة الثالثة' || yr === 'الفرقة الرابعة') {
-        deptGroup.style.display = 'block';
-    } else {
-        deptGroup.style.display = 'none';
+/* =========================================================
+   ✅ التحكم بزر الدخول
+   ========================================================= */
+function showLoginBtn() {
+    const btn = document.getElementById('login-submit-btn');
+    if (btn) {
+        btn.style.removeProperty('display');
+        btn.style.display = 'block';
     }
 }
 
-window.onload = () => {
-    const saved = localStorage.getItem('nx_student_auth');
-    if(saved) {
-        currentStudent = JSON.parse(saved);
-        showStudentUI();
+function hideLoginBtn() {
+    const btn = document.getElementById('login-submit-btn');
+    if (btn) {
+        btn.style.display = 'none';
     }
-};
+}
 
+/* =========================================================
+   ✅ الخطوة 1 → الخطوة 2
+   ========================================================= */
+function goToClassStep() {
+    const name = document.getElementById('login-name').value.trim();
+    const idInput = document.getElementById('login-id');
+    idInput.value = idInput.value.replace(/[^0-9]/g, '');
+    const id = idInput.value.trim();
+    const yearEl = document.getElementById('login-year');
+    const year = yearEl ? yearEl.value : '';
+
+    if (!name || name.length < 3) {
+        return Swal.fire({...swalDark, icon:'warning', text:'يرجى إدخال اسم الطالب بشكل صحيح!'});
+    }
+    if (id.length !== 7 || isNaN(id)) {
+        return Swal.fire({...swalDark, icon:'warning', text:'رقم الـ ID يجب أن يتكون من 7 أرقام!'});
+    }
+    if (!year) {
+        return Swal.fire({...swalDark, icon:'warning', text:'يرجى اختيار الفرقة الدراسية!'});
+    }
+
+    const step1 = document.getElementById('auth-step-1');
+    const step2 = document.getElementById('auth-step-2');
+    if (step1) step1.style.display = 'none';
+    if (step2) step2.style.display = 'block';
+
+    setupStep2(year);
+}
+
+/* =========================================================
+   ✅ الرجوع من الخطوة 2 → الخطوة 1
+   ========================================================= */
+function backToStep1() {
+    const step1 = document.getElementById('auth-step-1');
+    const step2 = document.getElementById('auth-step-2');
+    if (step2) step2.style.display = 'none';
+    if (step1) step1.style.display = 'block';
+
+    const deptEl = document.getElementById('login-dept');
+    if (deptEl) deptEl.value = '';
+
+    const classGroup = document.getElementById('class-group');
+    if (classGroup) {
+        classGroup.style.display = 'none';
+        classGroup.innerHTML = '';
+    }
+
+    hideLoginBtn();
+}
+
+/* =========================================================
+   ✅ تجهيز الخطوة 2 حسب الفرقة
+   ========================================================= */
+function setupStep2(year) {
+    const isYear34 = (year === 'الفرقة الثالثة' || year === 'الفرقة الرابعة');
+    const deptGroup = document.getElementById('dept-group');
+    const classGroup = document.getElementById('class-group');
+
+    // 🔒 إخفاء زر الدخول دايماً في البداية
+    hideLoginBtn();
+
+    if (isYear34) {
+        // ===== سنة 3/4 =====
+        if (deptGroup) deptGroup.style.display = 'block';
+        const deptEl = document.getElementById('login-dept');
+        if (deptEl) deptEl.value = '';
+
+        // نظهر الـ Class فوراً لكن معطّل
+        if (classGroup) {
+            classGroup.style.display = 'block';
+            classGroup.innerHTML = `
+                <select id="login-class" class="custom-select" disabled style="opacity:0.55;">
+                    <option value="" disabled selected>اختر القسم أولاً لعرض الفصول</option>
+                </select>
+            `;
+        }
+    } else {
+        // ===== سنة 1/2 =====
+        if (deptGroup) deptGroup.style.display = 'none';
+        loadClassesFor(year, 'عام (IT)');
+    }
+}
+
+/* =========================================================
+   ✅ تحميل الفصول من السيرفر
+   ========================================================= */
+async function loadClassesFor(year, dept) {
+    const classGroup = document.getElementById('class-group');
+    if (!classGroup) return;
+
+    // 🔒 إخفاء زر الدخول دائماً قبل التحميل
+    hideLoginBtn();
+
+    classGroup.style.display = 'block';
+    classGroup.innerHTML = `
+        <select class="custom-select" disabled style="opacity:0.55;">
+            <option value="" disabled selected>جاري تحميل الفصول...</option>
+        </select>
+    `;
+
+    try {
+        const url = `/api/available-classes?year=${encodeURIComponent(year)}&dept=${encodeURIComponent(dept)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (data.status === 'success' && Array.isArray(data.classes) && data.classes.length > 0) {
+            classGroup.innerHTML = `
+                <select id="login-class" class="custom-select">
+                    <option value="" disabled selected>اختر الفصل (Class)</option>
+                    ${data.classes.map(c => `<option value="${c}">Class ${c}</option>`).join('')}
+                </select>
+            `;
+        } else {
+            classGroup.innerHTML = `
+                <select id="login-class" class="custom-select" disabled style="opacity:0.55;">
+                    <option value="" disabled selected>لا توجد فصول متاحة بعد — تواصل مع الدكتور</option>
+                </select>
+            `;
+        }
+        // ✅ زر الدخول يفضل مخفي لحد ما يختار Class
+    } catch (e) {
+        console.error("loadClassesFor error:", e);
+        classGroup.innerHTML = `
+            <select id="login-class" class="custom-select" disabled style="opacity:0.55;">
+                <option value="" disabled selected>فشل تحميل الفصول</option>
+            </select>
+        `;
+    }
+}
+
+/* =========================================================
+   ✅ AUTO-LOGIN
+   ========================================================= */
+window.addEventListener('load', () => {
+    const saved = localStorage.getItem('nx_student_auth');
+    if (saved) {
+        try {
+            currentStudent = JSON.parse(saved);
+            showStudentUI();
+        } catch (e) {
+            localStorage.removeItem('nx_student_auth');
+        }
+    }
+});
+
+/* =========================================================
+   ✅ Event Delegation — للـ dept والـ class
+   ========================================================= */
+document.addEventListener('change', (e) => {
+    const t = e.target;
+    if (!t || !t.id) return;
+
+    // ===== تغيير القسم =====
+    if (t.id === 'login-dept') {
+        hideLoginBtn();
+
+        const yearEl = document.getElementById('login-year');
+        const year = yearEl ? yearEl.value : '';
+        const dept = t.value;
+        if (year && dept) {
+            loadClassesFor(year, dept);
+        }
+    }
+
+    // ===== تغيير الفصل =====
+    if (t.id === 'login-class') {
+        if (t.value && t.value !== '') {
+            showLoginBtn();
+        } else {
+            hideLoginBtn();
+        }
+    }
+});
+
+/* =========================================================
+   ✅ تسجيل الدخول — Final Submit
+   ========================================================= */
 async function loginStudent() {
     const name = document.getElementById('login-name').value.trim();
 
-    // ✅ تنظيف حقل الكود من أي حروف أو رموز (حماية إضافية بعد اللصق)
     const idInput = document.getElementById('login-id');
     idInput.value = idInput.value.replace(/[^0-9]/g, '');
     const id = idInput.value.trim();
@@ -74,12 +250,28 @@ async function loginStudent() {
     let dept = 'عام (IT)';
 
     if (year === 'الفرقة الثالثة' || year === 'الفرقة الرابعة') {
-        dept = document.getElementById('login-dept').value;
+        const deptEl = document.getElementById('login-dept');
+        dept = deptEl ? deptEl.value : '';
     }
 
-    if(!name || name.length < 3) return Swal.fire({...swalDark, icon:'warning', text:'يرجى إدخال اسم الطالب بشكل صحيح!'});
-    if(id.length !== 7 || isNaN(id)) return Swal.fire({...swalDark, icon:'warning', text:'رقم الـ ID يجب أن يتكون من 7 أرقام!'});
-    if(!year) return Swal.fire({...swalDark, icon:'warning', text:'يرجى اختيار الفرقة الدراسية!'});
+    const classEl = document.getElementById('login-class');
+    const classNumber = classEl ? classEl.value : '';
+
+    if (!name || name.length < 3) {
+        return Swal.fire({...swalDark, icon:'warning', text:'يرجى إدخال اسم الطالب بشكل صحيح!'});
+    }
+    if (id.length !== 7 || isNaN(id)) {
+        return Swal.fire({...swalDark, icon:'warning', text:'رقم الـ ID يجب أن يتكون من 7 أرقام!'});
+    }
+    if (!year) {
+        return Swal.fire({...swalDark, icon:'warning', text:'يرجى اختيار الفرقة الدراسية!'});
+    }
+    if ((year === 'الفرقة الثالثة' || year === 'الفرقة الرابعة') && !dept) {
+        return Swal.fire({...swalDark, icon:'warning', text:'يرجى اختيار القسم!'});
+    }
+    if (!classEl || !classNumber) {
+        return Swal.fire({...swalDark, icon:'warning', text:'يرجى اختيار الفصل (Class)!'});
+    }
 
     // 🔒 فحص قفل الجهاز
     const owner = getDeviceOwner();
@@ -111,21 +303,39 @@ async function loginStudent() {
         }
     }
 
-    const res = await fetch('/api/student-login', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({student_name: name, student_id: id, year: year, department: dept})
-    });
-    const data = await res.json();
-    if(data.status === 'success') {
-        currentStudent = data.student;
-        localStorage.setItem('nx_student_auth', JSON.stringify(currentStudent));
-        showStudentUI();
-    } else {
-        Swal.fire({...swalDark, icon:'error', text: data.message});
+    Swal.fire({ title: 'جاري التحقق...', background:'#1a1f2c', color:'#fff', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+
+    try {
+        const res = await fetch('/api/student-login', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                student_name: name,
+                student_id: id,
+                year: year,
+                department: dept,
+                class_number: classNumber
+            })
+        });
+        const data = await res.json();
+        Swal.close();
+
+        if (data.status === 'success') {
+            currentStudent = data.student;
+            localStorage.setItem('nx_student_auth', JSON.stringify(currentStudent));
+            showStudentUI();
+        } else {
+            Swal.fire({...swalDark, icon:'error', text: data.message || 'فشل التسجيل'});
+        }
+    } catch (e) {
+        Swal.close();
+        Swal.fire({...swalDark, icon:'error', text: 'تعذر الاتصال بالسيرفر'});
     }
 }
 
+/* =========================================================
+   ✅ عرض الواجهة الرئيسية
+   ========================================================= */
 function showStudentUI() {
     document.getElementById('auth-screen').style.display = 'none';
     document.getElementById('main-ui').style.display = 'flex';
@@ -137,6 +347,15 @@ function showStudentUI() {
     const dpEl = document.getElementById('display-dept');
     if (yrEl) yrEl.innerText = currentStudent.year || '';
     if (dpEl) dpEl.innerText = currentStudent.department || '';
+
+    const classChip = document.getElementById('display-class-chip');
+    const classEl = document.getElementById('display-class');
+    if (currentStudent.class_number && classChip && classEl) {
+        classEl.innerText = `Class ${currentStudent.class_number}`;
+        classChip.style.display = 'inline-flex';
+    } else if (classChip) {
+        classChip.style.display = 'none';
+    }
 
     const nameParts = (currentStudent.name || '').trim().split(/\s+/);
     let initials = '•';
@@ -158,17 +377,29 @@ function logoutStudent() {
     location.reload();
 }
 
+/* =========================================================
+   📊 تحميل الداشبورد
+   ========================================================= */
 async function loadDashboard() {
     document.getElementById('loading-screen').style.display = 'flex';
-    const res = await fetch(`/api/student-init?year=${encodeURIComponent(currentStudent.year)}&dept=${encodeURIComponent(currentStudent.department)}`);
-    const data = await res.json();
-    document.getElementById('loading-screen').style.display = 'none';
+    try {
+        const res = await fetch(
+            `/api/student-init?year=${encodeURIComponent(currentStudent.year)}` +
+            `&dept=${encodeURIComponent(currentStudent.department)}` +
+            `&student_id=${encodeURIComponent(currentStudent.student_id)}`
+        );
+        const data = await res.json();
+        document.getElementById('loading-screen').style.display = 'none';
 
-    allSubjects = data.subjects || [];
-    allActiveSessions = data.sessions || [];
+        allSubjects = data.subjects || [];
+        allActiveSessions = data.sessions || [];
 
-    renderSubjectCards();
-    startAutoRefresh();
+        renderSubjectCards();
+        startAutoRefresh();
+    } catch (e) {
+        document.getElementById('loading-screen').style.display = 'none';
+        Swal.fire({...swalDark, icon:'error', text: 'تعذر تحميل البيانات'});
+    }
 }
 
 function renderSubjectCards() {
@@ -222,7 +453,11 @@ function stopAutoRefresh() {
 async function refreshSessionStatus() {
     if (!currentStudent) return;
     try {
-        const res = await fetch(`/api/student-init?year=${encodeURIComponent(currentStudent.year)}&dept=${encodeURIComponent(currentStudent.department)}`);
+        const res = await fetch(
+            `/api/student-init?year=${encodeURIComponent(currentStudent.year)}` +
+            `&dept=${encodeURIComponent(currentStudent.department)}` +
+            `&student_id=${encodeURIComponent(currentStudent.student_id)}`
+        );
         const data = await res.json();
 
         const newSessions = data.sessions || [];
@@ -259,12 +494,16 @@ async function refreshSessionStatus() {
             }
         });
     } catch (err) {
-        // silent fail
+        // silent
     }
 }
 
+/* =========================================================
+   ✅ عرض جلسات المادة
+   ========================================================= */
 function selectSubjectForAttendance(subId, subName) {
     const filtered = allActiveSessions.filter(s => s.subject_id === subId);
+
     if(filtered.length === 0) {
         return Swal.fire({
             ...swalDark,
@@ -274,7 +513,13 @@ function selectSubjectForAttendance(subId, subName) {
         });
     }
 
-    const buttonsHtml = filtered.map(s => `
+    const classBadge = currentStudent && currentStudent.class_number
+        ? `<div style="margin-bottom:10px; padding:8px 12px; background:rgba(6,182,212,0.08); border:1px solid rgba(6,182,212,0.25); border-radius:10px; font-size:12px; color:#22d3ee; font-weight:800; text-align:right;">
+             <i class="fas fa-layer-group"></i> فصلك: Class ${currentStudent.class_number}
+           </div>`
+        : '';
+
+    const buttonsHtml = classBadge + filtered.map(s => `
         <div style="background:#1F2937; padding:12px; border-radius:10px; margin-bottom:8px; cursor:pointer; text-align:right; border:1px solid var(--border);" onclick="openVerifyModal('${s.session_id}', '${s.title}', '${subName}', '${s.type}')">
             <b style="color:var(--gold); font-size:15px;">${s.title}</b>
             <span style="font-size:11px; background:rgba(255,179,0,0.15); color:var(--gold); padding:2px 8px; border-radius:6px; margin-right:5px;">${s.type === 'Lecture' ? 'محاضرة' : 'سكشن'}</span>
@@ -284,7 +529,7 @@ function selectSubjectForAttendance(subId, subName) {
 
     Swal.fire({
         ...swalDark,
-        title: `اختر الجلسة (${subName})`,
+        title: `الجلسات المتاحة (${subName})`,
         html: buttonsHtml,
         showConfirmButton: false,
         showCancelButton: true,
@@ -293,13 +538,12 @@ function selectSubjectForAttendance(subId, subName) {
 }
 
 /* =========================================================
-   ✅ فتح نافذة تأكيد الحضور — مع فحص "أنت مسجل بالفعل"
+   ✅ فتح نافذة تأكيد الحضور
    ========================================================= */
 async function openVerifyModal(sessId, title, subName, type) {
     Swal.close();
-    qrAutoSubmitLocked = false; // ✅ تصفير القفل عند فتح نافذة جديدة
+    qrAutoSubmitLocked = false;
 
-    /* فحص سريع: هل الطالب سجل في هذه الجلسة بالفعل؟ */
     try {
         const res = await fetch('/api/student-history', {
             method: 'POST',
@@ -328,7 +572,7 @@ async function openVerifyModal(sessId, title, subName, type) {
                 });
             }
         }
-    } catch (e) { /* لو الاتصال فشل، نكمل عادي */ }
+    } catch (e) { /* تجاهل */ }
 
     selectedSession = sessId;
     document.getElementById('modal-sess-title').innerText = `${title} (${type === 'Lecture' ? 'محاضرة' : 'سكشن'})`;
@@ -354,8 +598,7 @@ function closeVerifyModal() {
 }
 
 /* =========================================================
-   📷 QR Scanner — نسخة محسّنة مع Fallback وحل المشاكل
-   ✅ عند المسح: يملأ الحقل ويُرسل تلقائياً
+   📷 QR Scanner
    ========================================================= */
 async function stopQrReader() {
     const r = document.getElementById('reader');
@@ -363,16 +606,11 @@ async function stopQrReader() {
     if (html5Qr) {
         try {
             const state = html5Qr.getState ? html5Qr.getState() : null;
-            // 2 = SCANNING, 3 = PAUSED
             if (state === 2 || state === 3) {
-                try {
-                    await html5Qr.stop();
-                } catch (e) { /* تجاهل */ }
+                try { await html5Qr.stop(); } catch (e) {}
             }
-            try {
-                html5Qr.clear();
-            } catch (e) { /* تجاهل */ }
-        } catch (e) { /* تجاهل */ }
+            try { html5Qr.clear(); } catch (e) {}
+        } catch (e) {}
         html5Qr = null;
     }
 
@@ -387,24 +625,20 @@ async function toggleQrReader() {
     const r = document.getElementById('reader');
     if (!r) return;
 
-    // لو شغال، نقفله
     if (r.style.display === 'block' || html5Qr) {
         await stopQrReader();
         return;
     }
 
-    // منع التشغيل المزدوج
     if (qrScannerStarting) return;
     qrScannerStarting = true;
 
     r.style.display = 'block';
     r.innerHTML = '<div style="text-align:center; padding:20px; color:#FFB300;"><i class="fas fa-spinner fa-spin fa-2x"></i><br><br>جاري تشغيل الكاميرا...</div>';
 
-    // تأخير بسيط للسماح للمتصفح ببناء الـ DOM
     await new Promise(resolve => setTimeout(resolve, 150));
 
     try {
-        // تنظيف أي instance قديم
         if (html5Qr) {
             try { await html5Qr.stop(); } catch(e) {}
             try { html5Qr.clear(); } catch(e) {}
@@ -414,7 +648,6 @@ async function toggleQrReader() {
         r.innerHTML = '';
         html5Qr = new Html5Qrcode("reader", { verbose: false });
 
-        // إعدادات مربع المسح — متجاوب مع حجم الشاشة
         const config = {
             fps: 10,
             qrbox: function(viewfinderWidth, viewfinderHeight) {
@@ -426,9 +659,7 @@ async function toggleQrReader() {
             disableFlip: false
         };
 
-        // ✅ دالة نجاح المسح: تملأ الحقل + ترسل تلقائياً
         const onScanSuccess = (decodedText) => {
-            // 🛡️ منع الإرسال المزدوج لو نفس الكود اتقرأ مرتين
             if (qrAutoSubmitLocked) return;
             qrAutoSubmitLocked = true;
 
@@ -436,72 +667,41 @@ async function toggleQrReader() {
             const cleanCode = (decodedText || '').trim().substring(0, 6).toUpperCase();
             if (input) input.value = cleanCode;
 
-            // إيقاف الكاميرا فوراً
             stopQrReader();
 
-            // ✅ إرسال فوري بعد 250ms
             setTimeout(() => {
-                submitAttendanceFinal(true); // true = مسح QR
+                submitAttendanceFinal(true);
             }, 250);
         };
 
-        const onScanError = () => { /* تجاهل الأخطاء العادية */ };
+        const onScanError = () => {};
 
         let started = false;
         let lastError = null;
 
-        // المحاولة 1: الكاميرا الخلفية
         try {
-            await html5Qr.start(
-                { facingMode: "environment" },
-                config,
-                onScanSuccess,
-                onScanError
-            );
+            await html5Qr.start({ facingMode: "environment" }, config, onScanSuccess, onScanError);
             started = true;
-        } catch (err1) {
-            lastError = err1;
-            console.warn("Back camera failed:", err1);
-        }
+        } catch (err1) { lastError = err1; }
 
-        // المحاولة 2: الكاميرا الأمامية (لو الخلفية فشلت)
         if (!started) {
             try {
-                await html5Qr.start(
-                    { facingMode: "user" },
-                    config,
-                    onScanSuccess,
-                    onScanError
-                );
+                await html5Qr.start({ facingMode: "user" }, config, onScanSuccess, onScanError);
                 started = true;
-            } catch (err2) {
-                lastError = err2;
-                console.warn("Front camera failed:", err2);
-            }
+            } catch (err2) { lastError = err2; }
         }
 
-        // المحاولة 3: أي كاميرا متاحة
         if (!started) {
             try {
                 const devices = await Html5Qrcode.getCameras();
                 if (devices && devices.length > 0) {
-                    await html5Qr.start(
-                        devices[0].id,
-                        config,
-                        onScanSuccess,
-                        onScanError
-                    );
+                    await html5Qr.start(devices[0].id, config, onScanSuccess, onScanError);
                     started = true;
                 }
-            } catch (err3) {
-                lastError = err3;
-                console.warn("Any camera failed:", err3);
-            }
+            } catch (err3) { lastError = err3; }
         }
 
-        if (!started) {
-            throw lastError || new Error("No camera available");
-        }
+        if (!started) throw lastError || new Error("No camera available");
 
         qrScannerStarting = false;
 
@@ -515,19 +715,16 @@ async function toggleQrReader() {
 
         if (errStr.includes('permission') || errStr.includes('notallowed') || errStr.includes('denied')) {
             title = 'صلاحية الكاميرا مرفوضة';
-            msg = 'يرجى السماح بالوصول للكاميرا من إعدادات المتصفح ثم إعادة المحاولة';
-        } else if (errStr.includes('notfound') || errStr.includes('no camera') || errStr.includes('devicesnotfound')) {
+            msg = 'يرجى السماح بالوصول للكاميرا من إعدادات المتصفح';
+        } else if (errStr.includes('notfound') || errStr.includes('no camera')) {
             title = 'لا توجد كاميرا';
             msg = 'هذا الجهاز لا يحتوي على كاميرا متاحة';
-        } else if (errStr.includes('notreadable') || errStr.includes('in use') || errStr.includes('trackstarterror')) {
+        } else if (errStr.includes('notreadable') || errStr.includes('in use')) {
             title = 'الكاميرا مشغولة';
-            msg = 'الكاميرا مستخدمة من تطبيق آخر — يرجى إغلاقه ثم إعادة المحاولة';
+            msg = 'الكاميرا مستخدمة من تطبيق آخر';
         } else if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
             title = 'اتصال غير آمن';
-            msg = 'تشغيل الكاميرا يحتاج اتصال HTTPS — يمكنك استخدام الرمز اليدوي';
-        } else if (errStr.includes('overconstrained')) {
-            title = 'الكاميرا غير مدعومة';
-            msg = 'إعدادات الكاميرا المطلوبة غير متوفرة';
+            msg = 'تشغيل الكاميرا يحتاج اتصال HTTPS';
         }
 
         Swal.fire({
@@ -539,20 +736,18 @@ async function toggleQrReader() {
                     <p style="color:#fff; margin-bottom:12px;">${msg}</p>
                     <p style="font-size:12px; color:#9CA3AF;">💡 يمكنك استخدام الرمز اليدوي بدلاً من الكاميرا</p>
                 </div>
-            `,
-            confirmButtonText: 'حسناً'
+            `
         });
     }
 }
 
 /* =========================================================
-   ✅ إرسال الحضور — يدعم وضع QR (تلقائي) و اليدوي
+   ✅ إرسال الحضور
    ========================================================= */
 async function submitAttendanceFinal(fromQr = false) {
     const code = document.getElementById('totp-input').value.trim();
     if(code.length !== 6) return Swal.fire({...swalDark, icon:'warning', text:'الرمز السري يتكون من 6 خانات!'});
 
-    // 🔒 فحص قفل الجهاز
     const owner = getDeviceOwner();
     if (owner.id && owner.id !== currentStudent.student_id) {
         return Swal.fire({
@@ -563,74 +758,83 @@ async function submitAttendanceFinal(fromQr = false) {
                 <div style="text-align:center; line-height:1.8;">
                     <p style="color:#fff; margin-bottom:8px;">لا يمكن استخدام هذا الجهاز لتسجيل حضور أكثر من طالب.</p>
                     <p style="color:#FFB300; font-weight:900; font-size:14px; margin-bottom:12px;">مسجّل باسم: ${owner.name || owner.id}</p>
-                    <p style="color:#9CA3AF; font-size:12px;">يُرجى استخدام جهازك الخاص أو التواصل مع الإدارة.</p>
                 </div>
-            `,
-            confirmButtonText: 'فهمت'
+            `
         });
     }
 
     Swal.fire({title: 'جاري تسجيل حضورك...', background:'#1a1f2c', color:'#fff', didOpen: () => Swal.showLoading()});
 
-    const res = await fetch('/api/submit-attendance', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            student_id: currentStudent.student_id,
-            student_name: currentStudent.name,
-            session_id: selectedSession,
-            code: code,
-            device_token: getDeviceToken(),
-            scan_type: fromQr ? 'qr' : 'manual'   // ✅ تحديد نوع الإدخال للسيرفر
-        })
-    });
-    const data = await res.json();
-    if(res.ok) {
-        setDeviceOwner(currentStudent.student_id, currentStudent.name);
+    try {
+        const res = await fetch('/api/submit-attendance', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                student_id: currentStudent.student_id,
+                student_name: currentStudent.name,
+                session_id: selectedSession,
+                code: code,
+                device_token: getDeviceToken(),
+                scan_type: fromQr ? 'qr' : 'manual'
+            })
+        });
+        const data = await res.json();
+        if(res.ok) {
+            setDeviceOwner(currentStudent.student_id, currentStudent.name);
 
-        closeVerifyModal();
-        Swal.fire({...swalDark, icon:'success', title:'تم بنجاح!', text: data.message});
-        if (typeof confetti === 'function') {
-            const colors = ['#FFB300', '#FFD54F', '#10B981', '#7C3AED', '#06B6D4'];
-            confetti({ particleCount: 80, angle: 60, spread: 70, origin: { x: 0 }, colors });
-            confetti({ particleCount: 80, angle: 120, spread: 70, origin: { x: 1 }, colors });
-            setTimeout(() => {
-                confetti({ particleCount: 60, spread: 100, origin: { y: 0.6 }, colors });
-            }, 200);
+            closeVerifyModal();
+            Swal.fire({...swalDark, icon:'success', title:'تم بنجاح!', text: data.message});
+            if (typeof confetti === 'function') {
+                const colors = ['#FFB300', '#FFD54F', '#10B981', '#7C3AED', '#06B6D4'];
+                confetti({ particleCount: 80, angle: 60, spread: 70, origin: { x: 0 }, colors });
+                confetti({ particleCount: 80, angle: 120, spread: 70, origin: { x: 1 }, colors });
+                setTimeout(() => {
+                    confetti({ particleCount: 60, spread: 100, origin: { y: 0.6 }, colors });
+                }, 200);
+            }
+        } else {
+            if (fromQr) qrAutoSubmitLocked = false;
+            Swal.fire({...swalDark, icon:'error', title:'خطأ', text: data.message});
         }
-    } else {
-        // ✅ لو فشل الإرسال التلقائي بعد المسح، نفتح القفل للسماح بإعادة المحاولة
+    } catch (e) {
         if (fromQr) qrAutoSubmitLocked = false;
-        Swal.fire({...swalDark, icon:'error', title:'خطأ', text: data.message});
+        Swal.fire({...swalDark, icon:'error', title:'خطأ', text: 'تعذر الاتصال بالسيرفر'});
     }
 }
 
 /* =========================================================
-   سجل الحضور
+   📜 سجل الحضور
    ========================================================= */
 async function openHistoryModal() {
     document.getElementById('history-modal').style.display = 'flex';
-    const res = await fetch('/api/student-history', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({student_id: currentStudent.student_id})
-    });
-    const data = await res.json();
     const list = document.getElementById('history-list-container');
-    if(!data.history || data.history.length === 0) {
-        list.innerHTML = `<div class="empty-state"><i class="fas fa-box-open fa-3x" style="color:var(--border); margin-bottom:15px;"></i><h3 style="color:#fff;">لا يوجد حضور مسجل بعد</h3></div>`;
-        return;
-    }
-    list.innerHTML = data.history.map(h => `
-        <div class="comp-card">
-            <div class="comp-header">
-                <span class="comp-sub">${h.subject_name}</span>
-                <span class="badge-resolved"><i class="fas fa-check-circle"></i> حاضر</span>
+    list.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-muted);"><i class="fas fa-spinner fa-spin fa-2x"></i></div>`;
+
+    try {
+        const res = await fetch('/api/student-history', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({student_id: currentStudent.student_id})
+        });
+        const data = await res.json();
+
+        if(!data.history || data.history.length === 0) {
+            list.innerHTML = `<div class="empty-state"><i class="fas fa-box-open fa-3x" style="color:var(--border); margin-bottom:15px;"></i><h3 style="color:#fff;">لا يوجد حضور مسجل بعد</h3></div>`;
+            return;
+        }
+        list.innerHTML = data.history.map(h => `
+            <div class="comp-card">
+                <div class="comp-header">
+                    <span class="comp-sub">${h.subject_name}</span>
+                    <span class="badge-resolved"><i class="fas fa-check-circle"></i> حاضر</span>
+                </div>
+                <p style="color:#fff; font-size:14px; margin:5px 0;">${h.session_title} (${h.session_type === 'Lecture' ? 'محاضرة' : 'سكشن'})</p>
+                <span style="font-size:12px; color:var(--text-muted); font-family:monospace;"><i class="far fa-clock"></i> ${h.timestamp}</span>
             </div>
-            <p style="color:#fff; font-size:14px; margin:5px 0;">${h.session_title} (${h.session_type === 'Lecture' ? 'محاضرة' : 'سكشن'})</p>
-            <span style="font-size:12px; color:var(--text-muted); font-family:monospace;"><i class="far fa-clock"></i> ${h.timestamp}</span>
-        </div>
-    `).join('');
+        `).join('');
+    } catch (e) {
+        list.innerHTML = `<div class="empty-state"><h3 style="color:#f87171;">تعذر تحميل السجل</h3></div>`;
+    }
 }
 
 function closeHistoryModal() {

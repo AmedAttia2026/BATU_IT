@@ -1176,11 +1176,18 @@ async function addClass() {
 }
 
 /* =========================================================
-   ✅ حذف فصل
+   ✅ حذف فصل — Cascade Delete
    ========================================================= */
 async function deleteClass(classId) {
     const cls = (allData.classes || []).find(c => c.class_id === classId);
     if (!cls) return;
+
+    const relatedSessions = allData.sessions.filter(s =>
+        s.subject_id === cls.subject_id &&
+        s.type === 'Section' &&
+        String(s.class_number) === String(cls.class_number)
+    );
+    const sessionsCount = relatedSessions.length;
 
     const affectedTAs = (allData.staff || []).filter(u => {
         const c = (u.allowed_classes || []);
@@ -1189,11 +1196,21 @@ async function deleteClass(classId) {
 
     let warnHtml = '';
     if (affectedTAs.length > 0) {
-        warnHtml = `
+        warnHtml += `
             <div style="background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.35); border-radius:10px; padding:10px 14px; margin:10px 0;">
                 <p style="color:#f87171; font-size:12.5px; font-weight:800; margin:0;">
                     <i class="fas fa-exclamation-triangle"></i>
                     ${affectedTAs.length} معيد معيّن على هذا الفصل — سيتم إزالة الصلاحية
+                </p>
+            </div>
+        `;
+    }
+    if (sessionsCount > 0) {
+        warnHtml += `
+            <div style="background:rgba(255,179,0,0.12); border:1px solid rgba(255,179,0,0.4); border-radius:10px; padding:10px 14px; margin:10px 0;">
+                <p style="color:#FFB300; font-size:12.5px; font-weight:800; margin:0;">
+                    <i class="fas fa-users"></i>
+                    سيتم حذف <b>${sessionsCount} سكشن</b> مرتبط بالفصل + سجلات حضورهم
                 </p>
             </div>
         `;
@@ -1225,6 +1242,17 @@ async function deleteClass(classId) {
     const removed = idx >= 0 ? allData.classes.splice(idx, 1)[0] : null;
     const subjectId = cls.subject_id;
 
+    const removedSessions = allData.sessions.filter(s =>
+        s.subject_id === cls.subject_id &&
+        s.type === 'Section' &&
+        String(s.class_number) === String(cls.class_number)
+    );
+    allData.sessions = allData.sessions.filter(s =>
+        !(s.subject_id === cls.subject_id &&
+          s.type === 'Section' &&
+          String(s.class_number) === String(cls.class_number))
+    );
+
     const classKey = `${cls.subject_id}|Class${cls.class_number}`;
     allData.staff.forEach(u => {
         if (u.allowed_classes && u.allowed_classes.includes(classKey)) {
@@ -1233,6 +1261,7 @@ async function deleteClass(classId) {
     });
 
     renderClassesTable(subjectId);
+    renderFilteredSessionsTable(subjectId);
 
     try {
         const res = await fetch('/api/admin-action', {
@@ -1242,17 +1271,30 @@ async function deleteClass(classId) {
         const data = await res.json();
 
         if (data.status === 'success') {
-            Swal.fire({...swalDark, icon: 'success', title: 'تم الحذف', timer: 1100, showConfirmButton: false});
+            Swal.fire({
+                ...swalDark,
+                icon: 'success',
+                title: 'تم الحذف',
+                html: data.deleted_sessions > 0
+                    ? `<p style="color:#fff;">تم حذف الفصل + <b style="color:#FFB300;">${data.deleted_sessions}</b> جلسة</p>`
+                    : `<p style="color:#fff;">تم حذف الفصل</p>`,
+                timer: 1400,
+                showConfirmButton: false
+            });
             refreshDataSilently();
         } else {
             if (removed) allData.classes.splice(idx, 0, removed);
+            allData.sessions = [...allData.sessions, ...removedSessions];
             renderClassesTable(subjectId);
+            renderFilteredSessionsTable(subjectId);
             Swal.fire({...swalDark, icon: 'error', text: data.message});
             refreshDataSilently();
         }
     } catch (e) {
         if (removed) allData.classes.splice(idx, 0, removed);
+        allData.sessions = [...allData.sessions, ...removedSessions];
         renderClassesTable(subjectId);
+        renderFilteredSessionsTable(subjectId);
         Swal.fire({...swalDark, icon: 'error', text: 'تعذر الاتصال'});
     }
 }
@@ -1321,13 +1363,16 @@ function filterSessionStudents() {
     renderGlassStudentCards(filtered, currentInspectedSessionId);
 }
 
+/* =========================================================
+   🔥 كارت الطالب — تصميم جديد كبير وواضح
+   ========================================================= */
 function renderGlassStudentCards(records, sessionId) {
     const container = document.getElementById('sess-glass-cards-container');
     if(!records || records.length === 0) {
         container.innerHTML = `
             <div style="text-align:center; padding:40px 20px; background:rgba(30,41,59,0.5); border-radius:16px; border:1px dashed rgba(255,255,255,0.15);">
                 <i class="fas fa-user-clock fa-2x" style="color:var(--text-muted); margin-bottom:10px;"></i>
-                <h3 style="color:#fff; font-size:14px; margin:0;">لا توجد نتائج</h3>
+                <h3 style="color:#fff; font-size:16px; margin:0;">لا توجد نتائج</h3>
             </div>`;
         return;
     }
@@ -1337,31 +1382,41 @@ function renderGlassStudentCards(records, sessionId) {
         const scanType = r.scan_type || '';
         const entryClass = isManual ? 'manual-entry' : 'auto-entry';
 
-        let entryIcon = '🖥️';
+        let entryIcon = '📷';
         let entryLabel = 'QR';
-        if (isManual) { entryIcon = '✍️'; entryLabel = 'يدوي'; }
-        else if (scanType === 'manual') { entryIcon = '⌨️'; entryLabel = 'كود'; }
-        else if (scanType === 'qr') { entryIcon = '📷'; entryLabel = 'QR'; }
+        let entryColor = '#10B981';
+        if (isManual) { entryIcon = '✍️'; entryLabel = 'يدوي'; entryColor = '#F59E0B'; }
+        else if (scanType === 'manual') { entryIcon = '⌨️'; entryLabel = 'كود'; entryColor = '#3B82F6'; }
+        else if (scanType === 'qr') { entryIcon = '📷'; entryLabel = 'QR'; entryColor = '#10B981'; }
 
         let timeShort = r.timestamp || '';
         const m = timeShort.match(/(\d{1,2}:\d{2}):\d{2}\s*(AM|PM)/i);
         if (m) timeShort = m[1] + ' ' + m[2];
 
+        const initial = (r.student_name || '?').trim().charAt(0).toUpperCase();
+
         return `
             <div class="glass-student-card ${entryClass}">
-                <div class="gsc-main">
-                    <span class="gsc-dot"></span>
-                    <span class="gsc-name" title="${r.student_name}">${r.student_name}</span>
-                    <span class="gsc-sep">·</span>
-                    <span class="gsc-id">${r.student_id}</span>
-                    <span class="gsc-sep gsc-hide-xs">·</span>
-                    <span class="gsc-type gsc-hide-xs">${entryIcon} ${entryLabel}</span>
-                    <span class="gsc-sep">·</span>
-                    <span class="gsc-time">${timeShort}</span>
+                <div class="gsc-avatar">${initial}</div>
+                <div class="gsc-body">
+                    <div class="gsc-name-row">
+                        <span class="gsc-name" title="${r.student_name}">${r.student_name}</span>
+                    </div>
+                    <div class="gsc-meta-row">
+                        <span class="gsc-chip gsc-chip-id">
+                            <i class="fas fa-id-badge"></i> ${r.student_id}
+                        </span>
+                        <span class="gsc-chip" style="border-color: ${entryColor}55; color: ${entryColor}; background: ${entryColor}15;">
+                            ${entryIcon} ${entryLabel}
+                        </span>
+                        <span class="gsc-chip gsc-chip-time">
+                            <i class="far fa-clock"></i> ${timeShort}
+                        </span>
+                    </div>
                 </div>
                 <div class="gsc-actions">
-                    <button class="gsc-btn gsc-btn-edit" onclick="event.stopPropagation(); editAttendanceRecordModal('${sessionId}', '${r.student_id}', '${r.student_name}')"><i class="fas fa-edit"></i></button>
-                    <button class="gsc-btn gsc-btn-del" onclick="event.stopPropagation(); deleteSessionAttendanceRecord('${sessionId}', '${r.student_id}')"><i class="fas fa-trash"></i></button>
+                    <button class="gsc-btn gsc-btn-edit" onclick="event.stopPropagation(); editAttendanceRecordModal('${sessionId}', '${r.student_id}', '${r.student_name}')" title="تعديل"><i class="fas fa-edit"></i></button>
+                    <button class="gsc-btn gsc-btn-del" onclick="event.stopPropagation(); deleteSessionAttendanceRecord('${sessionId}', '${r.student_id}')" title="حذف"><i class="fas fa-trash"></i></button>
                 </div>
             </div>
         `;
@@ -2186,8 +2241,6 @@ function canEditStaff(targetUser) {
 
 /* =========================================================
    ✅ عرض المواد — Bulletproof FIX
-   ✅ override كل CSS قديم (background-clip, gradient, shadow)
-   ✅ الـ checkbox + الاسم على اليسار معاً
    ========================================================= */
 function getGroupedSubjectsHTML(allowedSubjects = [], allowedClasses = [], subjectsList = null) {
     const subs = subjectsList || allData.subjects;
@@ -2199,7 +2252,6 @@ function getGroupedSubjectsHTML(allowedSubjects = [], allowedClasses = [], subje
         </div>`;
     }
 
-    /* ✅ خريطة المواد → عدد الفصول المُعيَّنة */
     const classesCountMap = {};
     allowedClasses.forEach(item => {
         const parts = item.split('|');
@@ -2208,7 +2260,7 @@ function getGroupedSubjectsHTML(allowedSubjects = [], allowedClasses = [], subje
         }
     });
 
-    /* ✅ inject style مرة واحدة — يـ override كل CSS قديم */
+    /* ✅ inject style مرة واحدة */
     if (!document.getElementById('nx-sub-name-fix')) {
         const st = document.createElement('style');
         st.id = 'nx-sub-name-fix';

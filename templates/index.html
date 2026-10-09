@@ -1,1019 +1,1219 @@
-const swalDark = { background: '#1a1f2c', color: '#fff', confirmButtonColor: '#FFB300' };
-let currentStudent = null;
-let allSubjects = [];
-let allActiveSessions = [];
-let selectedSession = null;
-let html5Qr = null;
-let dashboardRefreshInterval = null;
-let qrScannerStarting = false;
-let qrAutoSubmitLocked = false;
-
-/* =========================================================
-   💾 Cache بسيط لتقليل الطلبات
-   ========================================================= */
-const nxCache = {
-    history: { data: null, ts: 0, ttl: 30000 }, // 30 ثانية
-
-    get(key) {
-        const c = this[key];
-        if (c && c.data && (Date.now() - c.ts) < c.ttl) return c.data;
-        return null;
-    },
-    set(key, data) {
-        if (this[key]) {
-            this[key].data = data;
-            this[key].ts = Date.now();
-        }
-    },
-    clear(key) {
-        if (this[key]) { this[key].data = null; this[key].ts = 0; }
-    }
-};
-
-/* =========================================================
-   🔒 قفل الجهاز
-   ========================================================= */
-const DEVICE_OWNER_ID_KEY = 'nx_device_owner_id';
-const DEVICE_OWNER_NAME_KEY = 'nx_device_owner_name';
-
-function getDeviceOwner() {
-    try {
-        return {
-            id: localStorage.getItem(DEVICE_OWNER_ID_KEY),
-            name: localStorage.getItem(DEVICE_OWNER_NAME_KEY) || ''
-        };
-    } catch (e) {
-        return { id: null, name: '' };
-    }
-}
-
-function setDeviceOwner(id, name) {
-    try {
-        localStorage.setItem(DEVICE_OWNER_ID_KEY, id);
-        localStorage.setItem(DEVICE_OWNER_NAME_KEY, name || '');
-    } catch (e) {}
-}
-
-/* =========================================================
-   🎫 Device Token
-   ========================================================= */
-function getDeviceToken() {
-    let t = localStorage.getItem('nx_device_token');
-    if(!t) {
-        t = 'DEV_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now().toString(36);
-        localStorage.setItem('nx_device_token', t);
-    }
-    return t;
-}
-
-/* =========================================================
-   🛡️ فحص كود ربط الشاشة (SCR)
-   ========================================================= */
-function isPairingCode(code) {
-    if (typeof code !== 'string') return false;
-    return code.trim().toUpperCase().startsWith('SCR');
-}
-
-function showPairingCodeWarning() {
-    return Swal.fire({
-        ...swalDark,
-        icon: 'info',
-        title: '🖥️ هذا كود ربط الشاشة',
-        html: `
-            <div style="text-align:center; line-height:1.9;">
-                <p style="color:#fff; margin-bottom:12px;">
-                    الكود اللي قرأته/كتبته <b style="color:#f87171;">ليس كود حضور</b>.
-                </p>
-
-                <div style="padding:14px; background:rgba(6,182,212,0.08); border:1px solid rgba(6,182,212,0.3); border-radius:14px; margin-bottom:14px;">
-                    <p style="color:#22d3ee; font-weight:900; font-size:14px; margin:0;">
-                        <i class="fas fa-user-tie"></i>
-                        كود ربط الشاشة يُستخدم بواسطة
-                    </p>
-                    <p style="color:#FFB300; font-weight:900; font-size:15px; margin:6px 0 0;">
-                        المعيد / دكتور المادة فقط
-                    </p>
-                </div>
-
-                <div style="padding:12px; background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.25); border-radius:12px;">
-                    <p style="color:#8b93a7; font-size:12.5px; margin:0;">
-                        <i class="fas fa-lightbulb" style="color:#10B981;"></i>
-                        يرجى مسح <b style="color:#10B981;">كود الحضور</b> (6 خانات) الظاهر على شاشة العرض
-                    </p>
-                </div>
-            </div>
-        `,
-        confirmButtonText: '<i class="fas fa-check"></i> فهمت',
-        confirmButtonColor: '#FFB300'
-    });
-}
-
-/* =========================================================
-   ✅ التحكم بزر الدخول
-   ========================================================= */
-function showLoginBtn() {
-    const btn = document.getElementById('login-submit-btn');
-    if (btn) {
-        btn.style.removeProperty('display');
-        btn.style.display = 'block';
-    }
-}
-
-function hideLoginBtn() {
-    const btn = document.getElementById('login-submit-btn');
-    if (btn) {
-        btn.style.display = 'none';
-    }
-}
-
-/* =========================================================
-   ✅ الخطوة 1 → الخطوة 2
-   ========================================================= */
-function goToClassStep() {
-    const name = document.getElementById('login-name').value.trim();
-    const idInput = document.getElementById('login-id');
-    idInput.value = idInput.value.replace(/[^0-9]/g, '');
-    const id = idInput.value.trim();
-    const yearEl = document.getElementById('login-year');
-    const year = yearEl ? yearEl.value : '';
-
-    if (!name || name.length < 3) {
-        return Swal.fire({...swalDark, icon:'warning', text:'يرجى إدخال اسم الطالب بشكل صحيح!'});
-    }
-    if (id.length !== 7 || isNaN(id)) {
-        return Swal.fire({...swalDark, icon:'warning', text:'رقم الـ ID يجب أن يتكون من 7 أرقام!'});
-    }
-    if (!year) {
-        return Swal.fire({...swalDark, icon:'warning', text:'يرجى اختيار الفرقة الدراسية!'});
-    }
-
-    const step1 = document.getElementById('auth-step-1');
-    const step2 = document.getElementById('auth-step-2');
-    if (step1) step1.style.display = 'none';
-    if (step2) step2.style.display = 'block';
-
-    setupStep2(year);
-}
-
-/* =========================================================
-   ✅ الرجوع من الخطوة 2 → الخطوة 1
-   ========================================================= */
-function backToStep1() {
-    const step1 = document.getElementById('auth-step-1');
-    const step2 = document.getElementById('auth-step-2');
-    if (step2) step2.style.display = 'none';
-    if (step1) step1.style.display = 'block';
-
-    const deptEl = document.getElementById('login-dept');
-    if (deptEl) deptEl.value = '';
-
-    const classGroup = document.getElementById('class-group');
-    if (classGroup) {
-        classGroup.style.display = 'none';
-        classGroup.innerHTML = '';
-    }
-
-    hideLoginBtn();
-}
-
-/* =========================================================
-   ✅ تجهيز الخطوة 2 حسب الفرقة
-   ========================================================= */
-function setupStep2(year) {
-    const isYear34 = (year === 'الفرقة الثالثة' || year === 'الفرقة الرابعة');
-    const deptGroup = document.getElementById('dept-group');
-    const classGroup = document.getElementById('class-group');
-
-    // 🔒 إخفاء زر الدخول دايماً في البداية
-    hideLoginBtn();
-
-    if (isYear34) {
-        // ===== سنة 3/4 =====
-        if (deptGroup) deptGroup.style.display = 'block';
-        const deptEl = document.getElementById('login-dept');
-        if (deptEl) deptEl.value = '';
-
-        // نظهر الـ Class فوراً لكن معطّل
-        if (classGroup) {
-            classGroup.style.display = 'block';
-            classGroup.innerHTML = `
-                <select id="login-class" class="custom-select" disabled style="opacity:0.55;">
-                    <option value="" disabled selected>اختر القسم أولاً لعرض الفصول</option>
-                </select>
-            `;
-        }
-    } else {
-        // ===== سنة 1/2 =====
-        if (deptGroup) deptGroup.style.display = 'none';
-        loadClassesFor(year, 'عام (IT)');
-    }
-}
-
-/* =========================================================
-   ✅ تحميل الفصول من السيرفر
-   ========================================================= */
-async function loadClassesFor(year, dept) {
-    const classGroup = document.getElementById('class-group');
-    if (!classGroup) return;
-
-    // 🔒 إخفاء زر الدخول دائماً قبل التحميل
-    hideLoginBtn();
-
-    classGroup.style.display = 'block';
-    classGroup.innerHTML = `
-        <select class="custom-select" disabled style="opacity:0.55;">
-            <option value="" disabled selected>جاري تحميل الفصول...</option>
-        </select>
-    `;
-
-    try {
-        const url = `/api/available-classes?year=${encodeURIComponent(year)}&dept=${encodeURIComponent(dept)}`;
-        const res = await fetch(url);
-        const data = await res.json();
-
-        if (data.status === 'success' && Array.isArray(data.classes) && data.classes.length > 0) {
-            classGroup.innerHTML = `
-                <select id="login-class" class="custom-select">
-                    <option value="" disabled selected>اختر الفصل (Class)</option>
-                    ${data.classes.map(c => `<option value="${c}">Class ${c}</option>`).join('')}
-                </select>
-            `;
-        } else {
-            classGroup.innerHTML = `
-                <select id="login-class" class="custom-select" disabled style="opacity:0.55;">
-                    <option value="" disabled selected>لا توجد فصول متاحة بعد — تواصل مع الدكتور</option>
-                </select>
-            `;
-        }
-    } catch (e) {
-        console.error("loadClassesFor error:", e);
-        classGroup.innerHTML = `
-            <select id="login-class" class="custom-select" disabled style="opacity:0.55;">
-                <option value="" disabled selected>فشل تحميل الفصول</option>
-            </select>
-        `;
-    }
-}
-
-/* =========================================================
-   ✅ AUTO-LOGIN
-   ========================================================= */
-window.addEventListener('load', () => {
-    const saved = localStorage.getItem('nx_student_auth');
-    if (saved) {
-        try {
-            currentStudent = JSON.parse(saved);
-            showStudentUI();
-        } catch (e) {
-            localStorage.removeItem('nx_student_auth');
-        }
-    }
-});
-
-/* =========================================================
-   ✅ Event Delegation — للـ dept والـ class
-   ========================================================= */
-document.addEventListener('change', (e) => {
-    const t = e.target;
-    if (!t || !t.id) return;
-
-    // ===== تغيير القسم =====
-    if (t.id === 'login-dept') {
-        hideLoginBtn();
-
-        const yearEl = document.getElementById('login-year');
-        const year = yearEl ? yearEl.value : '';
-        const dept = t.value;
-        if (year && dept) {
-            loadClassesFor(year, dept);
-        }
-    }
-
-    // ===== تغيير الفصل =====
-    if (t.id === 'login-class') {
-        if (t.value && t.value !== '') {
-            showLoginBtn();
-        } else {
-            hideLoginBtn();
-        }
-    }
-});
-
-/* =========================================================
-   ✅ تسجيل الدخول — Final Submit
-   ========================================================= */
-async function loginStudent() {
-    const name = document.getElementById('login-name').value.trim();
-
-    const idInput = document.getElementById('login-id');
-    idInput.value = idInput.value.replace(/[^0-9]/g, '');
-    const id = idInput.value.trim();
-
-    const year = document.getElementById('login-year').value;
-    let dept = 'عام (IT)';
-
-    if (year === 'الفرقة الثالثة' || year === 'الفرقة الرابعة') {
-        const deptEl = document.getElementById('login-dept');
-        dept = deptEl ? deptEl.value : '';
-    }
-
-    const classEl = document.getElementById('login-class');
-    const classNumber = classEl ? classEl.value : '';
-
-    if (!name || name.length < 3) {
-        return Swal.fire({...swalDark, icon:'warning', text:'يرجى إدخال اسم الطالب بشكل صحيح!'});
-    }
-    if (id.length !== 7 || isNaN(id)) {
-        return Swal.fire({...swalDark, icon:'warning', text:'رقم الـ ID يجب أن يتكون من 7 أرقام!'});
-    }
-    if (!year) {
-        return Swal.fire({...swalDark, icon:'warning', text:'يرجى اختيار الفرقة الدراسية!'});
-    }
-    if ((year === 'الفرقة الثالثة' || year === 'الفرقة الرابعة') && !dept) {
-        return Swal.fire({...swalDark, icon:'warning', text:'يرجى اختيار القسم!'});
-    }
-    if (!classEl || !classNumber) {
-        return Swal.fire({...swalDark, icon:'warning', text:'يرجى اختيار الفصل (Class)!'});
-    }
-
-    // 🔒 فحص قفل الجهاز
-    const owner = getDeviceOwner();
-    if (owner.id && owner.id !== id) {
-        const confirmReset = await Swal.fire({
-            ...swalDark,
-            icon: 'warning',
-            title: 'هذا الجهاز مرتبط بطالب آخر',
-            html: `
-                <div style="text-align:center; line-height:1.8;">
-                    <p style="color:#fff; margin-bottom:8px;">هذا الجهاز مسجّل باسم:</p>
-                    <p style="color:#FFB300; font-weight:900; font-size:16px; margin-bottom:12px;">${owner.name || '—'}</p>
-                    <p style="color:#9CA3AF; font-size:13px;">لا يمكن استخدام نفس الجهاز لتسجيل حضور أكثر من طالب واحد.</p>
-                </div>
-            `,
-            showCancelButton: true,
-            confirmButtonText: 'إعادة تعيين الجهاز',
-            cancelButtonText: 'إلغاء',
-            confirmButtonColor: '#EF4444'
-        });
-
-        if (confirmReset.isConfirmed) {
-            try {
-                localStorage.removeItem(DEVICE_OWNER_ID_KEY);
-                localStorage.removeItem(DEVICE_OWNER_NAME_KEY);
-            } catch(e) {}
-        } else {
-            return;
-        }
-    }
-
-    Swal.fire({ title: 'جاري التحقق...', background:'#1a1f2c', color:'#fff', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
-
-    try {
-        const res = await fetch('/api/student-login', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                student_name: name,
-                student_id: id,
-                year: year,
-                department: dept,
-                class_number: classNumber
-            })
-        });
-        const data = await res.json();
-        Swal.close();
-
-        if (data.status === 'success') {
-            currentStudent = data.student;
-            localStorage.setItem('nx_student_auth', JSON.stringify(currentStudent));
-            showStudentUI();
-        } else {
-            Swal.fire({...swalDark, icon:'error', text: data.message || 'فشل التسجيل'});
-        }
-    } catch (e) {
-        Swal.close();
-        Swal.fire({...swalDark, icon:'error', text: 'تعذر الاتصال بالسيرفر'});
-    }
-}
-
-/* =========================================================
-   ✅ عرض الواجهة الرئيسية
-   ========================================================= */
-function showStudentUI() {
-    document.getElementById('auth-screen').style.display = 'none';
-    document.getElementById('main-ui').style.display = 'flex';
-
-    document.getElementById('display-name').innerText = currentStudent.name;
-    document.getElementById('display-id').innerText = currentStudent.student_id;
-
-    const yrEl = document.getElementById('display-year');
-    const dpEl = document.getElementById('display-dept');
-    if (yrEl) yrEl.innerText = currentStudent.year || '';
-    if (dpEl) dpEl.innerText = currentStudent.department || '';
-
-    const classChip = document.getElementById('display-class-chip');
-    const classEl = document.getElementById('display-class');
-    if (currentStudent.class_number && classChip && classEl) {
-        classEl.innerText = `Class ${currentStudent.class_number}`;
-        classChip.style.display = 'inline-flex';
-    } else if (classChip) {
-        classChip.style.display = 'none';
-    }
-
-    const nameParts = (currentStudent.name || '').trim().split(/\s+/);
-    let initials = '•';
-    if (nameParts.length >= 2) {
-        initials = (nameParts[0][0] || '') + (nameParts[1][0] || '');
-    } else if (nameParts.length === 1 && nameParts[0]) {
-        initials = nameParts[0].substring(0, 2);
-    }
-    const av = document.getElementById('display-avatar');
-    if (av) av.innerText = initials;
-
-    loadDashboard();
-}
-
-function logoutStudent() {
-    stopAutoRefresh();
-    stopQrReader();
-    nxCache.clear('history');
-    localStorage.removeItem('nx_student_auth');
-    location.reload();
-}
-
-/* =========================================================
-   📊 تحميل الداشبورد
-   ========================================================= */
-async function loadDashboard() {
-    document.getElementById('loading-screen').style.display = 'flex';
-    try {
-        const res = await fetch(
-            `/api/student-init?year=${encodeURIComponent(currentStudent.year)}` +
-            `&dept=${encodeURIComponent(currentStudent.department)}` +
-            `&student_id=${encodeURIComponent(currentStudent.student_id)}`
-        );
-        const data = await res.json();
-        document.getElementById('loading-screen').style.display = 'none';
-
-        allSubjects = data.subjects || [];
-        allActiveSessions = data.sessions || [];
-
-        renderSubjectCards();
-        startAutoRefresh();
-    } catch (e) {
-        document.getElementById('loading-screen').style.display = 'none';
-        Swal.fire({...swalDark, icon:'error', text: 'تعذر تحميل البيانات'});
-    }
-}
-
-function renderSubjectCards() {
-    const container = document.getElementById('subjects-container');
-
-    if(allSubjects.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <i class="fas fa-book fa-3x" style="color:var(--border); margin-bottom:15px;"></i>
-                <h3 style="color:#fff;">لا توجد مواد مضافة لـ ${currentStudent.year}</h3>
-                <p style="color:var(--text-muted); font-size:13px; margin-top:5px;">تأكد من قيام الدكتور أو الإدارة بإضافة مواد لفرقتك.</p>
-            </div>`;
-        return;
-    }
-
-    container.innerHTML = allSubjects.map(sub => {
-        const activeCount = allActiveSessions.filter(s => s.subject_id === sub.id).length;
-        const isOpen = activeCount > 0;
-
-        const statusHtml = isOpen
-            ? `<span class="badge-open"><i class="fas fa-circle"></i> مفتوح جلسة الآن</span>`
-            : `<span class="badge-closed">لا توجد جلسات حالياً</span>`;
-
-        return `
-            <div class="subject-card" data-sub-id="${sub.id}" onclick="selectSubjectForAttendance('${sub.id}', '${sub.name}')">
-                <img src="${sub.image || 'https://cdn-icons-png.flaticon.com/512/2997/2997295.png'}" alt="subject">
-                <h2 class="sub-title">${sub.name}</h2>
-                <div class="session-status-badge" data-open="${isOpen ? '1' : '0'}">
-                    ${statusHtml}
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-/* =========================================================
-   🔄 AUTO-REFRESH
-   ========================================================= */
-function startAutoRefresh() {
-    stopAutoRefresh();
-    dashboardRefreshInterval = setInterval(refreshSessionStatus, 15000);
-}
-
-function stopAutoRefresh() {
-    if (dashboardRefreshInterval) {
-        clearInterval(dashboardRefreshInterval);
-        dashboardRefreshInterval = null;
-    }
-}
-
-async function refreshSessionStatus() {
-    if (!currentStudent) return;
-    try {
-        const res = await fetch(
-            `/api/student-init?year=${encodeURIComponent(currentStudent.year)}` +
-            `&dept=${encodeURIComponent(currentStudent.department)}` +
-            `&student_id=${encodeURIComponent(currentStudent.student_id)}`
-        );
-        const data = await res.json();
-
-        const newSessions = data.sessions || [];
-        const newSubjects = data.subjects || [];
-
-        if (newSubjects.length !== allSubjects.length) {
-            allSubjects = newSubjects;
-            allActiveSessions = newSessions;
-            renderSubjectCards();
-            return;
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+
+    <title>BATU · Display Screen</title>
+
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3CradialGradient id='bg' cx='30%25' cy='25%25'%3E%3Cstop offset='0%25' stop-color='%231a2136'/%3E%3Cstop offset='100%25' stop-color='%230a0e18'/%3E%3C/radialGradient%3E%3ClinearGradient id='ring' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23FFD54F'/%3E%3Cstop offset='50%25' stop-color='%23FFB300'/%3E%3Cstop offset='100%25' stop-color='%23FF8F00'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='50' cy='50' r='47' fill='url(%23bg)' stroke='url(%23ring)' stroke-width='4'/%3E%3Ctext x='50' y='59' text-anchor='middle' font-family='Arial Black,Arial,sans-serif' font-weight='900' font-size='24' fill='%23FFB300' letter-spacing='0.5'%3EBATU%3C/text%3E%3C/svg%3E">
+
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; font-family:'Cairo', sans-serif; }
+
+        html, body {
+            background: radial-gradient(circle at center, #0d1220 0%, #05070f 100%);
+            color: #fff;
+            min-height: 100vh;
+            overflow: hidden;
         }
 
-        allActiveSessions = newSessions;
+        .nx-aurora { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+        .nx-aurora .blob { position: absolute; border-radius: 50%; filter: blur(130px); opacity: 0.5; will-change: transform; }
+        .nx-aurora .b1 { width: 560px; height: 560px; background: radial-gradient(circle, #FFB300, transparent 70%); top: -200px; right: -140px; animation: nxFloat1 24s ease-in-out infinite; }
+        .nx-aurora .b2 { width: 480px; height: 480px; background: radial-gradient(circle, #7C3AED, transparent 70%); bottom: -180px; left: -140px; animation: nxFloat2 28s ease-in-out infinite; }
+        .nx-aurora .b3 { width: 400px; height: 400px; background: radial-gradient(circle, #06B6D4, transparent 70%); top: 45%; left: 45%; animation: nxFloat3 32s ease-in-out infinite; opacity: 0.28; }
+        @keyframes nxFloat1 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-80px, 70px) scale(1.15); } }
+        @keyframes nxFloat2 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(70px, -60px) scale(1.12); } }
+        @keyframes nxFloat3 { 0%,100% { transform: translate(-50%,-50%) scale(1); } 50% { transform: translate(-55%,-45%) scale(1.18); } }
 
-        newSubjects.forEach(sub => {
-            const card = document.querySelector(`.subject-card[data-sub-id="${sub.id}"]`);
-            if (!card) return;
+        .nx-particles { position: fixed; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+        .nx-particle {
+            position: absolute; width: 3px; height: 3px; background: #FFB300; border-radius: 50%;
+            box-shadow: 0 0 10px #FFB300, 0 0 20px rgba(255,179,0,0.5);
+            opacity: 0; animation: nxRise linear infinite;
+        }
+        @keyframes nxRise {
+            0% { transform: translateY(100vh) scale(0.6); opacity: 0; }
+            10% { opacity: 0.9; }
+            90% { opacity: 0.9; }
+            100% { transform: translateY(-20vh) scale(1); opacity: 0; }
+        }
 
-            const badge = card.querySelector('.session-status-badge');
-            if (!badge) return;
+        @keyframes nxSpin { to { transform: rotate(360deg); } }
 
-            const activeCount = allActiveSessions.filter(s => s.subject_id === sub.id).length;
-            const isOpen = activeCount > 0;
-            const wasOpen = badge.dataset.open === '1';
+        #pair-screen {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 30px;
+            text-align: center;
+            overflow-y: auto;
+        }
 
-            if (isOpen !== wasOpen) {
-                badge.dataset.open = isOpen ? '1' : '0';
-                badge.innerHTML = isOpen
-                    ? `<span class="badge-open"><i class="fas fa-circle"></i> مفتوح جلسة الآن</span>`
-                    : `<span class="badge-closed">لا توجد جلسات حالياً</span>`;
+        .nx-logo-wrap {
+            position: relative;
+            width: 130px;
+            height: 130px;
+            margin: 0 auto 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .nx-logo-ring {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            background: conic-gradient(from 0deg, transparent 0deg, #FFB300 120deg, #7C3AED 240deg, transparent 360deg);
+            animation: nxSpin 6s linear infinite;
+            filter: blur(0.5px);
+        }
+        .nx-logo-ring::after {
+            content: "";
+            position: absolute;
+            inset: 5px;
+            border-radius: 50%;
+            background: #0b0f1a;
+        }
+        .nx-logo-core {
+            position: relative;
+            z-index: 2;
+            width: 110px; height: 110px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            background: radial-gradient(circle at 30% 25%, #1a2136, #0a0e18);
+            border: 1px solid rgba(255,179,0,0.35);
+            box-shadow: 0 0 60px rgba(255,179,0,0.35), inset 0 0 30px rgba(255,179,0,0.18);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 24px;
+            font-weight: 900;
+            color: #FFB300;
+            letter-spacing: 2px;
+        }
 
-                badge.classList.add('bump');
-                setTimeout(() => badge.classList.remove('bump'), 600);
+        .nx-hero {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0;
+            margin-bottom: 26px;
+            width: 100%;
+            max-width: 520px;
+            flex-shrink: 0;
+        }
+
+        .nx-hero-icon {
+            position: relative;
+            width: 74px;
+            height: 74px;
+            border-radius: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(145deg, #FFD54F 0%, #FFB300 45%, #FF8F00 100%);
+            box-shadow:
+                0 20px 45px rgba(255,179,0,0.4),
+                0 10px 22px rgba(255,179,0,0.28),
+                inset 0 3px 0 rgba(255,255,255,0.55),
+                inset 0 -5px 12px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+            animation: nxHeroFloat 4s ease-in-out infinite;
+        }
+        @keyframes nxHeroFloat {
+            0%,100% { transform: translateY(0) rotate(0); }
+            50%     { transform: translateY(-6px) rotate(-2deg); }
+        }
+
+        .nx-hero-icon::before,
+        .nx-hero-icon::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: 22px;
+            border: 2px solid rgba(255,179,0,0.6);
+            pointer-events: none;
+            animation: nxHeroRingOut 3s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+        }
+        .nx-hero-icon::after { animation-delay: 1.5s; }
+        @keyframes nxHeroRingOut {
+            0%   { transform: scale(1); opacity: 0.9; }
+            100% { transform: scale(1.7); opacity: 0; }
+        }
+
+        .nx-hero-icon i {
+            font-size: 32px;
+            color: #0a0e17;
+            filter: drop-shadow(0 3px 4px rgba(0,0,0,0.35));
+            animation: nxHeroIconScale 3s ease-in-out infinite;
+        }
+        @keyframes nxHeroIconScale {
+            0%,100% { transform: scale(1); }
+            50%     { transform: scale(1.08); }
+        }
+
+        .nx-hero-divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            opacity: 0.85;
+        }
+        .nx-hero-divider .line {
+            width: 50px;
+            height: 1.5px;
+            background: linear-gradient(90deg, transparent, #FFB300);
+            border-radius: 2px;
+        }
+        .nx-hero-divider .line:last-child {
+            background: linear-gradient(90deg, #FFB300, transparent);
+        }
+        .nx-hero-divider .diamond {
+            width: 8px;
+            height: 8px;
+            background: #FFB300;
+            transform: rotate(45deg);
+            border-radius: 1px;
+            box-shadow: 0 0 14px #FFB300, 0 0 28px rgba(255,179,0,0.6);
+            animation: nxDiamondPulse 2s ease-in-out infinite;
+        }
+        @keyframes nxDiamondPulse {
+            0%,100% { transform: rotate(45deg) scale(1); opacity: 1; }
+            50%     { transform: rotate(45deg) scale(1.25); opacity: 0.85; }
+        }
+
+        .nx-pair-qr-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            width: 100%;
+            max-width: 460px;
+            flex-shrink: 0;
+        }
+
+        .nx-qr-frame {
+            position: relative;
+            background: #fff;
+            padding: 18px;
+            border-radius: 24px;
+            box-shadow:
+                0 25px 60px rgba(0,0,0,0.55),
+                0 0 90px rgba(255,179,0,0.35),
+                inset 0 0 0 1px rgba(255,179,0,0.2);
+            animation: nxQrFloat 4s ease-in-out infinite;
+        }
+        @keyframes nxQrFloat {
+            0%,100% { transform: translateY(0); }
+            50%     { transform: translateY(-4px); }
+        }
+        .nx-qr-frame::before {
+            content: "";
+            position: absolute;
+            inset: -3px;
+            border-radius: 26px;
+            background: linear-gradient(135deg, #FFB300, #7C3AED, #06B6D4, #FFB300);
+            background-size: 300% 300%;
+            z-index: -1;
+            animation: borderFlow 6s linear infinite;
+            filter: blur(0.5px);
+        }
+        @keyframes borderFlow {
+            0%   { background-position: 0% 50%; }
+            100% { background-position: 300% 50%; }
+        }
+
+        #pair-qr-canvas img,
+        #pair-qr-canvas canvas {
+            display: block;
+            width: 280px !important;
+            height: 280px !important;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        .nx-qr-corner {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            border: 3px solid #FFB300;
+            border-radius: 4px;
+            pointer-events: none;
+            box-shadow: 0 0 12px rgba(255,179,0,0.8);
+        }
+        .nx-qr-tl { top: 6px; left: 6px; border-right: none; border-bottom: none; border-radius: 12px 4px 4px 4px; }
+        .nx-qr-tr { top: 6px; right: 6px; border-left: none; border-bottom: none; border-radius: 4px 12px 4px 4px; }
+        .nx-qr-bl { bottom: 6px; left: 6px; border-right: none; border-top: none; border-radius: 4px 4px 4px 12px; }
+        .nx-qr-br { bottom: 6px; right: 6px; border-left: none; border-top: none; border-radius: 4px 4px 12px 4px; }
+
+        .nx-or-divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            max-width: 280px;
+            opacity: 0.6;
+        }
+        .nx-or-divider span {
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+        }
+        .nx-or-divider b {
+            color: #8b93a7;
+            font-size: 12px;
+            font-weight: 800;
+            font-family: 'Cairo', sans-serif;
+        }
+
+        .nx-manual-toggle {
+            background: transparent;
+            border: 1px dashed rgba(255,179,0,0.4);
+            color: #FFB300;
+            padding: 10px 22px;
+            border-radius: 12px;
+            font-family: 'Cairo', sans-serif;
+            font-size: 13px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .nx-manual-toggle:hover {
+            background: rgba(255,179,0,0.1);
+            border-color: #FFB300;
+            transform: translateY(-1px);
+        }
+
+        #pair-input {
+            width: 100%;
+            padding: 18px;
+            font-size: 30px;
+            font-family: 'Plus Jakarta Sans', monospace;
+            letter-spacing: 14px;
+            text-align: center;
+            background: rgba(0,0,0,0.55);
+            border: 2px solid rgba(255,179,0,0.4);
+            border-radius: 16px;
+            color: #FFB300;
+            outline: none;
+            margin-bottom: 14px;
+            direction: ltr;
+            transition: all .3s ease;
+            font-weight: 900;
+        }
+        #pair-input::placeholder { color: rgba(255,179,0,0.22); letter-spacing: 14px; }
+        #pair-input:focus {
+            border-color: #FFB300;
+            box-shadow: 0 0 50px rgba(255,179,0,0.4);
+            transform: translateY(-2px);
+        }
+
+        #pair-btn {
+            width: 100%;
+            padding: 16px;
+            font-size: 15px;
+            font-family: 'Cairo', sans-serif;
+            font-weight: 900;
+            background: linear-gradient(135deg, #FFB300, #FFD54F);
+            color: #0a0e17;
+            border: none;
+            border-radius: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 14px 34px rgba(255,179,0,0.35);
+            letter-spacing: 0.5px;
+            position: relative;
+            overflow: hidden;
+        }
+        #pair-btn::after {
+            content: "";
+            position: absolute;
+            top: 0; left: -60%;
+            width: 60%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent);
+            transform: skewX(-25deg);
+            transition: left .75s ease;
+        }
+        #pair-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 44px rgba(255,179,0,0.5);
+            filter: brightness(1.08);
+        }
+        #pair-btn:hover::after { left: 130%; }
+
+        #pair-error {
+            color: #f87171; font-size: 13px; font-weight: 700;
+            margin-top: 12px; min-height: 20px;
+            padding: 8px 16px;
+            border-radius: 12px;
+            background: rgba(239,68,68,0);
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+        #pair-error.has-error {
+            background: rgba(239,68,68,0.1);
+            border: 1px solid rgba(239,68,68,0.3);
+        }
+
+        #display-screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 30px 20px 200px 20px;
+            gap: 18px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .info-wrap { text-align: center; margin-bottom: 4px; }
+        #subject-name {
+            font-size: 32px; font-weight: 900;
+            background: linear-gradient(120deg, #fff 30%, #ffd76a 100%);
+            -webkit-background-clip: text; background-clip: text; color: transparent;
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+            line-height: 1.3;
+        }
+        #session-title {
+            color: #FFB300; font-size: 18px; font-weight: 800;
+            letter-spacing: 0.3px;
+            padding: 6px 18px;
+            display: inline-block;
+            background: rgba(255,179,0,0.08);
+            border: 1px solid rgba(255,179,0,0.25);
+            border-radius: 12px;
+        }
+
+        #qr-wrapper {
+            background: #fff;
+            padding: 20px;
+            border-radius: 26px;
+            box-shadow: 0 0 90px rgba(255,179,0,0.35), 0 25px 60px rgba(0,0,0,0.55);
+            position: relative;
+        }
+        #qr-wrapper::before {
+            content: "";
+            position: absolute;
+            inset: -3px;
+            border-radius: 28px;
+            background: linear-gradient(135deg, #FFB300, #7C3AED, #06B6D4, #FFB300);
+            background-size: 300% 300%;
+            z-index: -1;
+            animation: borderFlow 6s linear infinite;
+        }
+
+        #qr-canvas img, #qr-canvas canvas {
+            display: block;
+            width: 320px !important;
+            height: 320px !important;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        #code-section {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            margin-top: 6px;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        #code-label {
+            color: #8b93a7; font-size: 13px; font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+        #manual-code {
+            font-family: 'Plus Jakarta Sans', monospace;
+            font-size: 72px;
+            font-weight: 900;
+            letter-spacing: 20px;
+            color: #FFB300;
+            text-shadow: 0 0 44px rgba(255,179,0,0.7), 0 0 90px rgba(255,179,0,0.35);
+            direction: ltr;
+            padding-right: 20px;
+            line-height: 1;
+            padding-top: 6px;
+        }
+        #timer-track {
+            width: 360px; height: 9px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 5px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        #timer-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #FFB300, #FFD54F);
+            width: 100%;
+            transition: width 0.2s linear;
+            box-shadow: 0 0 14px #FFB300;
+            border-radius: 5px;
+        }
+
+        #status-badge {
+            position: fixed;
+            top: 22px;
+            right: 22px;
+            padding: 11px 20px;
+            border-radius: 14px;
+            font-size: 13px;
+            font-weight: 800;
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            background: rgba(16,185,129,0.12);
+            border: 1px solid rgba(16,185,129,0.4);
+            color: #34d399;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            font-family: 'Cairo', sans-serif;
+        }
+        #status-badge i { font-size: 8px; animation: blink 1.4s infinite; }
+        #status-badge.closed {
+            background: rgba(239,68,68,0.12);
+            border-color: rgba(239,68,68,0.4);
+            color: #f87171;
+        }
+        @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+        .bottom-actions {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            z-index: 100;
+        }
+        .disp-btn {
+            padding: 12px 22px;
+            border-radius: 16px;
+            background: rgba(255,179,0,0.12);
+            border: 1px solid rgba(255,179,0,0.45);
+            color: #FFB300;
+            font-family: 'Cairo', sans-serif;
+            font-weight: 800;
+            font-size: 14px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            transition: all .25s ease;
+            backdrop-filter: blur(10px);
+        }
+        .disp-btn:hover {
+            background: rgba(255,179,0,0.24);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 26px rgba(255,179,0,0.3);
+        }
+        .disp-btn.danger {
+            background: rgba(239,68,68,0.12);
+            border-color: rgba(239,68,68,0.45);
+            color: #f87171;
+        }
+        .disp-btn.danger:hover {
+            background: rgba(239,68,68,0.24);
+            box-shadow: 0 10px 26px rgba(239,68,68,0.3);
+        }
+        .disp-btn i { font-size: 14px; }
+
+        @media (max-width: 640px) {
+            #qr-canvas img, #qr-canvas canvas { width: 240px !important; height: 240px !important; }
+            #manual-code { font-size: 54px; letter-spacing: 14px; }
+            #timer-track { width: 250px; }
+            #subject-name { font-size: 22px; }
+            #session-title { font-size: 14px; }
+            .bottom-actions { bottom: 14px; gap: 8px; }
+            .disp-btn { padding: 10px 14px; font-size: 12px; }
+            .disp-btn i { font-size: 12px; }
+            #pair-input { font-size: 24px; letter-spacing: 10px; padding: 14px; }
+            #pair-input::placeholder { letter-spacing: 10px; }
+            #pair-btn { padding: 14px; font-size: 14px; }
+            .nx-logo-wrap { width: 100px; height: 100px; margin-bottom: 20px; }
+            .nx-logo-core { width: 86px; height: 86px; font-size: 18px; }
+            #display-screen { padding: 20px 15px 170px 15px; gap: 14px; }
+
+            .nx-hero { margin-bottom: 20px; }
+            .nx-hero-icon { width: 62px; height: 62px; border-radius: 18px; margin-bottom: 14px; }
+            .nx-hero-icon i { font-size: 26px; }
+            .nx-hero-divider .line { width: 42px; }
+
+            #pair-qr-canvas img, #pair-qr-canvas canvas {
+                width: 210px !important;
+                height: 210px !important;
             }
-        });
-    } catch (err) {
-        // silent
-    }
-}
+            .nx-qr-frame { padding: 14px; border-radius: 22px; }
+            .nx-qr-corner { width: 20px; height: 20px; border-width: 2.5px; }
+        }
 
-/* =========================================================
-   ✅ Force refresh لما الطالب يرجع للتاب أو يفتح النافذة
-   ========================================================= */
-document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && currentStudent && typeof refreshSessionStatus === 'function') {
-        refreshSessionStatus();
-    }
-});
+        @media (max-width: 380px) {
+            #qr-canvas img, #qr-canvas canvas { width: 200px !important; height: 200px !important; }
+            #manual-code { font-size: 42px; letter-spacing: 10px; }
+            #timer-track { width: 220px; }
+            #qr-wrapper { padding: 14px; }
+            #subject-name { font-size: 18px; }
+            #display-screen { padding: 16px 12px 160px 12px; gap: 12px; }
+            .nx-hero-icon { width: 54px; height: 54px; border-radius: 16px; }
+            .nx-hero-icon i { font-size: 22px; }
+        }
 
-window.addEventListener('focus', () => {
-    if (currentStudent && typeof refreshSessionStatus === 'function') {
-        refreshSessionStatus();
-    }
-});
+        @media (max-height: 700px) and (min-width: 641px) {
+            .nx-logo-wrap { width: 100px; height: 100px; margin-bottom: 20px; }
+            .nx-logo-core { width: 86px; height: 86px; font-size: 20px; }
+            .nx-hero-icon { width: 60px; height: 60px; }
+            .nx-hero-icon i { font-size: 26px; }
+            #pair-qr-canvas img, #pair-qr-canvas canvas {
+                width: 230px !important;
+                height: 230px !important;
+            }
+        }
 
-/* =========================================================
-   ✅ عرض جلسات المادة — نسخة محسّنة (بدون تعليق)
-   ========================================================= */
-async function selectSubjectForAttendance(subId, subName) {
-    // ✅ 1. اعرض الجلسات من البيانات المحلية فوراً (بدون انتظار)
-    const localSessions = allActiveSessions.filter(s => s.subject_id === subId);
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+    </style>
+</head>
+<body>
 
-    // ✅ 2. اعرض المودال فوراً - تجربة سلسة
-    showSessionsModal(localSessions, subId, subName);
+    <div class="nx-aurora" aria-hidden="true">
+        <div class="blob b1"></div>
+        <div class="blob b2"></div>
+        <div class="blob b3"></div>
+    </div>
 
-    // ✅ 3. في الخلفية (بدون blocking) - حدّث البيانات
-    refreshSessionsInBackground(subId, subName);
-}
+    <div class="nx-particles" id="nx-particles" aria-hidden="true"></div>
 
-/* ✅ دالة عرض المودال - منفصلة عشان نستخدمها مرتين */
-function showSessionsModal(sessions, subId, subName) {
-    if (sessions.length === 0) {
-        return Swal.fire({
-            ...swalDark,
-            icon: 'info',
-            title: subName,
-            text: 'لا توجد محاضرات أو سكاشن مفتوحة لتسجيل الحضور لهذه المادة في الوقت الحالي.'
-        });
-    }
-
-    const classBadge = currentStudent && currentStudent.class_number
-        ? `<div style="margin-bottom:10px; padding:8px 12px; background:rgba(6,182,212,0.08); border:1px solid rgba(6,182,212,0.25); border-radius:10px; font-size:12px; color:#22d3ee; font-weight:800; text-align:right;">
-             <i class="fas fa-layer-group"></i> فصلك: Class ${currentStudent.class_number}
-           </div>`
-        : '';
-
-    const buttonsHtml = classBadge + sessions.map(s => `
-        <div style="background:#1F2937; padding:12px; border-radius:10px; margin-bottom:8px; cursor:pointer; text-align:right; border:1px solid var(--border);" onclick="openVerifyModal('${s.session_id}', '${s.title}', '${subName}', '${s.type}')">
-            <b style="color:var(--gold); font-size:15px;">${s.title}</b>
-            <span style="font-size:11px; background:rgba(255,179,0,0.15); color:var(--gold); padding:2px 8px; border-radius:6px; margin-right:5px;">${s.type === 'Lecture' ? 'محاضرة' : 'سكشن'}</span>
-            <p style="font-size:11px; color:var(--text-muted); margin-top:4px;">المحاضر: ${s.created_by}</p>
+    <div id="pair-screen">
+        <div class="nx-logo-wrap">
+            <div class="nx-logo-ring"></div>
+            <div class="nx-logo-core">BATU</div>
         </div>
-    `).join('');
 
-    Swal.fire({
-        ...swalDark,
-        title: `الجلسات المتاحة (${subName})`,
-        html: buttonsHtml,
-        showConfirmButton: false,
-        showCancelButton: true,
-        cancelButtonText: 'إغلاق'
-    });
-}
+        <div class="nx-hero">
+            <div class="nx-hero-icon">
+                <i class="fas fa-desktop"></i>
+            </div>
 
-/* ✅ تحديث في الخلفية - بدون blocking */
-async function refreshSessionsInBackground(subId, subName) {
-    try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 ثواني max
+            <div class="nx-hero-divider">
+                <span class="line"></span>
+                <span class="diamond"></span>
+                <span class="line"></span>
+            </div>
+        </div>
 
-        const res = await fetch(
-            `/api/student-init?year=${encodeURIComponent(currentStudent.year)}` +
-            `&dept=${encodeURIComponent(currentStudent.department)}` +
-            `&student_id=${encodeURIComponent(currentStudent.student_id)}`,
-            { signal: controller.signal }
-        );
-        clearTimeout(timeoutId);
+        <div class="nx-pair-qr-section">
+            <div class="nx-qr-frame">
+                <div id="pair-qr-canvas"></div>
+                <div class="nx-qr-corner nx-qr-tl"></div>
+                <div class="nx-qr-corner nx-qr-tr"></div>
+                <div class="nx-qr-corner nx-qr-bl"></div>
+                <div class="nx-qr-corner nx-qr-br"></div>
+            </div>
 
-        const data = await res.json();
-        if (data.status === 'success') {
-            allSubjects = data.subjects || allSubjects;
-            allActiveSessions = data.sessions || [];
-            renderSubjectCards();
-            // ملاحظة: لا نعيد فتح المودال - عشان ما نزعجش المستخدم
-        }
-    } catch (e) {
-        // فشل/timeout - نستخدم البيانات المحلية اللي معروضة بالفعل
-        console.debug('Background refresh skipped:', e.message);
-    }
-}
+            <div class="nx-or-divider">
+                <span></span>
+                <b>أو</b>
+                <span></span>
+            </div>
 
-/* =========================================================
-   ✅ فتح نافذة تأكيد الحضور — نسخة محسّنة
-   ========================================================= */
-function openVerifyModal(sessId, title, subName, type) {
-    Swal.close();
-    qrAutoSubmitLocked = false;
-    selectedSession = sessId;
+            <button type="button" id="show-manual-btn" class="nx-manual-toggle" onclick="toggleManualEntry()">
+                <i class="fas fa-keyboard"></i> إدخال الكود يدوياً
+            </button>
 
-    // ✅ 1. اعرض المودال فوراً (بدون أي انتظار)
-    document.getElementById('modal-sess-title').innerText =
-        `${title} (${type === 'Lecture' ? 'محاضرة' : 'سكشن'})`;
-    document.getElementById('modal-sess-sub').innerText = subName;
-    document.getElementById('totp-input').value = '';
-    document.getElementById('verify-modal').style.display = 'flex';
+            <div id="manual-entry-box" style="display:none; width:100%; margin-top:14px;">
+                <input type="text" id="pair-input" maxlength="8" inputmode="numeric"
+                       placeholder="00000000" autocomplete="off"
+                       oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+                <button id="pair-btn">ربط الشاشة</button>
+                <div id="pair-error"></div>
+            </div>
+        </div>
+    </div>
 
-    // ✅ 2. في الخلفية - افحص لو الطالب مسجل قبل كده (non-blocking)
-    checkIfAlreadyRegistered(sessId);
-}
+    <div id="display-screen">
+        <div id="status-badge"><i class="fas fa-circle"></i> متصل بجلسة مباشرة</div>
 
-/* ✅ فحص إذا كان الطالب مسجل بالفعل - بدون blocking */
-async function checkIfAlreadyRegistered(sessId) {
-    // ✅ جرّب الكاش الأول
-    let history = nxCache.get('history');
+        <div class="info-wrap">
+            <div id="subject-name">...</div>
+            <div id="session-title">...</div>
+        </div>
 
-    if (!history) {
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 4000);
+        <div id="qr-wrapper">
+            <div id="qr-canvas"></div>
+        </div>
 
-            const res = await fetch('/api/student-history', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ student_id: currentStudent.student_id }),
-                signal: controller.signal
-            });
-            clearTimeout(timeoutId);
+        <div id="code-section">
+            <div id="code-label">أو اكتب الرمز يدوياً (6 خانات)</div>
+            <div id="manual-code">------</div>
+            <div id="timer-track"><div id="timer-bar"></div></div>
+        </div>
 
-            const data = await res.json();
-            history = data.history || [];
-            nxCache.set('history', history);
-        } catch (e) {
-            // فشل الفحص - الطالب يقدر يجرب عادي، والسيرفر هيرفض لو مسجل
-            console.debug('History check skipped:', e.message);
-            return;
-        }
-    }
+        <div class="bottom-actions">
+            <button class="disp-btn" id="toggle-code-btn">
+                <i class="fas fa-keyboard"></i> <span>إظهار الكود</span>
+            </button>
+            <button class="disp-btn danger" onclick="unpairScreen()">
+                <i class="fas fa-exchange-alt"></i> <span>تغيير الجلسة</span>
+            </button>
+        </div>
+    </div>
 
-    // ✅ تحقق: لو الطالب لسه فاتح نفس الجلسة ومسجل بالفعل
-    if (selectedSession === sessId) {
-        const already = history.find(h => h.session_id === sessId);
-        if (already) {
-            closeVerifyModal();
-            Swal.fire({
-                ...swalDark,
-                icon: 'success',
-                title: 'أنت مسجل بالفعل ✅',
-                html: `
-                    <div style="text-align:center; line-height:1.8;">
-                        <p style="color:#fff; margin-bottom:6px;">لقد سجّلت حضورك في هذه الجلسة مسبقاً</p>
-                        <p style="color:#10B981; font-weight:900; font-size:14px; margin-bottom:12px;">${already.subject_name} — ${already.session_title}</p>
-                        <span style="font-size:12px; color:#9CA3AF; font-family:monospace;">
-                            <i class="far fa-clock"></i> ${already.timestamp}
-                        </span>
-                    </div>
-                `,
-                confirmButtonText: 'حسناً'
-            });
-        }
-    }
-}
+<script>
+    /* ============================================================
+       🖥️ Display Screen Logic — v4 (FIXED QR PERSISTENCE)
+       ============================================================
+       ✅ QR الربط ثابت لا يختفي
+       ✅ إعادة إنشاء كائن QRCode جديد في كل مرة (بدون reuse)
+       ✅ Watchdog كل 2.5 ثانية يراقب وجود الـ QR
+       ✅ معالجة أفضل لحالة "expired"
+       ============================================================ */
 
-/* =========================================================
-   ✅ إغلاق نافذة التأكيد
-   ========================================================= */
-function closeVerifyModal() {
-    stopQrReader();
-
-    const modalEl = document.getElementById('verify-modal');
-    if (modalEl) modalEl.style.display = 'none';
-
-    const inputEl = document.getElementById('totp-input');
-    if (inputEl) inputEl.value = '';
-
-    selectedSession = null;
-    qrAutoSubmitLocked = false;
-}
-
-/* =========================================================
-   📷 QR Scanner
-   ========================================================= */
-async function stopQrReader() {
-    const r = document.getElementById('reader');
-
-    if (html5Qr) {
-        try {
-            const state = html5Qr.getState ? html5Qr.getState() : null;
-            if (state === 2 || state === 3) {
-                try { await html5Qr.stop(); } catch (e) {}
+    /* ---------- PARTICLES ---------- */
+    (function () {
+        const container = document.getElementById('nx-particles');
+        if (!container) return;
+        const count = window.innerWidth < 768 ? 14 : 26;
+        for (let i = 0; i < count; i++) {
+            const p = document.createElement('div');
+            p.className = 'nx-particle';
+            p.style.left = Math.random() * 100 + '%';
+            p.style.animationDuration = (10 + Math.random() * 14) + 's';
+            p.style.animationDelay = (Math.random() * 14) + 's';
+            const s = 1.5 + Math.random() * 2.5;
+            p.style.width = s + 'px';
+            p.style.height = s + 'px';
+            if (Math.random() > 0.7) {
+                p.style.background = '#7C3AED';
+                p.style.boxShadow = '0 0 10px #7C3AED, 0 0 20px rgba(124,58,237,0.5)';
+            } else if (Math.random() > 0.5) {
+                p.style.background = '#06B6D4';
+                p.style.boxShadow = '0 0 10px #06B6D4, 0 0 20px rgba(6,182,212,0.5)';
             }
-            try { html5Qr.clear(); } catch (e) {}
-        } catch (e) {}
-        html5Qr = null;
-    }
-
-    if (r) {
-        r.style.display = 'none';
-        r.innerHTML = '';
-    }
-    qrScannerStarting = false;
-}
-
-async function toggleQrReader() {
-    const r = document.getElementById('reader');
-    if (!r) return;
-
-    if (r.style.display === 'block' || html5Qr) {
-        await stopQrReader();
-        return;
-    }
-
-    if (qrScannerStarting) return;
-    qrScannerStarting = true;
-
-    r.style.display = 'block';
-    r.innerHTML = '<div style="text-align:center; padding:20px; color:#FFB300;"><i class="fas fa-spinner fa-spin fa-2x"></i><br><br>جاري تشغيل الكاميرا...</div>';
-
-    await new Promise(resolve => setTimeout(resolve, 150));
-
-    try {
-        if (html5Qr) {
-            try { await html5Qr.stop(); } catch(e) {}
-            try { html5Qr.clear(); } catch(e) {}
-            html5Qr = null;
+            container.appendChild(p);
         }
+    })();
 
-        r.innerHTML = '';
-        html5Qr = new Html5Qrcode("reader", { verbose: false });
+    /* ---------- NUKE OLD STORAGE ---------- */
+    (function nukeOldStorage() {
+        try {
+            localStorage.removeItem('nx_screen_secret');
+            Object.keys(localStorage).forEach(k => {
+                if (k && (k.includes('screen') || k.includes('nx_screen'))) {
+                    localStorage.removeItem(k);
+                }
+            });
+        } catch (e) {}
+    })();
 
-        const config = {
-            fps: 10,
-            qrbox: function(viewfinderWidth, viewfinderHeight) {
-                const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-                const size = Math.floor(minEdge * 0.75);
-                return { width: size, height: size };
-            },
-            aspectRatio: 1.0,
-            disableFlip: false
-        };
+    /* ---------- NO-CACHE FETCH ---------- */
+    const _origFetch = window.fetch;
+    window.fetch = function(url, opts) {
+        opts = opts || {};
+        opts.cache = 'no-store';
+        if ((!opts.method || opts.method === 'GET') && typeof url === 'string') {
+            const sep = url.includes('?') ? '&' : '?';
+            url = url + sep + '_t=' + Date.now();
+        }
+        return _origFetch(url, opts);
+    };
 
-        const onScanSuccess = (decodedText) => {
-            if (qrAutoSubmitLocked) return;
+    /* ============================================================
+       STATE
+       ============================================================ */
+    let currentSession = null;
+    let currentSecret = null;
+    let qrGenerator = null;
+    let lastQrCode = null;
+    let pollInterval = null;
+    let codeVisible = false;
+    let isPaired = false;
 
-            const raw = (decodedText || '').trim();
+    /* Pairing state */
+    let currentToken = null;
+    let qrTokenGenerator = null;
+    let tokenPollInterval = null;
+    let qrWatchdogInterval = null;
+    let manualModeVisible = false;
 
-            /* ✅ فحص كود ربط الشاشة فور المسح */
-            if (raw.toUpperCase().startsWith('SCR')) {
-                qrAutoSubmitLocked = true;
-                stopQrReader();
-                showPairingCodeWarning().then(() => {
-                    qrAutoSubmitLocked = false;
-                });
+    /* ============================================================
+       LIVE CODE POLLING
+       ============================================================ */
+    function stopPolling() {
+        if (pollInterval) {
+            clearInterval(pollInterval);
+            pollInterval = null;
+        }
+    }
+
+    function startPolling() {
+        stopPolling();
+        if (!isPaired || !currentSecret) return;
+        fetchScreenCode();
+        pollInterval = setInterval(fetchScreenCode, 1000);
+    }
+
+    /* ============================================================
+       🆕 Request New Pairing Token
+       ============================================================ */
+    async function requestNewToken() {
+        try {
+            const res = await fetch('/api/screen-new-token', {
+                method: 'POST',
+                cache: 'no-store'
+            });
+            const data = await res.json();
+
+            if (data.status !== 'success' || !data.token) {
+                console.debug('Token request failed: bad response');
                 return;
             }
 
-            qrAutoSubmitLocked = true;
+            currentToken = data.token;
+            drawPairQR(currentToken);
+        } catch (e) {
+            console.debug('Token request failed:', e);
+        }
+    }
 
-            const input = document.getElementById('totp-input');
-            const cleanCode = raw.substring(0, 6).toUpperCase();
-            if (input) input.value = cleanCode;
+    /* ============================================================
+       ✅ Always create a FRESH QRCode object — لا يعاد استخدام القديم
+       ============================================================ */
+    function drawPairQR(token) {
+        const container = document.getElementById('pair-qr-canvas');
+        if (!container) return;
 
-            stopQrReader();
+        // مسح المحتوى القديم
+        container.innerHTML = '';
 
-            setTimeout(() => {
-                submitAttendanceFinal(true);
-            }, 250);
-        };
+        // تحرير الكائن القديم
+        qrTokenGenerator = null;
 
-        const onScanError = () => {};
+        // إنشاء كائن جديد كلياً
+        try {
+            qrTokenGenerator = new QRCode(container, {
+                width: 280,
+                height: 280,
+                correctLevel: QRCode.CorrectLevel.H
+            });
+            qrTokenGenerator.makeCode(token);
+        } catch (e) {
+            console.debug('QR draw failed:', e);
+        }
+    }
 
-        let started = false;
-        let lastError = null;
+    /* ============================================================
+       📡 Check Pairing
+       ============================================================ */
+    async function checkPairing() {
+        if (!currentToken) return;
 
         try {
-            await html5Qr.start({ facingMode: "environment" }, config, onScanSuccess, onScanError);
-            started = true;
-        } catch (err1) { lastError = err1; }
+            const res = await fetch(
+                '/api/screen-check-pair?token=' + encodeURIComponent(currentToken),
+                { cache: 'no-store' }
+            );
+            const data = await res.json();
 
-        if (!started) {
-            try {
-                await html5Qr.start({ facingMode: "user" }, config, onScanSuccess, onScanError);
-                started = true;
-            } catch (err2) { lastError = err2; }
-        }
+            if (data.status === 'paired') {
+                stopTokenPolling();
+                stopQrWatchdog();
 
-        if (!started) {
-            try {
-                const devices = await Html5Qrcode.getCameras();
-                if (devices && devices.length > 0) {
-                    await html5Qr.start(devices[0].id, config, onScanSuccess, onScanError);
-                    started = true;
-                }
-            } catch (err3) { lastError = err3; }
-        }
+                currentSecret = data.screen_secret;
+                currentSession = data.session_info || {};
+                isPaired = true;
 
-        if (!started) throw lastError || new Error("No camera available");
+                startDisplay();
 
-        qrScannerStarting = false;
-
-    } catch (err) {
-        qrScannerStarting = false;
-        await stopQrReader();
-
-        const errStr = String(err).toLowerCase();
-        let title = 'تعذر تشغيل الكاميرا';
-        let msg = 'حدث خطأ غير متوقع، جرب مرة أخرى';
-
-        if (errStr.includes('permission') || errStr.includes('notallowed') || errStr.includes('denied')) {
-            title = 'صلاحية الكاميرا مرفوضة';
-            msg = 'يرجى السماح بالوصول للكاميرا من إعدادات المتصفح';
-        } else if (errStr.includes('notfound') || errStr.includes('no camera')) {
-            title = 'لا توجد كاميرا';
-            msg = 'هذا الجهاز لا يحتوي على كاميرا متاحة';
-        } else if (errStr.includes('notreadable') || errStr.includes('in use')) {
-            title = 'الكاميرا مشغولة';
-            msg = 'الكاميرا مستخدمة من تطبيق آخر';
-        } else if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-            title = 'اتصال غير آمن';
-            msg = 'تشغيل الكاميرا يحتاج اتصال HTTPS';
-        }
-
-        Swal.fire({
-            ...swalDark,
-            icon: 'error',
-            title: title,
-            html: `
-                <div style="text-align:center; line-height:1.8;">
-                    <p style="color:#fff; margin-bottom:12px;">${msg}</p>
-                    <p style="font-size:12px; color:#9CA3AF;">💡 يمكنك استخدام الرمز اليدوي بدلاً من الكاميرا</p>
-                </div>
-            `
-        });
-    }
-}
-
-/* =========================================================
-   ✅ إرسال الحضور
-   ========================================================= */
-async function submitAttendanceFinal(fromQr = false) {
-    const rawCode = document.getElementById('totp-input').value.trim();
-
-    /* ✅ فحص كود ربط الشاشة أولاً */
-    if (isPairingCode(rawCode)) {
-        document.getElementById('totp-input').value = '';
-        qrAutoSubmitLocked = false;
-        return showPairingCodeWarning();
-    }
-
-    const code = rawCode;
-    if (code.length !== 6) {
-        return Swal.fire({...swalDark, icon:'warning', text:'الرمز السري يتكون من 6 خانات!'});
-    }
-
-    const owner = getDeviceOwner();
-    if (owner.id && owner.id !== currentStudent.student_id) {
-        return Swal.fire({
-            ...swalDark,
-            icon: 'error',
-            title: 'هذا الجهاز مرتبط بطالب آخر',
-            html: `
-                <div style="text-align:center; line-height:1.8;">
-                    <p style="color:#fff; margin-bottom:8px;">لا يمكن استخدام هذا الجهاز لتسجيل حضور أكثر من طالب.</p>
-                    <p style="color:#FFB300; font-weight:900; font-size:14px; margin-bottom:12px;">مسجّل باسم: ${owner.name || owner.id}</p>
-                </div>
-            `
-        });
-    }
-
-    Swal.fire({title: 'جاري تسجيل حضورك...', background:'#1a1f2c', color:'#fff', didOpen: () => Swal.showLoading()});
-
-    try {
-        const res = await fetch('/api/submit-attendance', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                student_id: currentStudent.student_id,
-                student_name: currentStudent.name,
-                session_id: selectedSession,
-                code: code,
-                device_token: getDeviceToken(),
-                scan_type: fromQr ? 'qr' : 'manual'
-            })
-        });
-        const data = await res.json();
-        if(res.ok) {
-            setDeviceOwner(currentStudent.student_id, currentStudent.name);
-
-            // ✅ امسح الكاش عشان المرة الجاية يجيب history محدّث
-            nxCache.clear('history');
-
-            closeVerifyModal();
-            Swal.fire({...swalDark, icon:'success', title:'تم بنجاح!', text: data.message});
-            if (typeof confetti === 'function') {
-                const colors = ['#FFB300', '#FFD54F', '#10B981', '#7C3AED', '#06B6D4'];
-                confetti({ particleCount: 80, angle: 60, spread: 70, origin: { x: 0 }, colors });
-                confetti({ particleCount: 80, angle: 120, spread: 70, origin: { x: 1 }, colors });
-                setTimeout(() => {
-                    confetti({ particleCount: 60, spread: 100, origin: { y: 0.6 }, colors });
-                }, 200);
+            } else if (data.status === 'expired') {
+                // التوكن انتهى → اطلب واحد جديد فوراً
+                await requestNewToken();
             }
-        } else {
-            if (fromQr) qrAutoSubmitLocked = false;
-            Swal.fire({...swalDark, icon:'error', title:'خطأ', text: data.message});
+        } catch (e) {
+            // silent
         }
-    } catch (e) {
-        if (fromQr) qrAutoSubmitLocked = false;
-        Swal.fire({...swalDark, icon:'error', title:'خطأ', text: 'تعذر الاتصال بالسيرفر'});
     }
-}
 
-/* =========================================================
-   📜 سجل الحضور
-   ========================================================= */
-async function openHistoryModal() {
-    document.getElementById('history-modal').style.display = 'flex';
-    const list = document.getElementById('history-list-container');
-    list.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-muted);"><i class="fas fa-spinner fa-spin fa-2x"></i></div>`;
+    function startTokenPolling() {
+        stopTokenPolling();
+        checkPairing();
+        tokenPollInterval = setInterval(checkPairing, 1500);
+    }
 
-    try {
-        // ✅ جرّب الكاش الأول
-        let history = nxCache.get('history');
+    function stopTokenPolling() {
+        if (tokenPollInterval) {
+            clearInterval(tokenPollInterval);
+            tokenPollInterval = null;
+        }
+    }
 
-        if (!history) {
-            const res = await fetch('/api/student-history', {
+    /* ============================================================
+       🛡️ QR Watchdog — يفحص وجود الـ QR كل 2.5 ثانية
+       ============================================================ */
+    function startQrWatchdog() {
+        stopQrWatchdog();
+        qrWatchdogInterval = setInterval(() => {
+            if (isPaired || !currentToken) return;
+
+            const container = document.getElementById('pair-qr-canvas');
+            if (!container) return;
+
+            // لو الحاوية فاضية → أعد رسم الـ QR
+            if (container.children.length === 0) {
+                console.debug('[Watchdog] QR missing — redrawing');
+                drawPairQR(currentToken);
+                return;
+            }
+
+            // فحص إضافي: هل الـ canvas داخلها فعلاً فيه محتوى؟
+            const canvas = container.querySelector('canvas');
+            const img = container.querySelector('img');
+
+            if (!canvas && !img) {
+                console.debug('[Watchdog] No canvas/img — redrawing');
+                drawPairQR(currentToken);
+            }
+        }, 2500);
+    }
+
+    function stopQrWatchdog() {
+        if (qrWatchdogInterval) {
+            clearInterval(qrWatchdogInterval);
+            qrWatchdogInterval = null;
+        }
+    }
+
+    /* ============================================================
+       MANUAL ENTRY TOGGLE
+       ============================================================ */
+    function toggleManualEntry() {
+        manualModeVisible = !manualModeVisible;
+        const box = document.getElementById('manual-entry-box');
+        const btn = document.getElementById('show-manual-btn');
+
+        if (box) box.style.display = manualModeVisible ? 'block' : 'none';
+        if (btn) {
+            btn.innerHTML = manualModeVisible
+                ? '<i class="fas fa-times"></i> إلغاء الإدخال اليدوي'
+                : '<i class="fas fa-keyboard"></i> إدخال الكود يدوياً';
+        }
+
+        if (manualModeVisible) {
+            setTimeout(() => {
+                const input = document.getElementById('pair-input');
+                if (input) input.focus();
+            }, 100);
+        }
+    }
+
+    /* ============================================================
+       SHOW PAIR SCREEN
+       ============================================================ */
+    function showPairScreen(message) {
+        stopPolling();
+        stopTokenPolling();
+        stopQrWatchdog();
+
+        isPaired = false;
+        currentSecret = null;
+        currentSession = null;
+        currentToken = null;
+        lastQrCode = null;
+        codeVisible = false;
+        manualModeVisible = false;
+
+        document.getElementById('display-screen').style.display = 'none';
+        document.getElementById('pair-screen').style.display = 'flex';
+
+        const box = document.getElementById('manual-entry-box');
+        const btn = document.getElementById('show-manual-btn');
+        if (box) box.style.display = 'none';
+        if (btn) btn.innerHTML = '<i class="fas fa-keyboard"></i> إدخال الكود يدوياً';
+
+        const inputEl = document.getElementById('pair-input');
+        if (inputEl) inputEl.value = '';
+
+        const errEl = document.getElementById('pair-error');
+        if (errEl) {
+            errEl.textContent = message || '';
+            errEl.classList.toggle('has-error', !!message);
+        }
+
+        qrTokenGenerator = null;
+        requestNewToken();
+        startTokenPolling();
+        startQrWatchdog();
+    }
+
+    /* ============================================================
+       MANUAL PAIR (8-digit code)
+       ============================================================ */
+    async function pairScreen(code) {
+        const errEl = document.getElementById('pair-error');
+        errEl.textContent = '';
+        errEl.classList.remove('has-error');
+
+        if (!code || code.length !== 8 || !/^\d{8}$/.test(code)) {
+            errEl.textContent = 'الكود يجب أن يكون 8 أرقام بالضبط';
+            errEl.classList.add('has-error');
+            return false;
+        }
+
+        try {
+            const res = await fetch('/api/screen-pair', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({student_id: currentStudent.student_id})
+                headers: { 'Content-Type': 'application/json' },
+                cache: 'no-store',
+                body: JSON.stringify({ screen_code: code })
             });
             const data = await res.json();
-            history = data.history || [];
-            nxCache.set('history', history);
-        }
 
-        if(!history || history.length === 0) {
-            list.innerHTML = `<div class="empty-state"><i class="fas fa-box-open fa-3x" style="color:var(--border); margin-bottom:15px;"></i><h3 style="color:#fff;">لا يوجد حضور مسجل بعد</h3></div>`;
-            return;
+            if (data.status === 'success') {
+                currentSession = data.session;
+                const secret = data.screen_secret || '';
+                if (!secret) {
+                    errEl.textContent = 'خطأ: السيرفر لم يرجّع الـ secret';
+                    errEl.classList.add('has-error');
+                    return false;
+                }
+                currentSecret = secret;
+                isPaired = true;
+                startDisplay();
+                return true;
+            } else {
+                errEl.textContent = data.message || 'فشل الربط';
+                errEl.classList.add('has-error');
+                return false;
+            }
+        } catch (e) {
+            errEl.textContent = 'تعذر الاتصال بالسيرفر';
+            errEl.classList.add('has-error');
+            return false;
         }
-        list.innerHTML = history.map(h => `
-            <div class="comp-card">
-                <div class="comp-header">
-                    <span class="comp-sub">${h.subject_name}</span>
-                    <span class="badge-resolved"><i class="fas fa-check-circle"></i> حاضر</span>
-                </div>
-                <p style="color:#fff; font-size:14px; margin:5px 0;">${h.session_title} (${h.session_type === 'Lecture' ? 'محاضرة' : 'سكشن'})</p>
-                <span style="font-size:12px; color:var(--text-muted); font-family:monospace;"><i class="far fa-clock"></i> ${h.timestamp}</span>
-            </div>
-        `).join('');
-    } catch (e) {
-        list.innerHTML = `<div class="empty-state"><h3 style="color:#f87171;">تعذر تحميل السجل</h3></div>`;
     }
-}
 
-function closeHistoryModal() {
-    document.getElementById('history-modal').style.display = 'none';
-}
+    /* ============================================================
+       START DISPLAY (after pairing)
+       ============================================================ */
+    function startDisplay() {
+        stopTokenPolling();
+        stopPolling();
+        stopQrWatchdog();
+
+        document.getElementById('pair-screen').style.display = 'none';
+        document.getElementById('display-screen').style.display = 'flex';
+
+        if (currentSession) {
+            document.getElementById('subject-name').textContent = currentSession.subject_name || '';
+            document.getElementById('session-title').textContent = currentSession.title || '';
+        }
+
+        const canvas = document.getElementById('qr-canvas');
+        canvas.innerHTML = '';
+        qrGenerator = new QRCode(canvas, {
+            width: 320,
+            height: 320,
+            correctLevel: QRCode.CorrectLevel.H
+        });
+        lastQrCode = null;
+
+        setStatus(true);
+        startPolling();
+    }
+
+    /* ============================================================
+       FETCH LIVE CODE (after pairing)
+       ============================================================ */
+    async function fetchScreenCode() {
+        if (!currentSecret) return;
+
+        try {
+            const res = await fetch('/api/screen-live-code?secret=' + encodeURIComponent(currentSecret));
+            const data = await res.json();
+
+            if (data.status === 'closed') {
+                showPairScreen('انتهت الجلسة — اطلب كود جديد من الأدمن');
+                return;
+            }
+
+            if (data.status !== 'success') {
+                setStatus(false);
+                return;
+            }
+
+            setStatus(true);
+
+            if (data.session_info) {
+                const subEl = document.getElementById('subject-name');
+                const titleEl = document.getElementById('session-title');
+                const newSub = data.session_info.subject_name || '';
+                const newTitle = data.session_info.title || '';
+                if (subEl.textContent !== newSub) subEl.textContent = newSub;
+                if (titleEl.textContent !== newTitle) titleEl.textContent = newTitle;
+            }
+
+            const manualCode = data.manual_code || '------';
+            const manualEl = document.getElementById('manual-code');
+            if (manualEl.textContent !== manualCode) manualEl.textContent = manualCode;
+
+            const interval = data.manual_interval || 10;
+            const remaining = data.manual_remaining || 0;
+            const barEl = document.getElementById('timer-bar');
+            if (barEl) barEl.style.width = ((remaining / interval) * 100) + '%';
+
+            const qrCode = data.qr_code;
+            if (qrCode && qrCode !== lastQrCode && qrGenerator) {
+                lastQrCode = qrCode;
+                try {
+                    qrGenerator.clear();
+                    qrGenerator.makeCode(qrCode);
+                } catch (e) {}
+            }
+        } catch (e) {
+            setStatus(false);
+        }
+    }
+
+    /* ============================================================
+       STATUS BADGE
+       ============================================================ */
+    function setStatus(isOpen) {
+        const badge = document.getElementById('status-badge');
+        if (!badge) return;
+        if (isOpen) {
+            badge.classList.remove('closed');
+            badge.innerHTML = '<i class="fas fa-circle"></i> متصل بجلسة مباشرة';
+        } else {
+            badge.classList.add('closed');
+            badge.innerHTML = '<i class="fas fa-circle"></i> الجلسة مغلقة';
+        }
+    }
+
+    /* ============================================================
+       TOGGLE CODE SECTION
+       ============================================================ */
+    function toggleCodeSection() {
+        codeVisible = !codeVisible;
+        const sec = document.getElementById('code-section');
+        const btn = document.getElementById('toggle-code-btn');
+        sec.style.display = codeVisible ? 'flex' : 'none';
+        if (btn) {
+            const span = btn.querySelector('span');
+            if (span) span.textContent = codeVisible ? 'إخفاء الكود' : 'إظهار الكود';
+            const icon = btn.querySelector('i');
+            if (icon) icon.className = codeVisible ? 'fas fa-eye-slash' : 'fas fa-keyboard';
+        }
+    }
+
+    /* ============================================================
+       UNPAIR SCREEN
+       ============================================================ */
+    function unpairScreen() {
+        Swal.fire({
+            background: '#1a1f2c', color: '#fff',
+            icon: 'warning',
+            title: 'إلغاء ربط الشاشة؟',
+            html: '<p style="color:#8b93a7; font-size:13px;">سيتوقف عرض الكود حتى تدخل كود جديد</p>',
+            showCancelButton: true,
+            confirmButtonText: 'إلغاء الربط',
+            cancelButtonText: 'تراجع',
+            confirmButtonColor: '#EF4444',
+            cancelButtonColor: '#374151',
+            reverseButtons: true
+        }).then(r => {
+            if (!r.isConfirmed) return;
+            showPairScreen('');
+        });
+    }
+
+    /* ============================================================
+       INIT
+       ============================================================ */
+    document.addEventListener('DOMContentLoaded', () => {
+        const pairBtn = document.getElementById('pair-btn');
+        if (pairBtn) {
+            pairBtn.addEventListener('click', async () => {
+                const code = document.getElementById('pair-input').value.trim();
+                await pairScreen(code);
+            });
+        }
+
+        const pairInput = document.getElementById('pair-input');
+        if (pairInput) {
+            pairInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') document.getElementById('pair-btn').click();
+            });
+        }
+
+        const toggleBtn = document.getElementById('toggle-code-btn');
+        if (toggleBtn) toggleBtn.addEventListener('click', toggleCodeSection);
+
+        showPairScreen('');
+    });
+
+    /* ============================================================
+       LIFECYCLE HANDLERS
+       ============================================================ */
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            stopPolling();
+            stopTokenPolling();
+            stopQrWatchdog();
+        } else {
+            if (isPaired) {
+                startPolling();
+            } else if (currentToken) {
+                startTokenPolling();
+                startQrWatchdog();
+                // تأكد من وجود الـ QR عند الرجوع
+                const container = document.getElementById('pair-qr-canvas');
+                if (container && container.children.length === 0) {
+                    drawPairQR(currentToken);
+                }
+            }
+        }
+    });
+
+    window.addEventListener('pagehide', () => {
+        stopPolling();
+        stopTokenPolling();
+        stopQrWatchdog();
+    });
+    window.addEventListener('beforeunload', () => {
+        stopPolling();
+        stopTokenPolling();
+        stopQrWatchdog();
+    });
+    window.addEventListener('unload', () => {
+        stopPolling();
+        stopTokenPolling();
+        stopQrWatchdog();
+    });
+</script>
+</body>
+</html>

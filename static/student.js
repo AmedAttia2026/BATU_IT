@@ -67,6 +67,48 @@ function getDeviceToken() {
 }
 
 /* =========================================================
+   🛡️ فحص كود ربط الشاشة (SCR)
+   ========================================================= */
+function isPairingCode(code) {
+    if (typeof code !== 'string') return false;
+    return code.trim().toUpperCase().startsWith('SCR');
+}
+
+function showPairingCodeWarning() {
+    return Swal.fire({
+        ...swalDark,
+        icon: 'info',
+        title: '🖥️ هذا كود ربط الشاشة',
+        html: `
+            <div style="text-align:center; line-height:1.9;">
+                <p style="color:#fff; margin-bottom:12px;">
+                    الكود اللي قرأته/كتبته <b style="color:#f87171;">ليس كود حضور</b>.
+                </p>
+
+                <div style="padding:14px; background:rgba(6,182,212,0.08); border:1px solid rgba(6,182,212,0.3); border-radius:14px; margin-bottom:14px;">
+                    <p style="color:#22d3ee; font-weight:900; font-size:14px; margin:0;">
+                        <i class="fas fa-user-tie"></i>
+                        كود ربط الشاشة يُستخدم بواسطة
+                    </p>
+                    <p style="color:#FFB300; font-weight:900; font-size:15px; margin:6px 0 0;">
+                        المعيد / دكتور المادة فقط
+                    </p>
+                </div>
+
+                <div style="padding:12px; background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.25); border-radius:12px;">
+                    <p style="color:#8b93a7; font-size:12.5px; margin:0;">
+                        <i class="fas fa-lightbulb" style="color:#10B981;"></i>
+                        يرجى مسح <b style="color:#10B981;">كود الحضور</b> (6 خانات) الظاهر على شاشة العرض
+                    </p>
+                </div>
+            </div>
+        `,
+        confirmButtonText: '<i class="fas fa-check"></i> فهمت',
+        confirmButtonColor: '#FFB300'
+    });
+}
+
+/* =========================================================
    ✅ التحكم بزر الدخول
    ========================================================= */
 function showLoginBtn() {
@@ -762,10 +804,23 @@ async function toggleQrReader() {
 
         const onScanSuccess = (decodedText) => {
             if (qrAutoSubmitLocked) return;
+
+            const raw = (decodedText || '').trim();
+
+            /* ✅ فحص كود ربط الشاشة فور المسح */
+            if (raw.toUpperCase().startsWith('SCR')) {
+                qrAutoSubmitLocked = true;
+                stopQrReader();
+                showPairingCodeWarning().then(() => {
+                    qrAutoSubmitLocked = false;
+                });
+                return;
+            }
+
             qrAutoSubmitLocked = true;
 
             const input = document.getElementById('totp-input');
-            const cleanCode = (decodedText || '').trim().substring(0, 6).toUpperCase();
+            const cleanCode = raw.substring(0, 6).toUpperCase();
             if (input) input.value = cleanCode;
 
             stopQrReader();
@@ -846,8 +901,19 @@ async function toggleQrReader() {
    ✅ إرسال الحضور
    ========================================================= */
 async function submitAttendanceFinal(fromQr = false) {
-    const code = document.getElementById('totp-input').value.trim();
-    if(code.length !== 6) return Swal.fire({...swalDark, icon:'warning', text:'الرمز السري يتكون من 6 خانات!'});
+    const rawCode = document.getElementById('totp-input').value.trim();
+
+    /* ✅ فحص كود ربط الشاشة أولاً */
+    if (isPairingCode(rawCode)) {
+        document.getElementById('totp-input').value = '';
+        qrAutoSubmitLocked = false;
+        return showPairingCodeWarning();
+    }
+
+    const code = rawCode;
+    if (code.length !== 6) {
+        return Swal.fire({...swalDark, icon:'warning', text:'الرمز السري يتكون من 6 خانات!'});
+    }
 
     const owner = getDeviceOwner();
     if (owner.id && owner.id !== currentStudent.student_id) {

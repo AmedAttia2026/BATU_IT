@@ -1,0 +1,1114 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+
+    <title>BATU · Display Screen</title>
+
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3CradialGradient id='bg' cx='30%25' cy='25%25'%3E%3Cstop offset='0%25' stop-color='%231a2136'/%3E%3Cstop offset='100%25' stop-color='%230a0e18'/%3E%3C/radialGradient%3E%3ClinearGradient id='ring' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23FFD54F'/%3E%3Cstop offset='50%25' stop-color='%23FFB300'/%3E%3Cstop offset='100%25' stop-color='%23FF8F00'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='50' cy='50' r='47' fill='url(%23bg)' stroke='url(%23ring)' stroke-width='4'/%3E%3Ctext x='50' y='59' text-anchor='middle' font-family='Arial Black,Arial,sans-serif' font-weight='900' font-size='24' fill='%23FFB300' letter-spacing='0.5'%3EBATU%3C/text%3E%3C/svg%3E">
+
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; font-family:'Cairo', sans-serif; }
+
+        html, body {
+            background: radial-gradient(circle at center, #0d1220 0%, #05070f 100%);
+            color: #fff;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .nx-aurora { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+        .nx-aurora .blob { position: absolute; border-radius: 50%; filter: blur(130px); opacity: 0.5; will-change: transform; }
+        .nx-aurora .b1 { width: 560px; height: 560px; background: radial-gradient(circle, #FFB300, transparent 70%); top: -200px; right: -140px; animation: nxFloat1 24s ease-in-out infinite; }
+        .nx-aurora .b2 { width: 480px; height: 480px; background: radial-gradient(circle, #7C3AED, transparent 70%); bottom: -180px; left: -140px; animation: nxFloat2 28s ease-in-out infinite; }
+        .nx-aurora .b3 { width: 400px; height: 400px; background: radial-gradient(circle, #06B6D4, transparent 70%); top: 45%; left: 45%; animation: nxFloat3 32s ease-in-out infinite; opacity: 0.28; }
+        @keyframes nxFloat1 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-80px, 70px) scale(1.15); } }
+        @keyframes nxFloat2 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(70px, -60px) scale(1.12); } }
+        @keyframes nxFloat3 { 0%,100% { transform: translate(-50%,-50%) scale(1); } 50% { transform: translate(-55%,-45%) scale(1.18); } }
+
+        .nx-particles { position: fixed; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+        .nx-particle {
+            position: absolute; width: 3px; height: 3px; background: #FFB300; border-radius: 50%;
+            box-shadow: 0 0 10px #FFB300, 0 0 20px rgba(255,179,0,0.5);
+            opacity: 0; animation: nxRise linear infinite;
+        }
+        @keyframes nxRise {
+            0% { transform: translateY(100vh) scale(0.6); opacity: 0; }
+            10% { opacity: 0.9; }
+            90% { opacity: 0.9; }
+            100% { transform: translateY(-20vh) scale(1); opacity: 0; }
+        }
+
+        @keyframes nxSpin { to { transform: rotate(360deg); } }
+
+        #pair-screen {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 30px;
+            text-align: center;
+            overflow-y: auto;
+        }
+
+        .nx-logo-wrap {
+            position: relative;
+            width: 130px;
+            height: 130px;
+            margin: 0 auto 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .nx-logo-ring {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            background: conic-gradient(from 0deg, transparent 0deg, #FFB300 120deg, #7C3AED 240deg, transparent 360deg);
+            animation: nxSpin 6s linear infinite;
+            filter: blur(0.5px);
+        }
+        .nx-logo-ring::after {
+            content: "";
+            position: absolute;
+            inset: 5px;
+            border-radius: 50%;
+            background: #0b0f1a;
+        }
+        .nx-logo-core {
+            position: relative;
+            z-index: 2;
+            width: 110px; height: 110px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            background: radial-gradient(circle at 30% 25%, #1a2136, #0a0e18);
+            border: 1px solid rgba(255,179,0,0.35);
+            box-shadow: 0 0 60px rgba(255,179,0,0.35), inset 0 0 30px rgba(255,179,0,0.18);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 24px;
+            font-weight: 900;
+            color: #FFB300;
+            letter-spacing: 2px;
+        }
+
+        .nx-hero {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0;
+            margin-bottom: 26px;
+            width: 100%;
+            max-width: 520px;
+            flex-shrink: 0;
+        }
+
+        .nx-hero-icon {
+            position: relative;
+            width: 74px;
+            height: 74px;
+            border-radius: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(145deg, #FFD54F 0%, #FFB300 45%, #FF8F00 100%);
+            box-shadow:
+                0 20px 45px rgba(255,179,0,0.4),
+                0 10px 22px rgba(255,179,0,0.28),
+                inset 0 3px 0 rgba(255,255,255,0.55),
+                inset 0 -5px 12px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+            animation: nxHeroFloat 4s ease-in-out infinite;
+        }
+        @keyframes nxHeroFloat {
+            0%,100% { transform: translateY(0) rotate(0); }
+            50%     { transform: translateY(-6px) rotate(-2deg); }
+        }
+
+        .nx-hero-icon::before,
+        .nx-hero-icon::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: 22px;
+            border: 2px solid rgba(255,179,0,0.6);
+            pointer-events: none;
+            animation: nxHeroRingOut 3s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+        }
+        .nx-hero-icon::after { animation-delay: 1.5s; }
+        @keyframes nxHeroRingOut {
+            0%   { transform: scale(1); opacity: 0.9; }
+            100% { transform: scale(1.7); opacity: 0; }
+        }
+
+        .nx-hero-icon i {
+            font-size: 32px;
+            color: #0a0e17;
+            filter: drop-shadow(0 3px 4px rgba(0,0,0,0.35));
+            animation: nxHeroIconScale 3s ease-in-out infinite;
+        }
+        @keyframes nxHeroIconScale {
+            0%,100% { transform: scale(1); }
+            50%     { transform: scale(1.08); }
+        }
+
+        .nx-hero-divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            opacity: 0.85;
+        }
+        .nx-hero-divider .line {
+            width: 50px;
+            height: 1.5px;
+            background: linear-gradient(90deg, transparent, #FFB300);
+            border-radius: 2px;
+        }
+        .nx-hero-divider .line:last-child {
+            background: linear-gradient(90deg, #FFB300, transparent);
+        }
+        .nx-hero-divider .diamond {
+            width: 8px;
+            height: 8px;
+            background: #FFB300;
+            transform: rotate(45deg);
+            border-radius: 1px;
+            box-shadow: 0 0 14px #FFB300, 0 0 28px rgba(255,179,0,0.6);
+            animation: nxDiamondPulse 2s ease-in-out infinite;
+        }
+        @keyframes nxDiamondPulse {
+            0%,100% { transform: rotate(45deg) scale(1); opacity: 1; }
+            50%     { transform: rotate(45deg) scale(1.25); opacity: 0.85; }
+        }
+
+        .nx-pair-qr-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            width: 100%;
+            max-width: 460px;
+            flex-shrink: 0;
+        }
+
+        .nx-qr-frame {
+            position: relative;
+            background: #fff;
+            padding: 18px;
+            border-radius: 24px;
+            box-shadow:
+                0 25px 60px rgba(0,0,0,0.55),
+                0 0 90px rgba(255,179,0,0.35),
+                inset 0 0 0 1px rgba(255,179,0,0.2);
+            animation: nxQrFloat 4s ease-in-out infinite;
+        }
+        @keyframes nxQrFloat {
+            0%,100% { transform: translateY(0); }
+            50%     { transform: translateY(-4px); }
+        }
+        .nx-qr-frame::before {
+            content: "";
+            position: absolute;
+            inset: -3px;
+            border-radius: 26px;
+            background: linear-gradient(135deg, #FFB300, #7C3AED, #06B6D4, #FFB300);
+            background-size: 300% 300%;
+            z-index: -1;
+            animation: borderFlow 6s linear infinite;
+            filter: blur(0.5px);
+        }
+        @keyframes borderFlow {
+            0%   { background-position: 0% 50%; }
+            100% { background-position: 300% 50%; }
+        }
+
+        #pair-qr-canvas img,
+        #pair-qr-canvas canvas {
+            display: block;
+            width: 280px !important;
+            height: 280px !important;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        .nx-qr-corner {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            border: 3px solid #FFB300;
+            border-radius: 4px;
+            pointer-events: none;
+            box-shadow: 0 0 12px rgba(255,179,0,0.8);
+        }
+        .nx-qr-tl { top: 6px; left: 6px; border-right: none; border-bottom: none; border-radius: 12px 4px 4px 4px; }
+        .nx-qr-tr { top: 6px; right: 6px; border-left: none; border-bottom: none; border-radius: 4px 12px 4px 4px; }
+        .nx-qr-bl { bottom: 6px; left: 6px; border-right: none; border-top: none; border-radius: 4px 4px 4px 12px; }
+        .nx-qr-br { bottom: 6px; right: 6px; border-left: none; border-top: none; border-radius: 4px 4px 12px 4px; }
+
+        .nx-or-divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            max-width: 280px;
+            opacity: 0.6;
+        }
+        .nx-or-divider span {
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+        }
+        .nx-or-divider b {
+            color: #8b93a7;
+            font-size: 12px;
+            font-weight: 800;
+            font-family: 'Cairo', sans-serif;
+        }
+
+        .nx-manual-toggle {
+            background: transparent;
+            border: 1px dashed rgba(255,179,0,0.4);
+            color: #FFB300;
+            padding: 10px 22px;
+            border-radius: 12px;
+            font-family: 'Cairo', sans-serif;
+            font-size: 13px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .nx-manual-toggle:hover {
+            background: rgba(255,179,0,0.1);
+            border-color: #FFB300;
+            transform: translateY(-1px);
+        }
+
+        #pair-input {
+            width: 100%;
+            padding: 18px;
+            font-size: 30px;
+            font-family: 'Plus Jakarta Sans', monospace;
+            letter-spacing: 14px;
+            text-align: center;
+            background: rgba(0,0,0,0.55);
+            border: 2px solid rgba(255,179,0,0.4);
+            border-radius: 16px;
+            color: #FFB300;
+            outline: none;
+            margin-bottom: 14px;
+            direction: ltr;
+            transition: all .3s ease;
+            font-weight: 900;
+        }
+        #pair-input::placeholder { color: rgba(255,179,0,0.22); letter-spacing: 14px; }
+        #pair-input:focus {
+            border-color: #FFB300;
+            box-shadow: 0 0 50px rgba(255,179,0,0.4);
+            transform: translateY(-2px);
+        }
+
+        #pair-btn {
+            width: 100%;
+            padding: 16px;
+            font-size: 15px;
+            font-family: 'Cairo', sans-serif;
+            font-weight: 900;
+            background: linear-gradient(135deg, #FFB300, #FFD54F);
+            color: #0a0e17;
+            border: none;
+            border-radius: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 14px 34px rgba(255,179,0,0.35);
+            letter-spacing: 0.5px;
+            position: relative;
+            overflow: hidden;
+        }
+        #pair-btn::after {
+            content: "";
+            position: absolute;
+            top: 0; left: -60%;
+            width: 60%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent);
+            transform: skewX(-25deg);
+            transition: left .75s ease;
+        }
+        #pair-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 44px rgba(255,179,0,0.5);
+            filter: brightness(1.08);
+        }
+        #pair-btn:hover::after { left: 130%; }
+
+        #pair-error {
+            color: #f87171; font-size: 13px; font-weight: 700;
+            margin-top: 12px; min-height: 20px;
+            padding: 8px 16px;
+            border-radius: 12px;
+            background: rgba(239,68,68,0);
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+        #pair-error.has-error {
+            background: rgba(239,68,68,0.1);
+            border: 1px solid rgba(239,68,68,0.3);
+        }
+
+        #display-screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 30px 20px 200px 20px;
+            gap: 18px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .info-wrap { text-align: center; margin-bottom: 4px; }
+        #subject-name {
+            font-size: 32px; font-weight: 900;
+            background: linear-gradient(120deg, #fff 30%, #ffd76a 100%);
+            -webkit-background-clip: text; background-clip: text; color: transparent;
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+            line-height: 1.3;
+        }
+        #session-title {
+            color: #FFB300; font-size: 18px; font-weight: 800;
+            letter-spacing: 0.3px;
+            padding: 6px 18px;
+            display: inline-block;
+            background: rgba(255,179,0,0.08);
+            border: 1px solid rgba(255,179,0,0.25);
+            border-radius: 12px;
+        }
+
+        #qr-wrapper {
+            background: #fff;
+            padding: 20px;
+            border-radius: 26px;
+            box-shadow: 0 0 90px rgba(255,179,0,0.35), 0 25px 60px rgba(0,0,0,0.55);
+            position: relative;
+        }
+        #qr-wrapper::before {
+            content: "";
+            position: absolute;
+            inset: -3px;
+            border-radius: 28px;
+            background: linear-gradient(135deg, #FFB300, #7C3AED, #06B6D4, #FFB300);
+            background-size: 300% 300%;
+            z-index: -1;
+            animation: borderFlow 6s linear infinite;
+        }
+
+        #qr-canvas img, #qr-canvas canvas {
+            display: block;
+            width: 320px !important;
+            height: 320px !important;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        #code-section {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            margin-top: 6px;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        #code-label {
+            color: #8b93a7; font-size: 13px; font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+        #manual-code {
+            font-family: 'Plus Jakarta Sans', monospace;
+            font-size: 72px;
+            font-weight: 900;
+            letter-spacing: 20px;
+            color: #FFB300;
+            text-shadow: 0 0 44px rgba(255,179,0,0.7), 0 0 90px rgba(255,179,0,0.35);
+            direction: ltr;
+            padding-right: 20px;
+            line-height: 1;
+            padding-top: 6px;
+        }
+        #timer-track {
+            width: 360px; height: 9px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 5px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        #timer-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #FFB300, #FFD54F);
+            width: 100%;
+            transition: width 0.2s linear;
+            box-shadow: 0 0 14px #FFB300;
+            border-radius: 5px;
+        }
+
+        #status-badge {
+            position: fixed;
+            top: 22px;
+            right: 22px;
+            padding: 11px 20px;
+            border-radius: 14px;
+            font-size: 13px;
+            font-weight: 800;
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            background: rgba(16,185,129,0.12);
+            border: 1px solid rgba(16,185,129,0.4);
+            color: #34d399;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            font-family: 'Cairo', sans-serif;
+        }
+        #status-badge i { font-size: 8px; animation: blink 1.4s infinite; }
+        #status-badge.closed {
+            background: rgba(239,68,68,0.12);
+            border-color: rgba(239,68,68,0.4);
+            color: #f87171;
+        }
+        @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+        .bottom-actions {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            z-index: 100;
+        }
+        .disp-btn {
+            padding: 12px 22px;
+            border-radius: 16px;
+            background: rgba(255,179,0,0.12);
+            border: 1px solid rgba(255,179,0,0.45);
+            color: #FFB300;
+            font-family: 'Cairo', sans-serif;
+            font-weight: 800;
+            font-size: 14px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            transition: all .25s ease;
+            backdrop-filter: blur(10px);
+        }
+        .disp-btn:hover {
+            background: rgba(255,179,0,0.24);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 26px rgba(255,179,0,0.3);
+        }
+        .disp-btn.danger {
+            background: rgba(239,68,68,0.12);
+            border-color: rgba(239,68,68,0.45);
+            color: #f87171;
+        }
+        .disp-btn.danger:hover {
+            background: rgba(239,68,68,0.24);
+            box-shadow: 0 10px 26px rgba(239,68,68,0.3);
+        }
+        .disp-btn i { font-size: 14px; }
+
+        @media (max-width: 640px) {
+            #qr-canvas img, #qr-canvas canvas { width: 240px !important; height: 240px !important; }
+            #manual-code { font-size: 54px; letter-spacing: 14px; }
+            #timer-track { width: 250px; }
+            #subject-name { font-size: 22px; }
+            #session-title { font-size: 14px; }
+            .bottom-actions { bottom: 14px; gap: 8px; }
+            .disp-btn { padding: 10px 14px; font-size: 12px; }
+            .disp-btn i { font-size: 12px; }
+            #pair-input { font-size: 24px; letter-spacing: 10px; padding: 14px; }
+            #pair-input::placeholder { letter-spacing: 10px; }
+            #pair-btn { padding: 14px; font-size: 14px; }
+            .nx-logo-wrap { width: 100px; height: 100px; margin-bottom: 20px; }
+            .nx-logo-core { width: 86px; height: 86px; font-size: 18px; }
+            #display-screen { padding: 20px 15px 170px 15px; gap: 14px; }
+
+            .nx-hero { margin-bottom: 20px; }
+            .nx-hero-icon { width: 62px; height: 62px; border-radius: 18px; margin-bottom: 14px; }
+            .nx-hero-icon i { font-size: 26px; }
+            .nx-hero-divider .line { width: 42px; }
+
+            #pair-qr-canvas img, #pair-qr-canvas canvas {
+                width: 210px !important;
+                height: 210px !important;
+            }
+            .nx-qr-frame { padding: 14px; border-radius: 22px; }
+            .nx-qr-corner { width: 20px; height: 20px; border-width: 2.5px; }
+        }
+
+        @media (max-width: 380px) {
+            #qr-canvas img, #qr-canvas canvas { width: 200px !important; height: 200px !important; }
+            #manual-code { font-size: 42px; letter-spacing: 10px; }
+            #timer-track { width: 220px; }
+            #qr-wrapper { padding: 14px; }
+            #subject-name { font-size: 18px; }
+            #display-screen { padding: 16px 12px 160px 12px; gap: 12px; }
+            .nx-hero-icon { width: 54px; height: 54px; border-radius: 16px; }
+            .nx-hero-icon i { font-size: 22px; }
+        }
+
+        @media (max-height: 700px) and (min-width: 641px) {
+            .nx-logo-wrap { width: 100px; height: 100px; margin-bottom: 20px; }
+            .nx-logo-core { width: 86px; height: 86px; font-size: 20px; }
+            .nx-hero-icon { width: 60px; height: 60px; }
+            .nx-hero-icon i { font-size: 26px; }
+            #pair-qr-canvas img, #pair-qr-canvas canvas {
+                width: 230px !important;
+                height: 230px !important;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="nx-aurora" aria-hidden="true">
+        <div class="blob b1"></div>
+        <div class="blob b2"></div>
+        <div class="blob b3"></div>
+    </div>
+
+    <div class="nx-particles" id="nx-particles" aria-hidden="true"></div>
+
+    <div id="pair-screen">
+        <div class="nx-logo-wrap">
+            <div class="nx-logo-ring"></div>
+            <div class="nx-logo-core">BATU</div>
+        </div>
+
+        <div class="nx-hero">
+            <div class="nx-hero-icon">
+                <i class="fas fa-desktop"></i>
+            </div>
+
+            <div class="nx-hero-divider">
+                <span class="line"></span>
+                <span class="diamond"></span>
+                <span class="line"></span>
+            </div>
+        </div>
+
+        <div class="nx-pair-qr-section">
+            <div class="nx-qr-frame">
+                <div id="pair-qr-canvas"></div>
+                <div class="nx-qr-corner nx-qr-tl"></div>
+                <div class="nx-qr-corner nx-qr-tr"></div>
+                <div class="nx-qr-corner nx-qr-bl"></div>
+                <div class="nx-qr-corner nx-qr-br"></div>
+            </div>
+
+            <div class="nx-or-divider">
+                <span></span>
+                <b>أو</b>
+                <span></span>
+            </div>
+
+            <button type="button" id="show-manual-btn" class="nx-manual-toggle" onclick="toggleManualEntry()">
+                <i class="fas fa-keyboard"></i> إدخال الكود يدوياً
+            </button>
+
+            <div id="manual-entry-box" style="display:none; width:100%; margin-top:14px;">
+                <input type="text" id="pair-input" maxlength="8" inputmode="numeric"
+                       placeholder="00000000" autocomplete="off"
+                       oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+                <button id="pair-btn">ربط الشاشة</button>
+                <div id="pair-error"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="display-screen">
+        <div id="status-badge"><i class="fas fa-circle"></i> متصل بجلسة مباشرة</div>
+
+        <div class="info-wrap">
+            <div id="subject-name">...</div>
+            <div id="session-title">...</div>
+        </div>
+
+        <div id="qr-wrapper">
+            <div id="qr-canvas"></div>
+        </div>
+
+        <div id="code-section">
+            <div id="code-label">أو اكتب الرمز يدوياً (6 خانات)</div>
+            <div id="manual-code">------</div>
+            <div id="timer-track"><div id="timer-bar"></div></div>
+        </div>
+
+        <div class="bottom-actions">
+            <button class="disp-btn" id="toggle-code-btn">
+                <i class="fas fa-keyboard"></i> <span>إظهار الكود</span>
+            </button>
+            <button class="disp-btn danger" onclick="unpairScreen()">
+                <i class="fas fa-exchange-alt"></i> <span>تغيير الجلسة</span>
+            </button>
+        </div>
+    </div>
+
+<script>
+    /* ============================================================
+       🖥️ Display Screen Logic — v3 (STATIC PAIRING QR)
+       ============================================================
+       ✅ QR الربط ثابت — مفيش تغيير تلقائي
+       ✅ بيفضل معروض لحد ما التعيد يمسحه
+       ✅ وقتها بس الشاشة تروح لـ QR الحضور
+       ============================================================ */
+
+    (function () {
+        const container = document.getElementById('nx-particles');
+        if (!container) return;
+        const count = window.innerWidth < 768 ? 14 : 26;
+        for (let i = 0; i < count; i++) {
+            const p = document.createElement('div');
+            p.className = 'nx-particle';
+            p.style.left = Math.random() * 100 + '%';
+            p.style.animationDuration = (10 + Math.random() * 14) + 's';
+            p.style.animationDelay = (Math.random() * 14) + 's';
+            const s = 1.5 + Math.random() * 2.5;
+            p.style.width = s + 'px';
+            p.style.height = s + 'px';
+            if (Math.random() > 0.7) {
+                p.style.background = '#7C3AED';
+                p.style.boxShadow = '0 0 10px #7C3AED, 0 0 20px rgba(124,58,237,0.5)';
+            } else if (Math.random() > 0.5) {
+                p.style.background = '#06B6D4';
+                p.style.boxShadow = '0 0 10px #06B6D4, 0 0 20px rgba(6,182,212,0.5)';
+            }
+            container.appendChild(p);
+        }
+    })();
+
+    (function nukeOldStorage() {
+        try {
+            localStorage.removeItem('nx_screen_secret');
+            Object.keys(localStorage).forEach(k => {
+                if (k && (k.includes('screen') || k.includes('nx_screen'))) {
+                    localStorage.removeItem(k);
+                }
+            });
+        } catch (e) {}
+    })();
+
+    const _origFetch = window.fetch;
+    window.fetch = function(url, opts) {
+        opts = opts || {};
+        opts.cache = 'no-store';
+        if ((!opts.method || opts.method === 'GET') && typeof url === 'string') {
+            const sep = url.includes('?') ? '&' : '?';
+            url = url + sep + '_t=' + Date.now();
+        }
+        return _origFetch(url, opts);
+    };
+
+    let currentSession = null;
+    let currentSecret = null;
+    let qrGenerator = null;
+    let lastQrCode = null;
+    let pollInterval = null;
+    let codeVisible = false;
+    let isPaired = false;
+
+    /* Pairing state */
+    let currentToken = null;
+    let qrTokenGenerator = null;
+    let tokenPollInterval = null;
+    let manualModeVisible = false;
+
+    function stopPolling() {
+        if (pollInterval) {
+            clearInterval(pollInterval);
+            pollInterval = null;
+        }
+    }
+
+    function startPolling() {
+        stopPolling();
+        if (!isPaired || !currentSecret) return;
+        fetchScreenCode();
+        pollInterval = setInterval(fetchScreenCode, 1000);
+    }
+
+    /* ============================================================
+       🆕 Request Token — مرة واحدة بس
+       ============================================================ */
+    async function requestNewToken() {
+        try {
+            const res = await fetch('/api/screen-new-token', {
+                method: 'POST',
+                cache: 'no-store'
+            });
+            const data = await res.json();
+
+            if (data.status !== 'success' || !data.token) return;
+
+            currentToken = data.token;
+
+            const canvas = document.getElementById('pair-qr-canvas');
+            if (canvas) {
+                canvas.innerHTML = '';
+                if (!qrTokenGenerator) {
+                    qrTokenGenerator = new QRCode(canvas, {
+                        width: 280,
+                        height: 280,
+                        correctLevel: QRCode.CorrectLevel.H
+                    });
+                }
+                qrTokenGenerator.clear();
+                qrTokenGenerator.makeCode(currentToken);
+            }
+
+        } catch (e) {
+            console.debug('Token request failed:', e);
+        }
+    }
+
+    /* ============================================================
+       📡 Check Pairing — Static Poll
+       ============================================================ */
+    async function checkPairing() {
+        if (!currentToken) return;
+
+        try {
+            const res = await fetch(
+                '/api/screen-check-pair?token=' + encodeURIComponent(currentToken),
+                { cache: 'no-store' }
+            );
+            const data = await res.json();
+
+            if (data.status === 'paired') {
+                stopTokenPolling();
+
+                currentSecret = data.screen_secret;
+                currentSession = data.session_info || {};
+                isPaired = true;
+
+                // 🚀 روح فوراً على شاشة العرض
+                startDisplay();
+
+            } else if (data.status === 'expired') {
+                // التوكن انتهى من السيرفر → اطلب واحد جديد بصمت
+                requestNewToken();
+            }
+        } catch (e) {
+            // silent
+        }
+    }
+
+    function startTokenPolling() {
+        stopTokenPolling();
+        checkPairing();
+        tokenPollInterval = setInterval(checkPairing, 1500);
+    }
+
+    function stopTokenPolling() {
+        if (tokenPollInterval) {
+            clearInterval(tokenPollInterval);
+            tokenPollInterval = null;
+        }
+    }
+
+    function toggleManualEntry() {
+        manualModeVisible = !manualModeVisible;
+        const box = document.getElementById('manual-entry-box');
+        const btn = document.getElementById('show-manual-btn');
+
+        if (box) box.style.display = manualModeVisible ? 'block' : 'none';
+        if (btn) {
+            btn.innerHTML = manualModeVisible
+                ? '<i class="fas fa-times"></i> إلغاء الإدخال اليدوي'
+                : '<i class="fas fa-keyboard"></i> إدخال الكود يدوياً';
+        }
+
+        if (manualModeVisible) {
+            setTimeout(() => {
+                const input = document.getElementById('pair-input');
+                if (input) input.focus();
+            }, 100);
+        }
+    }
+
+    function showPairScreen(message) {
+        stopPolling();
+        stopTokenPolling();
+
+        isPaired = false;
+        currentSecret = null;
+        currentSession = null;
+        currentToken = null;
+        lastQrCode = null;
+        codeVisible = false;
+        manualModeVisible = false;
+
+        document.getElementById('display-screen').style.display = 'none';
+        document.getElementById('pair-screen').style.display = 'flex';
+
+        const box = document.getElementById('manual-entry-box');
+        const btn = document.getElementById('show-manual-btn');
+        if (box) box.style.display = 'none';
+        if (btn) btn.innerHTML = '<i class="fas fa-keyboard"></i> إدخال الكود يدوياً';
+
+        const inputEl = document.getElementById('pair-input');
+        if (inputEl) inputEl.value = '';
+
+        const errEl = document.getElementById('pair-error');
+        if (errEl) {
+            errEl.textContent = message || '';
+            errEl.classList.toggle('has-error', !!message);
+        }
+
+        qrTokenGenerator = null;
+        requestNewToken();
+        startTokenPolling();
+    }
+
+    async function pairScreen(code) {
+        const errEl = document.getElementById('pair-error');
+        errEl.textContent = '';
+        errEl.classList.remove('has-error');
+
+        if (!code || code.length !== 8 || !/^\d{8}$/.test(code)) {
+            errEl.textContent = 'الكود يجب أن يكون 8 أرقام بالضبط';
+            errEl.classList.add('has-error');
+            return false;
+        }
+
+        try {
+            const res = await fetch('/api/screen-pair', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                cache: 'no-store',
+                body: JSON.stringify({ screen_code: code })
+            });
+            const data = await res.json();
+
+            if (data.status === 'success') {
+                currentSession = data.session;
+                const secret = data.screen_secret || '';
+                if (!secret) {
+                    errEl.textContent = 'خطأ: السيرفر لم يرجّع الـ secret';
+                    errEl.classList.add('has-error');
+                    return false;
+                }
+                currentSecret = secret;
+                isPaired = true;
+                startDisplay();
+                return true;
+            } else {
+                errEl.textContent = data.message || 'فشل الربط';
+                errEl.classList.add('has-error');
+                return false;
+            }
+        } catch (e) {
+            errEl.textContent = 'تعذر الاتصال بالسيرفر';
+            errEl.classList.add('has-error');
+            return false;
+        }
+    }
+
+    function startDisplay() {
+        stopTokenPolling();
+        stopPolling();
+
+        document.getElementById('pair-screen').style.display = 'none';
+        document.getElementById('display-screen').style.display = 'flex';
+
+        if (currentSession) {
+            document.getElementById('subject-name').textContent = currentSession.subject_name || '';
+            document.getElementById('session-title').textContent = currentSession.title || '';
+        }
+
+        const canvas = document.getElementById('qr-canvas');
+        canvas.innerHTML = '';
+        qrGenerator = new QRCode(canvas, {
+            width: 320,
+            height: 320,
+            correctLevel: QRCode.CorrectLevel.H
+        });
+        lastQrCode = null;
+
+        setStatus(true);
+        startPolling();
+    }
+
+    async function fetchScreenCode() {
+        if (!currentSecret) return;
+
+        try {
+            const res = await fetch('/api/screen-live-code?secret=' + encodeURIComponent(currentSecret));
+            const data = await res.json();
+
+            if (data.status === 'closed') {
+                showPairScreen('انتهت الجلسة — اطلب كود جديد من الأدمن');
+                return;
+            }
+
+            if (data.status !== 'success') {
+                setStatus(false);
+                return;
+            }
+
+            setStatus(true);
+
+            if (data.session_info) {
+                const subEl = document.getElementById('subject-name');
+                const titleEl = document.getElementById('session-title');
+                const newSub = data.session_info.subject_name || '';
+                const newTitle = data.session_info.title || '';
+                if (subEl.textContent !== newSub) subEl.textContent = newSub;
+                if (titleEl.textContent !== newTitle) titleEl.textContent = newTitle;
+            }
+
+            const manualCode = data.manual_code || '------';
+            const manualEl = document.getElementById('manual-code');
+            if (manualEl.textContent !== manualCode) manualEl.textContent = manualCode;
+
+            const interval = data.manual_interval || 10;
+            const remaining = data.manual_remaining || 0;
+            const barEl = document.getElementById('timer-bar');
+            if (barEl) barEl.style.width = ((remaining / interval) * 100) + '%';
+
+            const qrCode = data.qr_code;
+            if (qrCode && qrCode !== lastQrCode && qrGenerator) {
+                lastQrCode = qrCode;
+                try {
+                    qrGenerator.clear();
+                    qrGenerator.makeCode(qrCode);
+                } catch (e) {}
+            }
+        } catch (e) {
+            setStatus(false);
+        }
+    }
+
+    function setStatus(isOpen) {
+        const badge = document.getElementById('status-badge');
+        if (!badge) return;
+        if (isOpen) {
+            badge.classList.remove('closed');
+            badge.innerHTML = '<i class="fas fa-circle"></i> متصل بجلسة مباشرة';
+        } else {
+            badge.classList.add('closed');
+            badge.innerHTML = '<i class="fas fa-circle"></i> الجلسة مغلقة';
+        }
+    }
+
+    function toggleCodeSection() {
+        codeVisible = !codeVisible;
+        const sec = document.getElementById('code-section');
+        const btn = document.getElementById('toggle-code-btn');
+        sec.style.display = codeVisible ? 'flex' : 'none';
+        if (btn) {
+            const span = btn.querySelector('span');
+            if (span) span.textContent = codeVisible ? 'إخفاء الكود' : 'إظهار الكود';
+            const icon = btn.querySelector('i');
+            if (icon) icon.className = codeVisible ? 'fas fa-eye-slash' : 'fas fa-keyboard';
+        }
+    }
+
+    function unpairScreen() {
+        Swal.fire({
+            background: '#1a1f2c', color: '#fff',
+            icon: 'warning',
+            title: 'إلغاء ربط الشاشة؟',
+            html: '<p style="color:#8b93a7; font-size:13px;">سيتوقف عرض الكود حتى تدخل كود جديد</p>',
+            showCancelButton: true,
+            confirmButtonText: 'إلغاء الربط',
+            cancelButtonText: 'تراجع',
+            confirmButtonColor: '#EF4444',
+            cancelButtonColor: '#374151',
+            reverseButtons: true
+        }).then(r => {
+            if (!r.isConfirmed) return;
+            showPairScreen('');
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const pairBtn = document.getElementById('pair-btn');
+        if (pairBtn) {
+            pairBtn.addEventListener('click', async () => {
+                const code = document.getElementById('pair-input').value.trim();
+                await pairScreen(code);
+            });
+        }
+
+        const pairInput = document.getElementById('pair-input');
+        if (pairInput) {
+            pairInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') document.getElementById('pair-btn').click();
+            });
+        }
+
+        const toggleBtn = document.getElementById('toggle-code-btn');
+        if (toggleBtn) toggleBtn.addEventListener('click', toggleCodeSection);
+
+        showPairScreen('');
+    });
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            stopPolling();
+            stopTokenPolling();
+        } else {
+            if (isPaired) {
+                startPolling();
+            } else if (currentToken) {
+                startTokenPolling();
+            }
+        }
+    });
+
+    window.addEventListener('pagehide', () => {
+        stopPolling();
+        stopTokenPolling();
+    });
+    window.addEventListener('beforeunload', () => {
+        stopPolling();
+        stopTokenPolling();
+    });
+    window.addEventListener('unload', () => {
+        stopPolling();
+        stopTokenPolling();
+    });
+</script>
+</body>
+</html>

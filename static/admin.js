@@ -269,7 +269,7 @@ function backToSubjects() {
 }
 
 /* =========================================================
-   ✅ عرض تفاصيل المادة — حسب الدور
+   ✅ عرض تفاصيل المادة
    ========================================================= */
 function renderSubjectDetails(subId) {
     const isTA = (currentAdminRole === 'ta');
@@ -406,6 +406,7 @@ function renderFilteredSessionsTable(subId) {
             <td>
                 <div style="display:flex; justify-content:center; gap:6px; flex-wrap:wrap;">
                     <button class="btn btn-gold" style="padding:6px 12px; font-size:12px;" onclick="event.stopPropagation(); startLiveBroadcast('${s.session_id}', '${s.title}', '${s.subject_name}')"><i class="fas fa-qrcode"></i> بث</button>
+                    <button class="btn" style="padding:6px 12px; font-size:12px; background:linear-gradient(135deg, #22d3ee, #06B6D4); color:#0a0e17; font-weight:900; box-shadow:0 4px 14px rgba(34,211,238,0.35);" onclick="event.stopPropagation(); openScreenCodeModal('${s.session_id}', '${s.title}', '${s.subject_name}')"><i class="fas fa-tv"></i> شاشة</button>
                     <button class="btn btn-outline" style="padding:6px 12px; font-size:12px;" onclick="event.stopPropagation(); openSessionAttendanceModal('${s.session_id}')"><i class="fas fa-users"></i> الكشف</button>
                     <button class="btn btn-red" style="padding:6px 10px;" onclick="event.stopPropagation(); deleteSession('${s.session_id}')"><i class="fas fa-trash"></i></button>
                 </div>
@@ -413,6 +414,332 @@ function renderFilteredSessionsTable(subId) {
         </tr>
         `;
     }).join('');
+}
+
+/* =========================================================
+   🖥️ نافذة ربط الشاشة — QR Flow (جديد)
+   ========================================================= */
+let _adminQrScanner = null;
+
+async function openScreenCodeModal(sessionId, title, subName) {
+    await Swal.fire({
+        ...swalDark,
+        title: '🖥️ ربط الشاشة',
+        width: 620,
+        html: `
+            <div style="text-align:center; padding: 4px 0;">
+                <p style="color:#8b93a7; font-size:13px; margin: 0 0 20px; line-height: 1.8;">
+                    افتح على شاشة العرض الرابط
+                    <b style="color:#22d3ee; font-family:monospace;">/dis</b>
+                    <br>ثم امسح الـ QR اللي ظاهر عليها بالموبايل
+                </p>
+
+                <button type="button" id="scan-qr-btn"
+                    onclick="startDisplayQrScan('${sessionId}')"
+                    style="
+                        width:100%;
+                        padding: 22px;
+                        font-size: 18px;
+                        font-family: 'Cairo', sans-serif;
+                        font-weight: 900;
+                        background: linear-gradient(135deg, #FFB300, #FFD54F);
+                        color: #0a0e17;
+                        border: none;
+                        border-radius: 18px;
+                        cursor: pointer;
+                        box-shadow: 0 14px 34px rgba(255,179,0,0.35);
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        gap: 12px;
+                    ">
+                    <i class="fas fa-camera"></i>
+                    امسح QR الشاشة
+                </button>
+
+                <div id="admin-qr-reader" style="
+                    display:none;
+                    margin-top: 16px;
+                    border-radius: 16px;
+                    overflow: hidden;
+                    border: 2px solid rgba(255,179,0,0.4);
+                "></div>
+
+                <div id="scan-status" style="
+                    margin-top: 14px;
+                    font-size: 13px;
+                    color: #8b93a7;
+                    font-weight: 700;
+                    min-height: 24px;
+                "></div>
+
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.08);">
+                    <p style="color:#6b7385; font-size:12px; margin: 0 0 8px;">
+                        أو استخدم الكود اليدوي (احتياطي)
+                    </p>
+                    <button type="button" onclick="showManualCodeFallback('${sessionId}')"
+                        style="
+                            background: transparent;
+                            border: 1px solid rgba(255,179,0,0.35);
+                            color: #FFB300;
+                            padding: 8px 16px;
+                            border-radius: 10px;
+                            font-size: 12px;
+                            font-weight: 800;
+                            font-family: 'Cairo', sans-serif;
+                            cursor: pointer;
+                        ">
+                        <i class="fas fa-keyboard"></i> إظهار الكود اليدوي
+                    </button>
+                </div>
+            </div>
+        `,
+        showConfirmButton: false,
+        showCancelButton: true,
+        cancelButtonText: '<i class="fas fa-times"></i> إغلاق',
+        cancelButtonColor: '#374151',
+        willClose: () => {
+            stopAdminQrScan();
+        }
+    });
+}
+
+/* =========================================================
+   📷 QR Scanner للأدمن
+   ========================================================= */
+async function startDisplayQrScan(sessionId) {
+    const statusEl = document.getElementById('scan-status');
+    const readerEl = document.getElementById('admin-qr-reader');
+    const btn = document.getElementById('scan-qr-btn');
+
+    if (!readerEl) return;
+
+    if (btn) btn.style.display = 'none';
+    readerEl.style.display = 'block';
+    readerEl.innerHTML = `
+        <div style="text-align:center; padding:20px; color:#FFB300;">
+            <i class="fas fa-spinner fa-spin fa-2x"></i><br><br>
+            جاري تشغيل الكاميرا...
+        </div>
+    `;
+    if (statusEl) statusEl.textContent = '';
+
+    await new Promise(r => setTimeout(r, 150));
+
+    // تأكد إن html5-qrcode محمّل
+    if (typeof Html5Qrcode === 'undefined') {
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/html5-qrcode';
+        document.head.appendChild(script);
+        await new Promise(r => script.onload = r);
+    }
+
+    try {
+        readerEl.innerHTML = '';
+
+        if (_adminQrScanner) {
+            try { await _adminQrScanner.stop(); } catch(e) {}
+            try { _adminQrScanner.clear(); } catch(e) {}
+            _adminQrScanner = null;
+        }
+
+        _adminQrScanner = new Html5Qrcode("admin-qr-reader", { verbose: false });
+
+        const config = {
+            fps: 10,
+            qrbox: (w, h) => {
+                const size = Math.floor(Math.min(w, h) * 0.7);
+                return { width: size, height: size };
+            },
+            aspectRatio: 1.0
+        };
+
+        const onSuccess = async (decodedText) => {
+            const token = (decodedText || '').trim();
+
+            if (!token.startsWith('SCR_')) {
+                if (statusEl) {
+                    statusEl.style.color = '#f87171';
+                    statusEl.textContent = '❌ مش QR صحيح من شاشة العرض';
+                }
+                return;
+            }
+
+            await stopAdminQrScan();
+
+            if (statusEl) {
+                statusEl.style.color = '#22d3ee';
+                statusEl.textContent = '✅ تم قراءة QR — جاري الربط...';
+            }
+
+            try {
+                const res = await fetch('/api/screen-pair-token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        token: token,
+                        session_id: sessionId
+                    })
+                });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    if (statusEl) {
+                        statusEl.style.color = '#10B981';
+                        statusEl.textContent = '🎉 تم ربط الشاشة بالجلسة بنجاح!';
+                    }
+                    setTimeout(() => {
+                        Swal.close();
+                    }, 1200);
+                } else {
+                    if (statusEl) {
+                        statusEl.style.color = '#f87171';
+                        statusEl.textContent = '❌ ' + (data.message || 'فشل الربط');
+                    }
+                }
+            } catch (e) {
+                if (statusEl) {
+                    statusEl.style.color = '#f87171';
+                    statusEl.textContent = '❌ تعذر الاتصال بالسيرفر';
+                }
+            }
+        };
+
+        const onError = () => {};
+
+        let started = false;
+        try {
+            await _adminQrScanner.start({ facingMode: "environment" }, config, onSuccess, onError);
+            started = true;
+        } catch (e1) {
+            try {
+                await _adminQrScanner.start({ facingMode: "user" }, config, onSuccess, onError);
+                started = true;
+            } catch (e2) {
+                try {
+                    const devices = await Html5Qrcode.getCameras();
+                    if (devices && devices.length > 0) {
+                        await _adminQrScanner.start(devices[0].id, config, onSuccess, onError);
+                        started = true;
+                    }
+                } catch (e3) {}
+            }
+        }
+
+        if (!started) throw new Error('No camera');
+
+    } catch (err) {
+        readerEl.style.display = 'none';
+        if (btn) btn.style.display = 'inline-flex';
+        if (statusEl) {
+            statusEl.style.color = '#f87171';
+            statusEl.textContent = '❌ تعذر تشغيل الكاميرا — استخدم الكود اليدوي';
+        }
+        await stopAdminQrScan();
+    }
+}
+
+async function stopAdminQrScan() {
+    if (_adminQrScanner) {
+        try {
+            const state = _adminQrScanner.getState ? _adminQrScanner.getState() : null;
+            if (state === 2 || state === 3) {
+                try { await _adminQrScanner.stop(); } catch(e) {}
+            }
+            try { _adminQrScanner.clear(); } catch(e) {}
+        } catch(e) {}
+        _adminQrScanner = null;
+    }
+    const readerEl = document.getElementById('admin-qr-reader');
+    if (readerEl) {
+        readerEl.style.display = 'none';
+        readerEl.innerHTML = '';
+    }
+}
+
+/* =========================================================
+   ⌨️ Fallback — الكود اليدوي
+   ========================================================= */
+async function showManualCodeFallback(sessionId) {
+    await stopAdminQrScan();
+    Swal.close();
+
+    let pollInterval = null;
+
+    const fetchCode = async () => {
+        try {
+            const res = await fetch(
+                `/api/session-screen-code?session_id=${encodeURIComponent(sessionId)}`,
+                { credentials: 'same-origin' }
+            );
+            const data = await res.json();
+
+            const codeEl = document.getElementById('screen-code-display');
+            const barEl  = document.getElementById('screen-code-timer-bar');
+            const secEl  = document.getElementById('screen-code-seconds');
+
+            if (!data || data.status !== 'success') {
+                if (codeEl) codeEl.textContent = '------';
+                return;
+            }
+            if (codeEl) codeEl.textContent = data.code;
+            if (barEl)  barEl.style.width = ((data.remaining / data.interval) * 100) + '%';
+            if (secEl)  secEl.textContent = Math.ceil(data.remaining);
+        } catch (e) {}
+    };
+
+    await Swal.fire({
+        ...swalDark,
+        title: '🖥️ الكود اليدوي',
+        width: 520,
+        html: `
+            <div style="text-align:center; padding: 4px 0;">
+                <p style="color:#8b93a7; font-size:12.5px; margin: 0 0 4px;">
+                    اكتب الكود ده على شاشة العرض
+                </p>
+                <p style="color:#8b93a7; font-size:11.5px; margin: 0 0 16px;">
+                    <b style="color:#FFB300;">بسرعة قبل ما يتغير</b>
+                </p>
+                <div id="screen-code-display" style="
+                    font-family: 'Plus Jakarta Sans', monospace;
+                    font-size: 56px; font-weight: 900;
+                    letter-spacing: 14px;
+                    color: #FFB300;
+                    text-shadow: 0 0 34px rgba(255,179,0,0.65);
+                    padding: 20px;
+                    direction: ltr;
+                    background: linear-gradient(145deg, rgba(0,0,0,0.5), rgba(15,20,33,0.8));
+                    border: 1.5px solid rgba(255,179,0,0.45);
+                    border-radius: 18px;
+                    margin-bottom: 14px;
+                ">------</div>
+                <div style="width:100%; height:8px; background:rgba(255,255,255,0.08); border-radius:4px; overflow:hidden;">
+                    <div id="screen-code-timer-bar" style="
+                        height:100%;
+                        background: linear-gradient(90deg, #FFB300, #FFD54F);
+                        width: 100%;
+                        transition: width 0.2s linear;
+                        border-radius: 4px;
+                    "></div>
+                </div>
+                <div style="margin-top: 12px; font-size: 11.5px; color:#8b93a7;">
+                    المتبقي: <b id="screen-code-seconds" style="color:#FFB300;">20</b> ث
+                </div>
+            </div>
+        `,
+        showConfirmButton: false,
+        showCancelButton: true,
+        cancelButtonText: 'إغلاق',
+        cancelButtonColor: '#374151',
+        didOpen: () => {
+            fetchCode();
+            pollInterval = setInterval(fetchCode, 1000);
+        },
+        willClose: () => {
+            if (pollInterval) clearInterval(pollInterval);
+        }
+    });
 }
 
 /* =========================================================
@@ -1364,7 +1691,7 @@ function filterSessionStudents() {
 }
 
 /* =========================================================
-   🔥 كارت الطالب — تصميم جديد كبير وواضح
+   🔥 كارت الطالب
    ========================================================= */
 function renderGlassStudentCards(records, sessionId) {
     const container = document.getElementById('sess-glass-cards-container');
@@ -2240,7 +2567,7 @@ function canEditStaff(targetUser) {
 }
 
 /* =========================================================
-   ✅ عرض المواد — Bulletproof FIX
+   ✅ عرض المواد
    ========================================================= */
 function getGroupedSubjectsHTML(allowedSubjects = [], allowedClasses = [], subjectsList = null) {
     const subs = subjectsList || allData.subjects;
@@ -2260,7 +2587,6 @@ function getGroupedSubjectsHTML(allowedSubjects = [], allowedClasses = [], subje
         }
     });
 
-    /* ✅ inject style مرة واحدة */
     if (!document.getElementById('nx-sub-name-fix')) {
         const st = document.createElement('style');
         st.id = 'nx-sub-name-fix';
@@ -2744,16 +3070,21 @@ async function deleteStaff(u) {
 async function changeMyPassword() {
     const { value: pw } = await Swal.fire({
         ...swalDark, title: 'تغيير كلمة المرور',
-        input: 'password', inputPlaceholder: 'كلمة المرور الجديدة'
+        input: 'password', inputPlaceholder: 'كلمة المرور الجديدة (8 أحرف على الأقل)'
     });
     if(pw) {
-        await fetch('/api/admin-action', {
+        const res = await fetch('/api/admin-action', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'change_my_password', new_password: pw })
         });
-        Swal.fire({...swalDark, icon:'success', title: 'تم التغيير!', timer: 1200, showConfirmButton: false});
-        const saved = getSavedAdminCredentials();
-        if (saved) saveAdminCredentials(saved.username, pw);
+        const data = await res.json();
+        if (data.status === 'success') {
+            Swal.fire({...swalDark, icon:'success', title: 'تم التغيير!', timer: 1200, showConfirmButton: false});
+            const saved = getSavedAdminCredentials();
+            if (saved) saveAdminCredentials(saved.username, pw);
+        } else {
+            Swal.fire({...swalDark, icon: 'error', text: data.message || 'فشل التغيير'});
+        }
     }
 }
 

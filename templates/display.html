@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
@@ -20,21 +20,35 @@
     <style>
         * { margin:0; padding:0; box-sizing:border-box; font-family:'Cairo', sans-serif; }
 
+        :root{
+            --pad:   clamp(10px, 2.2vmin, 22px);
+            --gap:   clamp(8px, 1.6vmin, 16px);
+            --qr:    min(320px, 68vw, 44vh);
+            --qr-p:  min(280px, 62vw, 36vh);
+            --logo:  clamp(64px, 11vmin, 120px);
+            --hero:  clamp(44px, 8vmin, 70px);
+            --code:  clamp(34px, 6.5vmin, 68px);
+            --safe-top:    env(safe-area-inset-top, 0px);
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+        }
+
         html, body {
             background: radial-gradient(circle at center, #0d1220 0%, #05070f 100%);
             color: #fff;
             min-height: 100vh;
-            overflow: hidden;
+            min-height: 100dvh;
         }
 
+        body { overflow-x: hidden; }
+
         .nx-aurora { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
-        .nx-aurora .blob { position: absolute; border-radius: 50%; filter: blur(130px); opacity: 0.5; will-change: transform; }
-        .nx-aurora .b1 { width: 560px; height: 560px; background: radial-gradient(circle, #FFB300, transparent 70%); top: -200px; right: -140px; animation: nxFloat1 24s ease-in-out infinite; }
-        .nx-aurora .b2 { width: 480px; height: 480px; background: radial-gradient(circle, #7C3AED, transparent 70%); bottom: -180px; left: -140px; animation: nxFloat2 28s ease-in-out infinite; }
-        .nx-aurora .b3 { width: 400px; height: 400px; background: radial-gradient(circle, #06B6D4, transparent 70%); top: 45%; left: 45%; animation: nxFloat3 32s ease-in-out infinite; opacity: 0.28; }
-        @keyframes nxFloat1 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-80px, 70px) scale(1.15); } }
-        @keyframes nxFloat2 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(70px, -60px) scale(1.12); } }
-        @keyframes nxFloat3 { 0%,100% { transform: translate(-50%,-50%) scale(1); } 50% { transform: translate(-55%,-45%) scale(1.18); } }
+        .nx-aurora .blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.45; will-change: transform; }
+        .nx-aurora .b1 { width: 480px; height: 480px; background: radial-gradient(circle, #FFB300, transparent 70%); top: -180px; right: -120px; animation: nxFloat1 24s ease-in-out infinite; }
+        .nx-aurora .b2 { width: 420px; height: 420px; background: radial-gradient(circle, #7C3AED, transparent 70%); bottom: -160px; left: -120px; animation: nxFloat2 28s ease-in-out infinite; }
+        .nx-aurora .b3 { width: 340px; height: 340px; background: radial-gradient(circle, #06B6D4, transparent 70%); top: 45%; left: 45%; animation: nxFloat3 32s ease-in-out infinite; opacity: 0.22; }
+        @keyframes nxFloat1 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-70px, 60px) scale(1.12); } }
+        @keyframes nxFloat2 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(60px, -50px) scale(1.1); } }
+        @keyframes nxFloat3 { 0%,100% { transform: translate(-50%,-50%) scale(1); } 50% { transform: translate(-55%,-45%) scale(1.15); } }
 
         .nx-particles { position: fixed; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
         .nx-particle {
@@ -51,6 +65,33 @@
 
         @keyframes nxSpin { to { transform: rotate(360deg); } }
 
+        /* ============================================================
+           FULLSCREEN BUTTON
+           ============================================================ */
+        #fs-btn {
+            position: fixed;
+            top: calc(12px + var(--safe-top));
+            left: 12px;
+            z-index: 200;
+            width: 42px; height: 42px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,179,0,0.45);
+            background: rgba(0,0,0,0.5);
+            color: #FFB300;
+            font-size: 16px;
+            cursor: pointer;
+            display: none;            /* يظهر فقط عند الحاجة */
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+            transition: all .25s ease;
+        }
+        #fs-btn:hover { background: rgba(255,179,0,0.18); transform: translateY(-1px); }
+        #fs-btn.show { display: inline-flex; }
+
+        /* ============================================================
+           PAIR SCREEN
+           ============================================================ */
         #pair-screen {
             position: relative;
             z-index: 2;
@@ -58,17 +99,18 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            min-height: 100vh;
-            padding: 30px;
+            min-height: 100dvh;
+            padding: calc(var(--pad) + var(--safe-top)) var(--pad) calc(var(--pad) + var(--safe-bottom));
+            gap: var(--gap);
             text-align: center;
             overflow-y: auto;
         }
 
         .nx-logo-wrap {
             position: relative;
-            width: 130px;
-            height: 130px;
-            margin: 0 auto 26px;
+            width: var(--logo);
+            height: var(--logo);
+            margin: 0 auto clamp(10px, 2vmin, 22px);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -92,14 +134,15 @@
         .nx-logo-core {
             position: relative;
             z-index: 2;
-            width: 110px; height: 110px;
+            width: calc(var(--logo) - 20px);
+            height: calc(var(--logo) - 20px);
             border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
             background: radial-gradient(circle at 30% 25%, #1a2136, #0a0e18);
             border: 1px solid rgba(255,179,0,0.35);
             box-shadow: 0 0 60px rgba(255,179,0,0.35), inset 0 0 30px rgba(255,179,0,0.18);
             font-family: 'Plus Jakarta Sans', sans-serif;
-            font-size: 24px;
+            font-size: calc(var(--logo) * 0.19);
             font-weight: 900;
             color: #FFB300;
             letter-spacing: 2px;
@@ -109,8 +152,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 0;
-            margin-bottom: 26px;
+            margin-bottom: clamp(10px, 2vmin, 22px);
             width: 100%;
             max-width: 520px;
             flex-shrink: 0;
@@ -118,9 +160,9 @@
 
         .nx-hero-icon {
             position: relative;
-            width: 74px;
-            height: 74px;
-            border-radius: 22px;
+            width: var(--hero);
+            height: var(--hero);
+            border-radius: calc(var(--hero) * 0.3);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -130,7 +172,7 @@
                 0 10px 22px rgba(255,179,0,0.28),
                 inset 0 3px 0 rgba(255,255,255,0.55),
                 inset 0 -5px 12px rgba(0,0,0,0.2);
-            margin-bottom: 20px;
+            margin-bottom: clamp(8px, 1.6vmin, 18px);
             animation: nxHeroFloat 4s ease-in-out infinite;
         }
         @keyframes nxHeroFloat {
@@ -143,7 +185,7 @@
             content: "";
             position: absolute;
             inset: 0;
-            border-radius: 22px;
+            border-radius: calc(var(--hero) * 0.3);
             border: 2px solid rgba(255,179,0,0.6);
             pointer-events: none;
             animation: nxHeroRingOut 3s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
@@ -155,7 +197,7 @@
         }
 
         .nx-hero-icon i {
-            font-size: 32px;
+            font-size: calc(var(--hero) * 0.43);
             color: #0a0e17;
             filter: drop-shadow(0 3px 4px rgba(0,0,0,0.35));
             animation: nxHeroIconScale 3s ease-in-out infinite;
@@ -198,7 +240,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 16px;
+            gap: clamp(10px, 1.8vmin, 16px);
             width: 100%;
             max-width: 460px;
             flex-shrink: 0;
@@ -207,8 +249,8 @@
         .nx-qr-frame {
             position: relative;
             background: #fff;
-            padding: 18px;
-            border-radius: 24px;
+            padding: clamp(10px, 1.8vmin, 18px);
+            border-radius: 22px;
             box-shadow:
                 0 25px 60px rgba(0,0,0,0.55),
                 0 0 90px rgba(255,179,0,0.35),
@@ -223,7 +265,7 @@
             content: "";
             position: absolute;
             inset: -3px;
-            border-radius: 26px;
+            border-radius: 24px;
             background: linear-gradient(135deg, #FFB300, #7C3AED, #06B6D4, #FFB300);
             background-size: 300% 300%;
             z-index: -1;
@@ -238,16 +280,16 @@
         #pair-qr-canvas img,
         #pair-qr-canvas canvas {
             display: block;
-            width: 280px !important;
-            height: 280px !important;
+            width: var(--qr-p) !important;
+            height: var(--qr-p) !important;
             image-rendering: pixelated;
             image-rendering: crisp-edges;
         }
 
         .nx-qr-corner {
             position: absolute;
-            width: 24px;
-            height: 24px;
+            width: 22px;
+            height: 22px;
             border: 3px solid #FFB300;
             border-radius: 4px;
             pointer-events: none;
@@ -275,7 +317,6 @@
             color: #8b93a7;
             font-size: 12px;
             font-weight: 800;
-            font-family: 'Cairo', sans-serif;
         }
 
         .nx-manual-toggle {
@@ -301,22 +342,22 @@
 
         #pair-input {
             width: 100%;
-            padding: 18px;
-            font-size: 30px;
+            padding: 16px;
+            font-size: clamp(20px, 3.2vmin, 30px);
             font-family: 'Plus Jakarta Sans', monospace;
-            letter-spacing: 14px;
+            letter-spacing: 12px;
             text-align: center;
             background: rgba(0,0,0,0.55);
             border: 2px solid rgba(255,179,0,0.4);
             border-radius: 16px;
             color: #FFB300;
             outline: none;
-            margin-bottom: 14px;
+            margin-bottom: 12px;
             direction: ltr;
             transition: all .3s ease;
             font-weight: 900;
         }
-        #pair-input::placeholder { color: rgba(255,179,0,0.22); letter-spacing: 14px; }
+        #pair-input::placeholder { color: rgba(255,179,0,0.22); letter-spacing: 12px; }
         #pair-input:focus {
             border-color: #FFB300;
             box-shadow: 0 0 50px rgba(255,179,0,0.4);
@@ -325,7 +366,7 @@
 
         #pair-btn {
             width: 100%;
-            padding: 16px;
+            padding: 15px;
             font-size: 15px;
             font-family: 'Cairo', sans-serif;
             font-weight: 900;
@@ -370,31 +411,37 @@
             border: 1px solid rgba(239,68,68,0.3);
         }
 
+        /* ============================================================
+           DISPLAY SCREEN
+           ============================================================ */
         #display-screen {
             display: none;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            min-height: 100vh;
-            padding: 30px 20px 200px 20px;
-            gap: 18px;
+            min-height: 100dvh;
+            padding: calc(var(--pad) + var(--safe-top)) var(--pad) calc(var(--pad) + 70px + var(--safe-bottom));
+            gap: var(--gap);
             position: relative;
             z-index: 2;
         }
 
-        .info-wrap { text-align: center; margin-bottom: 4px; }
+        .info-wrap { text-align: center; }
         #subject-name {
-            font-size: 32px; font-weight: 900;
+            font-size: clamp(18px, 3.4vmin, 32px);
+            font-weight: 900;
             background: linear-gradient(120deg, #fff 30%, #ffd76a 100%);
             -webkit-background-clip: text; background-clip: text; color: transparent;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
             letter-spacing: 0.5px;
             line-height: 1.3;
         }
         #session-title {
-            color: #FFB300; font-size: 18px; font-weight: 800;
+            color: #FFB300;
+            font-size: clamp(12px, 2vmin, 18px);
+            font-weight: 800;
             letter-spacing: 0.3px;
-            padding: 6px 18px;
+            padding: 5px 16px;
             display: inline-block;
             background: rgba(255,179,0,0.08);
             border: 1px solid rgba(255,179,0,0.25);
@@ -403,8 +450,8 @@
 
         #qr-wrapper {
             background: #fff;
-            padding: 20px;
-            border-radius: 26px;
+            padding: clamp(10px, 1.8vmin, 20px);
+            border-radius: 24px;
             box-shadow: 0 0 90px rgba(255,179,0,0.35), 0 25px 60px rgba(0,0,0,0.55);
             position: relative;
         }
@@ -412,7 +459,7 @@
             content: "";
             position: absolute;
             inset: -3px;
-            border-radius: 28px;
+            border-radius: 26px;
             background: linear-gradient(135deg, #FFB300, #7C3AED, #06B6D4, #FFB300);
             background-size: 300% 300%;
             z-index: -1;
@@ -421,8 +468,8 @@
 
         #qr-canvas img, #qr-canvas canvas {
             display: block;
-            width: 320px !important;
-            height: 320px !important;
+            width: var(--qr) !important;
+            height: var(--qr) !important;
             image-rendering: pixelated;
             image-rendering: crisp-edges;
         }
@@ -432,7 +479,7 @@
             flex-direction: column;
             align-items: center;
             gap: 6px;
-            margin-top: 6px;
+            margin-top: 4px;
             animation: fadeIn 0.3s ease;
         }
         @keyframes fadeIn {
@@ -440,23 +487,26 @@
             to   { opacity: 1; transform: translateY(0); }
         }
         #code-label {
-            color: #8b93a7; font-size: 13px; font-weight: 700;
+            color: #8b93a7;
+            font-size: clamp(11px, 1.6vmin, 13px);
+            font-weight: 700;
             letter-spacing: 0.5px;
         }
         #manual-code {
             font-family: 'Plus Jakarta Sans', monospace;
-            font-size: 72px;
+            font-size: var(--code);
             font-weight: 900;
-            letter-spacing: 20px;
+            letter-spacing: clamp(6px, 1.6vmin, 20px);
             color: #FFB300;
             text-shadow: 0 0 44px rgba(255,179,0,0.7), 0 0 90px rgba(255,179,0,0.35);
             direction: ltr;
-            padding-right: 20px;
+            padding-right: clamp(6px, 1.6vmin, 20px);
             line-height: 1;
             padding-top: 6px;
         }
         #timer-track {
-            width: 360px; height: 9px;
+            width: min(360px, 70vw);
+            height: 8px;
             background: rgba(255,255,255,0.08);
             border-radius: 5px;
             overflow: hidden;
@@ -473,22 +523,21 @@
 
         #status-badge {
             position: fixed;
-            top: 22px;
-            right: 22px;
-            padding: 11px 20px;
+            top: calc(12px + var(--safe-top));
+            right: 12px;
+            padding: 9px 16px;
             border-radius: 14px;
-            font-size: 13px;
+            font-size: clamp(11px, 1.6vmin, 13px);
             font-weight: 800;
             display: inline-flex;
             align-items: center;
-            gap: 9px;
+            gap: 8px;
             background: rgba(16,185,129,0.12);
             border: 1px solid rgba(16,185,129,0.4);
             color: #34d399;
             z-index: 100;
             backdrop-filter: blur(10px);
             transition: all 0.3s ease;
-            font-family: 'Cairo', sans-serif;
         }
         #status-badge i { font-size: 8px; animation: blink 1.4s infinite; }
         #status-badge.closed {
@@ -500,7 +549,7 @@
 
         .bottom-actions {
             position: fixed;
-            bottom: 24px;
+            bottom: calc(12px + var(--safe-bottom));
             left: 50%;
             transform: translateX(-50%);
             display: flex;
@@ -508,20 +557,21 @@
             z-index: 100;
         }
         .disp-btn {
-            padding: 12px 22px;
-            border-radius: 16px;
+            padding: 10px 18px;
+            border-radius: 14px;
             background: rgba(255,179,0,0.12);
             border: 1px solid rgba(255,179,0,0.45);
             color: #FFB300;
             font-family: 'Cairo', sans-serif;
             font-weight: 800;
-            font-size: 14px;
+            font-size: clamp(11px, 1.6vmin, 14px);
             cursor: pointer;
             display: inline-flex;
             align-items: center;
-            gap: 9px;
+            gap: 8px;
             transition: all .25s ease;
             backdrop-filter: blur(10px);
+            white-space: nowrap;
         }
         .disp-btn:hover {
             background: rgba(255,179,0,0.24);
@@ -537,57 +587,47 @@
             background: rgba(239,68,68,0.24);
             box-shadow: 0 10px 26px rgba(239,68,68,0.3);
         }
-        .disp-btn i { font-size: 14px; }
 
-        @media (max-width: 640px) {
-            #qr-canvas img, #qr-canvas canvas { width: 240px !important; height: 240px !important; }
-            #manual-code { font-size: 54px; letter-spacing: 14px; }
-            #timer-track { width: 250px; }
-            #subject-name { font-size: 22px; }
-            #session-title { font-size: 14px; }
-            .bottom-actions { bottom: 14px; gap: 8px; }
-            .disp-btn { padding: 10px 14px; font-size: 12px; }
-            .disp-btn i { font-size: 12px; }
-            #pair-input { font-size: 24px; letter-spacing: 10px; padding: 14px; }
-            #pair-input::placeholder { letter-spacing: 10px; }
-            #pair-btn { padding: 14px; font-size: 14px; }
-            .nx-logo-wrap { width: 100px; height: 100px; margin-bottom: 20px; }
-            .nx-logo-core { width: 86px; height: 86px; font-size: 18px; }
-            #display-screen { padding: 20px 15px 170px 15px; gap: 14px; }
-
-            .nx-hero { margin-bottom: 20px; }
-            .nx-hero-icon { width: 62px; height: 62px; border-radius: 18px; margin-bottom: 14px; }
-            .nx-hero-icon i { font-size: 26px; }
-            .nx-hero-divider .line { width: 42px; }
-
-            #pair-qr-canvas img, #pair-qr-canvas canvas {
-                width: 210px !important;
-                height: 210px !important;
-            }
-            .nx-qr-frame { padding: 14px; border-radius: 22px; }
-            .nx-qr-corner { width: 20px; height: 20px; border-width: 2.5px; }
+        /* ============================================================
+           SHORT SCREENS — اختفاء الزخارف لتوفير المساحة
+           ============================================================ */
+        @media (max-height: 640px) {
+            .nx-hero-icon { display: none; }
+            .nx-hero-divider { display: none; }
+            .nx-hero { margin-bottom: 6px; }
+            .nx-logo-wrap { width: 56px; height: 56px; margin-bottom: 6px; }
+            .nx-logo-core { width: 46px; height: 46px; font-size: 12px; }
+            .nx-or-divider { display: none; }
+            .nx-manual-toggle { padding: 8px 16px; font-size: 12px; }
+            .bottom-actions { bottom: calc(8px + var(--safe-bottom)); gap: 8px; }
+            .disp-btn { padding: 8px 12px; font-size: 11px; }
         }
 
-        @media (max-width: 380px) {
-            #qr-canvas img, #qr-canvas canvas { width: 200px !important; height: 200px !important; }
-            #manual-code { font-size: 42px; letter-spacing: 10px; }
-            #timer-track { width: 220px; }
-            #qr-wrapper { padding: 14px; }
-            #subject-name { font-size: 18px; }
-            #display-screen { padding: 16px 12px 160px 12px; gap: 12px; }
-            .nx-hero-icon { width: 54px; height: 54px; border-radius: 16px; }
-            .nx-hero-icon i { font-size: 22px; }
+        @media (max-height: 500px) {
+            .nx-logo-wrap { width: 44px; height: 44px; margin-bottom: 4px; }
+            .nx-logo-core { width: 36px; height: 36px; font-size: 10px; letter-spacing: 1px; }
+            .nx-hero { margin-bottom: 4px; }
+            #pair-screen { justify-content: flex-start; }
+            #display-screen { justify-content: flex-start; }
         }
 
-        @media (max-height: 700px) and (min-width: 641px) {
-            .nx-logo-wrap { width: 100px; height: 100px; margin-bottom: 20px; }
-            .nx-logo-core { width: 86px; height: 86px; font-size: 20px; }
-            .nx-hero-icon { width: 60px; height: 60px; }
-            .nx-hero-icon i { font-size: 26px; }
-            #pair-qr-canvas img, #pair-qr-canvas canvas {
-                width: 230px !important;
-                height: 230px !important;
+        /* الوضع الأفقي القصير */
+        @media (orientation: landscape) and (max-height: 500px) {
+            #display-screen {
+                flex-direction: row;
+                justify-content: center;
+                gap: clamp(12px, 2vw, 24px);
+                padding: calc(var(--pad) + var(--safe-top)) var(--pad) calc(var(--pad) + 60px + var(--safe-bottom));
             }
+            #display-screen .info-wrap { order: 1; max-width: 40%; }
+            #qr-wrapper { order: 2; }
+            #code-section { order: 3; max-width: 40%; }
+            #manual-code { font-size: clamp(28px, 8vmin, 54px); }
+            #timer-track { width: min(240px, 40vw); }
+
+            #pair-screen { flex-direction: row; justify-content: center; gap: 20px; }
+            #pair-screen .nx-logo-wrap,
+            #pair-screen .nx-hero { display: none; }
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -608,6 +648,11 @@
     </div>
 
     <div class="nx-particles" id="nx-particles" aria-hidden="true"></div>
+
+    <!-- زر تفعيل وضع ملء الشاشة -->
+    <button id="fs-btn" type="button" title="ملء الشاشة" aria-label="ملء الشاشة">
+        <i class="fas fa-expand"></i>
+    </button>
 
     <div id="pair-screen">
         <div class="nx-logo-wrap">
@@ -646,7 +691,7 @@
                 <i class="fas fa-keyboard"></i> إدخال الكود يدوياً
             </button>
 
-            <div id="manual-entry-box" style="display:none; width:100%; margin-top:14px;">
+            <div id="manual-entry-box" style="display:none; width:100%; margin-top:12px;">
                 <input type="text" id="pair-input" maxlength="8" inputmode="numeric"
                        placeholder="00000000" autocomplete="off"
                        oninput="this.value = this.value.replace(/[^0-9]/g, '')">
@@ -686,19 +731,85 @@
 
 <script>
     /* ============================================================
-       🖥️ Display Screen Logic — v4 (FIXED QR PERSISTENCE)
-       ============================================================
-       ✅ QR الربط ثابت لا يختفي
-       ✅ إعادة إنشاء كائن QRCode جديد في كل مرة (بدون reuse)
-       ✅ Watchdog كل 2.5 ثانية يراقب وجود الـ QR
-       ✅ معالجة أفضل لحالة "expired"
+       🖥️ Display Screen Logic — v5 (Fullscreen + Responsive)
        ============================================================ */
+
+    /* ---------- FULLSCREEN ---------- */
+    (function () {
+        const fsBtn = document.getElementById('fs-btn');
+        const icon  = fsBtn.querySelector('i');
+
+        function isFs() {
+            return !!(document.fullscreenElement ||
+                      document.webkitFullscreenElement ||
+                      document.mozFullScreenElement ||
+                      document.msFullscreenElement);
+        }
+
+        async function requestFs() {
+            const el = document.documentElement;
+            try {
+                if (el.requestFullscreen)                 await el.requestFullscreen();
+                else if (el.webkitRequestFullscreen)      el.webkitRequestFullscreen();
+                else if (el.mozRequestFullScreen)         el.mozRequestFullScreen();
+                else if (el.msRequestFullscreen)          el.msRequestFullscreen();
+            } catch (e) { /* تجاهل */ }
+        }
+
+        async function exitFs() {
+            try {
+                if (document.exitFullscreen)              await document.exitFullscreen();
+                else if (document.webkitExitFullscreen)   document.webkitExitFullscreen();
+                else if (document.mozCancelFullScreen)    document.mozCancelFullScreen();
+                else if (document.msExitFullscreen)       document.msExitFullscreen();
+            } catch (e) { /* تجاهل */ }
+        }
+
+        function updateFsBtn() {
+            if (isFs()) {
+                icon.className = 'fas fa-compress';
+                fsBtn.title = 'إنهاء ملء الشاشة';
+            } else {
+                icon.className = 'fas fa-expand';
+                fsBtn.title = 'ملء الشاشة';
+            }
+            // أخفِ الزر لو المتصفح لا يدعم ملء الشاشة
+            const supported = !!(document.documentElement.requestFullscreen ||
+                                 document.documentElement.webkitRequestFullscreen ||
+                                 document.documentElement.mozRequestFullScreen ||
+                                 document.documentElement.msRequestFullscreen);
+            fsBtn.classList.toggle('show', supported);
+        }
+
+        fsBtn.addEventListener('click', () => {
+            if (isFs()) exitFs(); else requestFs();
+        });
+
+        ['fullscreenchange','webkitfullscreenchange','mozfullscreenchange','MSFullscreenChange']
+            .forEach(ev => document.addEventListener(ev, updateFsBtn));
+
+        updateFsBtn();
+
+        // محاولة الدخول التلقائي عند أول تفاعل (المتصفحات تمنع بدون gesture)
+        let autoTried = false;
+        const autoFs = () => {
+            if (autoTried) return;
+            autoTried = true;
+            if (!isFs()) requestFs();
+            document.removeEventListener('click', autoFs);
+            document.removeEventListener('touchstart', autoFs);
+            document.removeEventListener('keydown', autoFs);
+        };
+        document.addEventListener('click', autoFs, { passive: true });
+        document.addEventListener('touchstart', autoFs, { passive: true });
+        document.addEventListener('keydown', autoFs);
+    })();
 
     /* ---------- PARTICLES ---------- */
     (function () {
         const container = document.getElementById('nx-particles');
         if (!container) return;
-        const count = window.innerWidth < 768 ? 14 : 26;
+        const count = window.innerWidth < 768 ? 12 : 24;
         for (let i = 0; i < count; i++) {
             const p = document.createElement('div');
             p.className = 'nx-particle';
@@ -754,7 +865,6 @@
     let codeVisible = false;
     let isPaired = false;
 
-    /* Pairing state */
     let currentToken = null;
     let qrTokenGenerator = null;
     let tokenPollInterval = null;
@@ -765,10 +875,7 @@
        LIVE CODE POLLING
        ============================================================ */
     function stopPolling() {
-        if (pollInterval) {
-            clearInterval(pollInterval);
-            pollInterval = null;
-        }
+        if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
     }
 
     function startPolling() {
@@ -779,42 +886,26 @@
     }
 
     /* ============================================================
-       🆕 Request New Pairing Token
+       Request New Pairing Token
        ============================================================ */
     async function requestNewToken() {
         try {
-            const res = await fetch('/api/screen-new-token', {
-                method: 'POST',
-                cache: 'no-store'
-            });
+            const res = await fetch('/api/screen-new-token', { method: 'POST', cache: 'no-store' });
             const data = await res.json();
-
-            if (data.status !== 'success' || !data.token) {
-                console.debug('Token request failed: bad response');
-                return;
-            }
-
+            if (data.status !== 'success' || !data.token) return;
             currentToken = data.token;
             drawPairQR(currentToken);
-        } catch (e) {
-            console.debug('Token request failed:', e);
-        }
+        } catch (e) {}
     }
 
     /* ============================================================
-       ✅ Always create a FRESH QRCode object — لا يعاد استخدام القديم
+       Draw Pair QR (fresh object each time)
        ============================================================ */
     function drawPairQR(token) {
         const container = document.getElementById('pair-qr-canvas');
         if (!container) return;
-
-        // مسح المحتوى القديم
         container.innerHTML = '';
-
-        // تحرير الكائن القديم
         qrTokenGenerator = null;
-
-        // إنشاء كائن جديد كلياً
         try {
             qrTokenGenerator = new QRCode(container, {
                 width: 280,
@@ -822,41 +913,29 @@
                 correctLevel: QRCode.CorrectLevel.H
             });
             qrTokenGenerator.makeCode(token);
-        } catch (e) {
-            console.debug('QR draw failed:', e);
-        }
+        } catch (e) {}
     }
 
     /* ============================================================
-       📡 Check Pairing
+       Check Pairing
        ============================================================ */
     async function checkPairing() {
         if (!currentToken) return;
-
         try {
-            const res = await fetch(
-                '/api/screen-check-pair?token=' + encodeURIComponent(currentToken),
-                { cache: 'no-store' }
-            );
+            const res = await fetch('/api/screen-check-pair?token=' + encodeURIComponent(currentToken), { cache: 'no-store' });
             const data = await res.json();
 
             if (data.status === 'paired') {
                 stopTokenPolling();
                 stopQrWatchdog();
-
                 currentSecret = data.screen_secret;
                 currentSession = data.session_info || {};
                 isPaired = true;
-
                 startDisplay();
-
             } else if (data.status === 'expired') {
-                // التوكن انتهى → اطلب واحد جديد فوراً
                 await requestNewToken();
             }
-        } catch (e) {
-            // silent
-        }
+        } catch (e) {}
     }
 
     function startTokenPolling() {
@@ -866,63 +945,42 @@
     }
 
     function stopTokenPolling() {
-        if (tokenPollInterval) {
-            clearInterval(tokenPollInterval);
-            tokenPollInterval = null;
-        }
+        if (tokenPollInterval) { clearInterval(tokenPollInterval); tokenPollInterval = null; }
     }
 
     /* ============================================================
-       🛡️ QR Watchdog — يفحص وجود الـ QR كل 2.5 ثانية
+       QR Watchdog
        ============================================================ */
     function startQrWatchdog() {
         stopQrWatchdog();
         qrWatchdogInterval = setInterval(() => {
             if (isPaired || !currentToken) return;
-
             const container = document.getElementById('pair-qr-canvas');
             if (!container) return;
-
-            // لو الحاوية فاضية → أعد رسم الـ QR
-            if (container.children.length === 0) {
-                console.debug('[Watchdog] QR missing — redrawing');
-                drawPairQR(currentToken);
-                return;
-            }
-
-            // فحص إضافي: هل الـ canvas داخلها فعلاً فيه محتوى؟
+            if (container.children.length === 0) { drawPairQR(currentToken); return; }
             const canvas = container.querySelector('canvas');
             const img = container.querySelector('img');
-
-            if (!canvas && !img) {
-                console.debug('[Watchdog] No canvas/img — redrawing');
-                drawPairQR(currentToken);
-            }
+            if (!canvas && !img) drawPairQR(currentToken);
         }, 2500);
     }
 
     function stopQrWatchdog() {
-        if (qrWatchdogInterval) {
-            clearInterval(qrWatchdogInterval);
-            qrWatchdogInterval = null;
-        }
+        if (qrWatchdogInterval) { clearInterval(qrWatchdogInterval); qrWatchdogInterval = null; }
     }
 
     /* ============================================================
-       MANUAL ENTRY TOGGLE
+       Manual Entry Toggle
        ============================================================ */
     function toggleManualEntry() {
         manualModeVisible = !manualModeVisible;
         const box = document.getElementById('manual-entry-box');
         const btn = document.getElementById('show-manual-btn');
-
         if (box) box.style.display = manualModeVisible ? 'block' : 'none';
         if (btn) {
             btn.innerHTML = manualModeVisible
                 ? '<i class="fas fa-times"></i> إلغاء الإدخال اليدوي'
                 : '<i class="fas fa-keyboard"></i> إدخال الكود يدوياً';
         }
-
         if (manualModeVisible) {
             setTimeout(() => {
                 const input = document.getElementById('pair-input');
@@ -932,7 +990,7 @@
     }
 
     /* ============================================================
-       SHOW PAIR SCREEN
+       Show Pair Screen
        ============================================================ */
     function showPairScreen(message) {
         stopPolling();
@@ -971,7 +1029,7 @@
     }
 
     /* ============================================================
-       MANUAL PAIR (8-digit code)
+       Manual Pair
        ============================================================ */
     async function pairScreen(code) {
         const errEl = document.getElementById('pair-error');
@@ -1018,7 +1076,7 @@
     }
 
     /* ============================================================
-       START DISPLAY (after pairing)
+       Start Display
        ============================================================ */
     function startDisplay() {
         stopTokenPolling();
@@ -1047,11 +1105,10 @@
     }
 
     /* ============================================================
-       FETCH LIVE CODE (after pairing)
+       Fetch Live Code
        ============================================================ */
     async function fetchScreenCode() {
         if (!currentSecret) return;
-
         try {
             const res = await fetch('/api/screen-live-code?secret=' + encodeURIComponent(currentSecret));
             const data = await res.json();
@@ -1061,11 +1118,7 @@
                 return;
             }
 
-            if (data.status !== 'success') {
-                setStatus(false);
-                return;
-            }
-
+            if (data.status !== 'success') { setStatus(false); return; }
             setStatus(true);
 
             if (data.session_info) {
@@ -1089,18 +1142,13 @@
             const qrCode = data.qr_code;
             if (qrCode && qrCode !== lastQrCode && qrGenerator) {
                 lastQrCode = qrCode;
-                try {
-                    qrGenerator.clear();
-                    qrGenerator.makeCode(qrCode);
-                } catch (e) {}
+                try { qrGenerator.clear(); qrGenerator.makeCode(qrCode); } catch (e) {}
             }
-        } catch (e) {
-            setStatus(false);
-        }
+        } catch (e) { setStatus(false); }
     }
 
     /* ============================================================
-       STATUS BADGE
+       Status Badge
        ============================================================ */
     function setStatus(isOpen) {
         const badge = document.getElementById('status-badge');
@@ -1115,7 +1163,7 @@
     }
 
     /* ============================================================
-       TOGGLE CODE SECTION
+       Toggle Code Section
        ============================================================ */
     function toggleCodeSection() {
         codeVisible = !codeVisible;
@@ -1131,7 +1179,7 @@
     }
 
     /* ============================================================
-       UNPAIR SCREEN
+       Unpair
        ============================================================ */
     function unpairScreen() {
         Swal.fire({
@@ -1152,7 +1200,7 @@
     }
 
     /* ============================================================
-       INIT
+       Init
        ============================================================ */
     document.addEventListener('DOMContentLoaded', () => {
         const pairBtn = document.getElementById('pair-btn');
@@ -1177,7 +1225,7 @@
     });
 
     /* ============================================================
-       LIFECYCLE HANDLERS
+       Lifecycle
        ============================================================ */
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
@@ -1190,29 +1238,18 @@
             } else if (currentToken) {
                 startTokenPolling();
                 startQrWatchdog();
-                // تأكد من وجود الـ QR عند الرجوع
                 const container = document.getElementById('pair-qr-canvas');
-                if (container && container.children.length === 0) {
-                    drawPairQR(currentToken);
-                }
+                if (container && container.children.length === 0) drawPairQR(currentToken);
             }
         }
     });
 
-    window.addEventListener('pagehide', () => {
-        stopPolling();
-        stopTokenPolling();
-        stopQrWatchdog();
-    });
-    window.addEventListener('beforeunload', () => {
-        stopPolling();
-        stopTokenPolling();
-        stopQrWatchdog();
-    });
-    window.addEventListener('unload', () => {
-        stopPolling();
-        stopTokenPolling();
-        stopQrWatchdog();
+    ['pagehide','beforeunload','unload'].forEach(ev => {
+        window.addEventListener(ev, () => {
+            stopPolling();
+            stopTokenPolling();
+            stopQrWatchdog();
+        });
     });
 </script>
 </body>

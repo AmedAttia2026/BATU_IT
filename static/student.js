@@ -9,6 +9,28 @@ let qrScannerStarting = false;
 let qrAutoSubmitLocked = false;
 
 /* =========================================================
+   💾 Cache بسيط لتقليل الطلبات
+   ========================================================= */
+const nxCache = {
+    history: { data: null, ts: 0, ttl: 30000 }, // 30 ثانية
+
+    get(key) {
+        const c = this[key];
+        if (c && c.data && (Date.now() - c.ts) < c.ttl) return c.data;
+        return null;
+    },
+    set(key, data) {
+        if (this[key]) {
+            this[key].data = data;
+            this[key].ts = Date.now();
+        }
+    },
+    clear(key) {
+        if (this[key]) { this[key].data = null; this[key].ts = 0; }
+    }
+};
+
+/* =========================================================
    🔒 قفل الجهاز
    ========================================================= */
 const DEVICE_OWNER_ID_KEY = 'nx_device_owner_id';
@@ -372,6 +394,7 @@ function showStudentUI() {
 function logoutStudent() {
     stopAutoRefresh();
     stopQrReader();
+    nxCache.clear('history');
     localStorage.removeItem('nx_student_auth');
     location.reload();
 }
@@ -513,27 +536,22 @@ window.addEventListener('focus', () => {
 });
 
 /* =========================================================
-   ✅ عرض جلسات المادة — مع جلب أحدث البيانات فوراً
+   ✅ عرض جلسات المادة — نسخة محسّنة (بدون تعليق)
    ========================================================= */
 async function selectSubjectForAttendance(subId, subName) {
-    /* ✅ جلب أحدث البيانات من السيرفر قبل عرض النافذة */
-    try {
-        const res = await fetch(
-            `/api/student-init?year=${encodeURIComponent(currentStudent.year)}` +
-            `&dept=${encodeURIComponent(currentStudent.department)}` +
-            `&student_id=${encodeURIComponent(currentStudent.student_id)}`
-        );
-        const data = await res.json();
-        if (data.status === 'success') {
-            allSubjects = data.subjects || allSubjects;
-            allActiveSessions = data.sessions || [];
-            renderSubjectCards();
-        }
-    } catch (e) { /* silent */ }
+    // ✅ 1. اعرض الجلسات من البيانات المحلية فوراً (بدون انتظار)
+    const localSessions = allActiveSessions.filter(s => s.subject_id === subId);
 
-    const filtered = allActiveSessions.filter(s => s.subject_id === subId);
+    // ✅ 2. اعرض المودال فوراً - تجربة سلسة
+    showSessionsModal(localSessions, subId, subName);
 
-    if(filtered.length === 0) {
+    // ✅ 3. في الخلفية (بدون blocking) - حدّث البيانات
+    refreshSessionsInBackground(subId, subName);
+}
+
+/* ✅ دالة عرض المودال - منفصلة عشان نستخدمها مرتين */
+function showSessionsModal(sessions, subId, subName) {
+    if (sessions.length === 0) {
         return Swal.fire({
             ...swalDark,
             icon: 'info',
@@ -548,7 +566,7 @@ async function selectSubjectForAttendance(subId, subName) {
            </div>`
         : '';
 
-    const buttonsHtml = classBadge + filtered.map(s => `
+    const buttonsHtml = classBadge + sessions.map(s => `
         <div style="background:#1F2937; padding:12px; border-radius:10px; margin-bottom:8px; cursor:pointer; text-align:right; border:1px solid var(--border);" onclick="openVerifyModal('${s.session_id}', '${s.title}', '${subName}', '${s.type}')">
             <b style="color:var(--gold); font-size:15px;">${s.title}</b>
             <span style="font-size:11px; background:rgba(255,179,0,0.15); color:var(--gold); padding:2px 8px; border-radius:6px; margin-right:5px;">${s.type === 'Lecture' ? 'محاضرة' : 'سكشن'}</span>
@@ -566,48 +584,102 @@ async function selectSubjectForAttendance(subId, subName) {
     });
 }
 
+/* ✅ تحديث في الخلفية - بدون blocking */
+async function refreshSessionsInBackground(subId, subName) {
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 ثواني max
+
+        const res = await fetch(
+            `/api/student-init?year=${encodeURIComponent(currentStudent.year)}` +
+            `&dept=${encodeURIComponent(currentStudent.department)}` +
+            `&student_id=${encodeURIComponent(currentStudent.student_id)}`,
+            { signal: controller.signal }
+        );
+        clearTimeout(timeoutId);
+
+        const data = await res.json();
+        if (data.status === 'success') {
+            allSubjects = data.subjects || allSubjects;
+            allActiveSessions = data.sessions || [];
+            renderSubjectCards();
+            // ملاحظة: لا نعيد فتح المودال - عشان ما نزعجش المستخدم
+        }
+    } catch (e) {
+        // فشل/timeout - نستخدم البيانات المحلية اللي معروضة بالفعل
+        console.debug('Background refresh skipped:', e.message);
+    }
+}
+
 /* =========================================================
-   ✅ فتح نافذة تأكيد الحضور
+   ✅ فتح نافذة تأكيد الحضور — نسخة محسّنة
    ========================================================= */
-async function openVerifyModal(sessId, title, subName, type) {
+function openVerifyModal(sessId, title, subName, type) {
     Swal.close();
     qrAutoSubmitLocked = false;
-
-    try {
-        const res = await fetch('/api/student-history', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({student_id: currentStudent.student_id})
-        });
-        const data = await res.json();
-
-        if (data.history && Array.isArray(data.history)) {
-            const already = data.history.find(h => h.session_id === sessId);
-            if (already) {
-                return Swal.fire({
-                    ...swalDark,
-                    icon: 'success',
-                    title: 'أنت مسجل بالفعل ✅',
-                    html: `
-                        <div style="text-align:center; line-height:1.8;">
-                            <p style="color:#fff; margin-bottom:6px;">لقد سجّلت حضورك في هذه الجلسة مسبقاً</p>
-                            <p style="color:#10B981; font-weight:900; font-size:14px; margin-bottom:12px;">${already.subject_name} — ${already.session_title}</p>
-                            <span style="font-size:12px; color:#9CA3AF; font-family:monospace;">
-                                <i class="far fa-clock"></i> ${already.timestamp}
-                            </span>
-                        </div>
-                    `,
-                    confirmButtonText: 'حسناً'
-                });
-            }
-        }
-    } catch (e) { /* تجاهل */ }
-
     selectedSession = sessId;
-    document.getElementById('modal-sess-title').innerText = `${title} (${type === 'Lecture' ? 'محاضرة' : 'سكشن'})`;
+
+    // ✅ 1. اعرض المودال فوراً (بدون أي انتظار)
+    document.getElementById('modal-sess-title').innerText =
+        `${title} (${type === 'Lecture' ? 'محاضرة' : 'سكشن'})`;
     document.getElementById('modal-sess-sub').innerText = subName;
     document.getElementById('totp-input').value = '';
     document.getElementById('verify-modal').style.display = 'flex';
+
+    // ✅ 2. في الخلفية - افحص لو الطالب مسجل قبل كده (non-blocking)
+    checkIfAlreadyRegistered(sessId);
+}
+
+/* ✅ فحص إذا كان الطالب مسجل بالفعل - بدون blocking */
+async function checkIfAlreadyRegistered(sessId) {
+    // ✅ جرّب الكاش الأول
+    let history = nxCache.get('history');
+
+    if (!history) {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+            const res = await fetch('/api/student-history', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ student_id: currentStudent.student_id }),
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            const data = await res.json();
+            history = data.history || [];
+            nxCache.set('history', history);
+        } catch (e) {
+            // فشل الفحص - الطالب يقدر يجرب عادي، والسيرفر هيرفض لو مسجل
+            console.debug('History check skipped:', e.message);
+            return;
+        }
+    }
+
+    // ✅ تحقق: لو الطالب لسه فاتح نفس الجلسة ومسجل بالفعل
+    if (selectedSession === sessId) {
+        const already = history.find(h => h.session_id === sessId);
+        if (already) {
+            closeVerifyModal();
+            Swal.fire({
+                ...swalDark,
+                icon: 'success',
+                title: 'أنت مسجل بالفعل ✅',
+                html: `
+                    <div style="text-align:center; line-height:1.8;">
+                        <p style="color:#fff; margin-bottom:6px;">لقد سجّلت حضورك في هذه الجلسة مسبقاً</p>
+                        <p style="color:#10B981; font-weight:900; font-size:14px; margin-bottom:12px;">${already.subject_name} — ${already.session_title}</p>
+                        <span style="font-size:12px; color:#9CA3AF; font-family:monospace;">
+                            <i class="far fa-clock"></i> ${already.timestamp}
+                        </span>
+                    </div>
+                `,
+                confirmButtonText: 'حسناً'
+            });
+        }
+    }
 }
 
 /* =========================================================
@@ -811,6 +883,9 @@ async function submitAttendanceFinal(fromQr = false) {
         if(res.ok) {
             setDeviceOwner(currentStudent.student_id, currentStudent.name);
 
+            // ✅ امسح الكاش عشان المرة الجاية يجيب history محدّث
+            nxCache.clear('history');
+
             closeVerifyModal();
             Swal.fire({...swalDark, icon:'success', title:'تم بنجاح!', text: data.message});
             if (typeof confetti === 'function') {
@@ -840,18 +915,25 @@ async function openHistoryModal() {
     list.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-muted);"><i class="fas fa-spinner fa-spin fa-2x"></i></div>`;
 
     try {
-        const res = await fetch('/api/student-history', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({student_id: currentStudent.student_id})
-        });
-        const data = await res.json();
+        // ✅ جرّب الكاش الأول
+        let history = nxCache.get('history');
 
-        if(!data.history || data.history.length === 0) {
+        if (!history) {
+            const res = await fetch('/api/student-history', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({student_id: currentStudent.student_id})
+            });
+            const data = await res.json();
+            history = data.history || [];
+            nxCache.set('history', history);
+        }
+
+        if(!history || history.length === 0) {
             list.innerHTML = `<div class="empty-state"><i class="fas fa-box-open fa-3x" style="color:var(--border); margin-bottom:15px;"></i><h3 style="color:#fff;">لا يوجد حضور مسجل بعد</h3></div>`;
             return;
         }
-        list.innerHTML = data.history.map(h => `
+        list.innerHTML = history.map(h => `
             <div class="comp-card">
                 <div class="comp-header">
                     <span class="comp-sub">${h.subject_name}</span>

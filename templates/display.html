@@ -686,13 +686,15 @@
 
 <script>
     /* ============================================================
-       🖥️ Display Screen Logic — v3 (STATIC PAIRING QR)
+       🖥️ Display Screen Logic — v4 (FIXED QR PERSISTENCE)
        ============================================================
-       ✅ QR الربط ثابت — مفيش تغيير تلقائي
-       ✅ بيفضل معروض لحد ما التعيد يمسحه
-       ✅ وقتها بس الشاشة تروح لـ QR الحضور
+       ✅ QR الربط ثابت لا يختفي
+       ✅ إعادة إنشاء كائن QRCode جديد في كل مرة (بدون reuse)
+       ✅ Watchdog كل 2.5 ثانية يراقب وجود الـ QR
+       ✅ معالجة أفضل لحالة "expired"
        ============================================================ */
 
+    /* ---------- PARTICLES ---------- */
     (function () {
         const container = document.getElementById('nx-particles');
         if (!container) return;
@@ -717,6 +719,7 @@
         }
     })();
 
+    /* ---------- NUKE OLD STORAGE ---------- */
     (function nukeOldStorage() {
         try {
             localStorage.removeItem('nx_screen_secret');
@@ -728,6 +731,7 @@
         } catch (e) {}
     })();
 
+    /* ---------- NO-CACHE FETCH ---------- */
     const _origFetch = window.fetch;
     window.fetch = function(url, opts) {
         opts = opts || {};
@@ -739,6 +743,9 @@
         return _origFetch(url, opts);
     };
 
+    /* ============================================================
+       STATE
+       ============================================================ */
     let currentSession = null;
     let currentSecret = null;
     let qrGenerator = null;
@@ -751,8 +758,12 @@
     let currentToken = null;
     let qrTokenGenerator = null;
     let tokenPollInterval = null;
+    let qrWatchdogInterval = null;
     let manualModeVisible = false;
 
+    /* ============================================================
+       LIVE CODE POLLING
+       ============================================================ */
     function stopPolling() {
         if (pollInterval) {
             clearInterval(pollInterval);
@@ -768,7 +779,7 @@
     }
 
     /* ============================================================
-       🆕 Request Token — مرة واحدة بس
+       🆕 Request New Pairing Token
        ============================================================ */
     async function requestNewToken() {
         try {
@@ -778,31 +789,46 @@
             });
             const data = await res.json();
 
-            if (data.status !== 'success' || !data.token) return;
-
-            currentToken = data.token;
-
-            const canvas = document.getElementById('pair-qr-canvas');
-            if (canvas) {
-                canvas.innerHTML = '';
-                if (!qrTokenGenerator) {
-                    qrTokenGenerator = new QRCode(canvas, {
-                        width: 280,
-                        height: 280,
-                        correctLevel: QRCode.CorrectLevel.H
-                    });
-                }
-                qrTokenGenerator.clear();
-                qrTokenGenerator.makeCode(currentToken);
+            if (data.status !== 'success' || !data.token) {
+                console.debug('Token request failed: bad response');
+                return;
             }
 
+            currentToken = data.token;
+            drawPairQR(currentToken);
         } catch (e) {
             console.debug('Token request failed:', e);
         }
     }
 
     /* ============================================================
-       📡 Check Pairing — Static Poll
+       ✅ Always create a FRESH QRCode object — لا يعاد استخدام القديم
+       ============================================================ */
+    function drawPairQR(token) {
+        const container = document.getElementById('pair-qr-canvas');
+        if (!container) return;
+
+        // مسح المحتوى القديم
+        container.innerHTML = '';
+
+        // تحرير الكائن القديم
+        qrTokenGenerator = null;
+
+        // إنشاء كائن جديد كلياً
+        try {
+            qrTokenGenerator = new QRCode(container, {
+                width: 280,
+                height: 280,
+                correctLevel: QRCode.CorrectLevel.H
+            });
+            qrTokenGenerator.makeCode(token);
+        } catch (e) {
+            console.debug('QR draw failed:', e);
+        }
+    }
+
+    /* ============================================================
+       📡 Check Pairing
        ============================================================ */
     async function checkPairing() {
         if (!currentToken) return;
@@ -816,17 +842,17 @@
 
             if (data.status === 'paired') {
                 stopTokenPolling();
+                stopQrWatchdog();
 
                 currentSecret = data.screen_secret;
                 currentSession = data.session_info || {};
                 isPaired = true;
 
-                // 🚀 روح فوراً على شاشة العرض
                 startDisplay();
 
             } else if (data.status === 'expired') {
-                // التوكن انتهى من السيرفر → اطلب واحد جديد بصمت
-                requestNewToken();
+                // التوكن انتهى → اطلب واحد جديد فوراً
+                await requestNewToken();
             }
         } catch (e) {
             // silent
@@ -846,6 +872,45 @@
         }
     }
 
+    /* ============================================================
+       🛡️ QR Watchdog — يفحص وجود الـ QR كل 2.5 ثانية
+       ============================================================ */
+    function startQrWatchdog() {
+        stopQrWatchdog();
+        qrWatchdogInterval = setInterval(() => {
+            if (isPaired || !currentToken) return;
+
+            const container = document.getElementById('pair-qr-canvas');
+            if (!container) return;
+
+            // لو الحاوية فاضية → أعد رسم الـ QR
+            if (container.children.length === 0) {
+                console.debug('[Watchdog] QR missing — redrawing');
+                drawPairQR(currentToken);
+                return;
+            }
+
+            // فحص إضافي: هل الـ canvas داخلها فعلاً فيه محتوى؟
+            const canvas = container.querySelector('canvas');
+            const img = container.querySelector('img');
+
+            if (!canvas && !img) {
+                console.debug('[Watchdog] No canvas/img — redrawing');
+                drawPairQR(currentToken);
+            }
+        }, 2500);
+    }
+
+    function stopQrWatchdog() {
+        if (qrWatchdogInterval) {
+            clearInterval(qrWatchdogInterval);
+            qrWatchdogInterval = null;
+        }
+    }
+
+    /* ============================================================
+       MANUAL ENTRY TOGGLE
+       ============================================================ */
     function toggleManualEntry() {
         manualModeVisible = !manualModeVisible;
         const box = document.getElementById('manual-entry-box');
@@ -866,9 +931,13 @@
         }
     }
 
+    /* ============================================================
+       SHOW PAIR SCREEN
+       ============================================================ */
     function showPairScreen(message) {
         stopPolling();
         stopTokenPolling();
+        stopQrWatchdog();
 
         isPaired = false;
         currentSecret = null;
@@ -898,8 +967,12 @@
         qrTokenGenerator = null;
         requestNewToken();
         startTokenPolling();
+        startQrWatchdog();
     }
 
+    /* ============================================================
+       MANUAL PAIR (8-digit code)
+       ============================================================ */
     async function pairScreen(code) {
         const errEl = document.getElementById('pair-error');
         errEl.textContent = '';
@@ -944,9 +1017,13 @@
         }
     }
 
+    /* ============================================================
+       START DISPLAY (after pairing)
+       ============================================================ */
     function startDisplay() {
         stopTokenPolling();
         stopPolling();
+        stopQrWatchdog();
 
         document.getElementById('pair-screen').style.display = 'none';
         document.getElementById('display-screen').style.display = 'flex';
@@ -969,6 +1046,9 @@
         startPolling();
     }
 
+    /* ============================================================
+       FETCH LIVE CODE (after pairing)
+       ============================================================ */
     async function fetchScreenCode() {
         if (!currentSecret) return;
 
@@ -1019,6 +1099,9 @@
         }
     }
 
+    /* ============================================================
+       STATUS BADGE
+       ============================================================ */
     function setStatus(isOpen) {
         const badge = document.getElementById('status-badge');
         if (!badge) return;
@@ -1031,6 +1114,9 @@
         }
     }
 
+    /* ============================================================
+       TOGGLE CODE SECTION
+       ============================================================ */
     function toggleCodeSection() {
         codeVisible = !codeVisible;
         const sec = document.getElementById('code-section');
@@ -1044,6 +1130,9 @@
         }
     }
 
+    /* ============================================================
+       UNPAIR SCREEN
+       ============================================================ */
     function unpairScreen() {
         Swal.fire({
             background: '#1a1f2c', color: '#fff',
@@ -1062,6 +1151,9 @@
         });
     }
 
+    /* ============================================================
+       INIT
+       ============================================================ */
     document.addEventListener('DOMContentLoaded', () => {
         const pairBtn = document.getElementById('pair-btn');
         if (pairBtn) {
@@ -1084,15 +1176,25 @@
         showPairScreen('');
     });
 
+    /* ============================================================
+       LIFECYCLE HANDLERS
+       ============================================================ */
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
             stopPolling();
             stopTokenPolling();
+            stopQrWatchdog();
         } else {
             if (isPaired) {
                 startPolling();
             } else if (currentToken) {
                 startTokenPolling();
+                startQrWatchdog();
+                // تأكد من وجود الـ QR عند الرجوع
+                const container = document.getElementById('pair-qr-canvas');
+                if (container && container.children.length === 0) {
+                    drawPairQR(currentToken);
+                }
             }
         }
     });
@@ -1100,14 +1202,17 @@
     window.addEventListener('pagehide', () => {
         stopPolling();
         stopTokenPolling();
+        stopQrWatchdog();
     });
     window.addEventListener('beforeunload', () => {
         stopPolling();
         stopTokenPolling();
+        stopQrWatchdog();
     });
     window.addEventListener('unload', () => {
         stopPolling();
         stopTokenPolling();
+        stopQrWatchdog();
     });
 </script>
 </body>

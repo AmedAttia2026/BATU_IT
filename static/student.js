@@ -376,7 +376,7 @@ async function selectSubjectForAttendance(subId, subName) {
 }
 
 /* =========================================================
-   🎨 المودال الاحترافي الفاخر V2
+   🎨 المودال الاحترافي · قائمة سكرول واحدة · تصميم نار 🔥
    ========================================================= */
 function showSessionsModal(sessions, subId, subName) {
     if (sessions.length === 0) {
@@ -388,13 +388,16 @@ function showSessionsModal(sessions, subId, subName) {
         });
     }
 
-    // ترتيب: المحاضرات الأول ثم السكاشن
+    /* ترتيب: المحاضرات الأول ثم السكاشن، كل نوع الأحدث أولاً */
     const sorted = [...sessions].sort((a, b) => {
         if (a.type !== b.type) return a.type === 'Lecture' ? -1 : 1;
         return (b.session_id || '').localeCompare(a.session_id || '');
     });
 
-    /* 🎨 بطاقات الجلسات الفاخرة */
+    const countLect = sessions.filter(s => s.type === 'Lecture').length;
+    const countSec = sessions.filter(s => s.type === 'Section').length;
+
+    /* ═══ بطاقات الجلسات ═══ */
     const cardsHtml = sorted.map((s, idx) => {
         const isLecture = s.type === 'Lecture';
         const typeIcon = isLecture ? 'fa-chalkboard-teacher' : 'fa-users';
@@ -403,7 +406,6 @@ function showSessionsModal(sessions, subId, subName) {
         const typeColorDark = isLecture ? '#FFB300' : '#3B82F6';
         const typeGlow = isLecture ? 'rgba(255,179,0,0.35)' : 'rgba(59,130,246,0.35)';
 
-        // معلومات المنشئ
         const creatorRole = s.creator_role || 'doctor';
         const isTA = (creatorRole === 'ta');
         const creatorPrefix = isTA ? 'م.' : 'د.';
@@ -416,7 +418,7 @@ function showSessionsModal(sessions, subId, subName) {
 
         return `
             <div class="lux-sess-card ${isLecture ? 'lux-lecture' : 'lux-section'}"
-                 style="--tc:${typeColor}; --tcd:${typeColorDark}; --tglow:${typeGlow}; --delay:${idx * 60}ms;"
+                 style="--tc:${typeColor}; --tcd:${typeColorDark}; --tglow:${typeGlow}; --delay:${idx * 40}ms;"
                  onclick="openVerifyModal('${s.session_id}', '${safeTitle}', '${safeSub}', '${s.type}')">
 
                 <div class="lux-card-glow"></div>
@@ -453,7 +455,7 @@ function showSessionsModal(sessions, subId, subName) {
 
     Swal.fire({
         ...swalDark,
-        width: 520,
+        width: 540,
         showConfirmButton: false,
         showCancelButton: true,
         cancelButtonText: '<i class="fas fa-times"></i> إغلاق',
@@ -462,14 +464,14 @@ function showSessionsModal(sessions, subId, subName) {
         html: `
             <style>
                 /* ═══════════════════════════════════════════════════
-                   LUXURY SESSION MODAL · 2026
+                   🔥 LUXURY SESSION MODAL · SCROLL EDITION
                    ═══════════════════════════════════════════════════ */
 
                 .lux-modal-popup {
-                    padding: 26px 22px 20px !important;
+                    padding: 24px 20px 18px !important;
                     border-radius: 28px !important;
                     background:
-                        radial-gradient(700px circle at 100% -10%, rgba(255,179,0,0.12), transparent 55%),
+                        radial-gradient(700px circle at 100% -10%, rgba(255,179,0,0.14), transparent 55%),
                         radial-gradient(600px circle at -10% 110%, rgba(124,58,237,0.10), transparent 55%),
                         radial-gradient(500px circle at 50% 50%, rgba(6,182,212,0.04), transparent 60%),
                         linear-gradient(165deg, #141a2b 0%, #0a0e18 100%) !important;
@@ -488,11 +490,7 @@ function showSessionsModal(sessions, subId, subName) {
                     top: 0; left: 0; right: 0;
                     height: 3px;
                     background: linear-gradient(90deg,
-                        transparent,
-                        #FFB300 20%,
-                        #FFD54F 50%,
-                        #FFB300 80%,
-                        transparent);
+                        transparent, #FFB300 20%, #FFD54F 50%, #FFB300 80%, transparent);
                     background-size: 200% 100%;
                     animation: luxTopShimmer 4s linear infinite;
                     box-shadow: 0 0 30px rgba(255,179,0,0.6);
@@ -506,8 +504,8 @@ function showSessionsModal(sessions, subId, subName) {
                 /* ═══ الهيدر الفاخر ═══ */
                 .lux-head {
                     position: relative;
-                    padding: 4px 4px 20px;
-                    margin-bottom: 18px;
+                    padding: 2px 4px 16px;
+                    margin-bottom: 14px;
                     text-align: center;
                 }
                 .lux-head::after {
@@ -519,16 +517,14 @@ function showSessionsModal(sessions, subId, subName) {
                     width: 70%;
                     height: 1px;
                     background: linear-gradient(90deg,
-                        transparent,
-                        rgba(255,179,0,0.4) 50%,
-                        transparent);
+                        transparent, rgba(255,179,0,0.4) 50%, transparent);
                 }
 
                 .lux-head-icon {
                     position: relative;
-                    width: 62px;
-                    height: 62px;
-                    margin: 0 auto 14px;
+                    width: 58px;
+                    height: 58px;
+                    margin: 0 auto 12px;
                     display: flex;
                     align-items: center;
                     justify-content: center;
@@ -540,8 +536,7 @@ function showSessionsModal(sessions, subId, subName) {
                     border: 1.5px solid rgba(255,179,0,0.5);
                     box-shadow:
                         0 0 40px rgba(255,179,0,0.35),
-                        inset 0 0 24px rgba(255,179,0,0.15),
-                        0 15px 30px rgba(0,0,0,0.4);
+                        inset 0 0 24px rgba(255,179,0,0.15);
                     animation: luxHeadFloat 3.5s ease-in-out infinite;
                 }
                 @keyframes luxHeadFloat {
@@ -558,11 +553,11 @@ function showSessionsModal(sessions, subId, subName) {
                 }
                 @keyframes luxHeadRing {
                     0%,100% { transform: scale(1); opacity: 0.6; }
-                    50%     { transform: scale(1.12); opacity: 0; }
+                    50%     { transform: scale(1.15); opacity: 0; }
                 }
                 .lux-head-icon i {
                     color: #FFD54F;
-                    font-size: 26px;
+                    font-size: 24px;
                     filter: drop-shadow(0 0 14px rgba(255,179,0,0.9));
                     animation: luxHeadIcon 3s ease-in-out infinite;
                 }
@@ -601,10 +596,7 @@ function showSessionsModal(sessions, subId, subName) {
                     font-size: 24px;
                     font-weight: 900;
                     background: linear-gradient(120deg,
-                        #ffffff 0%,
-                        #ffd76a 40%,
-                        #ffffff 70%,
-                        #ffd76a 100%);
+                        #ffffff 0%, #ffd76a 40%, #ffffff 70%, #ffd76a 100%);
                     background-size: 200% 100%;
                     -webkit-background-clip: text;
                     background-clip: text;
@@ -619,25 +611,128 @@ function showSessionsModal(sessions, subId, subName) {
                     50%     { background-position: 100% 50%; }
                 }
 
-                /* ═══ قائمة البطاقات ═══ */
+                /* ═══ شريط الملخص ═══ */
+                .lux-summary {
+                    display: flex;
+                    justify-content: center;
+                    gap: 8px;
+                    margin-bottom: 14px;
+                    padding: 0 4px;
+                    flex-wrap: wrap;
+                }
+                .lux-summary-item {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    font-family: 'Cairo', sans-serif;
+                    font-size: 11.5px;
+                    font-weight: 800;
+                    color: #b8c0d4;
+                    padding: 5px 13px;
+                    border-radius: 10px;
+                    background: rgba(255,255,255,0.04);
+                    border: 1px solid rgba(255,255,255,0.07);
+                    letter-spacing: 0.2px;
+                }
+                .lux-summary-item b {
+                    color: #fff;
+                    font-weight: 900;
+                    font-size: 13px;
+                }
+                .lux-summary-item i { font-size: 11px; }
+
+                /* ═══════════════════════════════════════════════════
+                   🔥 SCROLL CONTAINER — سكرول فاخر
+                   ═══════════════════════════════════════════════════ */
+                .lux-scroll-wrap {
+                    position: relative;
+                    max-height: 55vh;
+                    overflow-y: auto;
+                    overflow-x: hidden;
+                    padding: 6px 10px 6px 4px;
+                    margin: 0 -6px;
+                    border-radius: 16px;
+                    background: rgba(0,0,0,0.15);
+                    scroll-behavior: smooth;
+
+                    /* Firefox */
+                    scrollbar-width: thin;
+                    scrollbar-color: #FFB300 rgba(0,0,0,0.3);
+                }
+
+                /* Chrome / Safari / Edge — سكرول ذهبي فاخر */
+                .lux-scroll-wrap::-webkit-scrollbar {
+                    width: 8px;
+                }
+                .lux-scroll-wrap::-webkit-scrollbar-track {
+                    background: rgba(0,0,0,0.35);
+                    border-radius: 8px;
+                    margin: 4px 0;
+                    border: 1px solid rgba(255,255,255,0.03);
+                }
+                .lux-scroll-wrap::-webkit-scrollbar-thumb {
+                    background: linear-gradient(180deg,
+                        #FFE082 0%,
+                        #FFD54F 30%,
+                        #FFB300 70%,
+                        #FF8F00 100%);
+                    border-radius: 8px;
+                    border: 1px solid rgba(255,179,0,0.6);
+                    box-shadow:
+                        0 0 12px rgba(255,179,0,0.6),
+                        inset 0 1px 2px rgba(255,255,255,0.4);
+                    transition: all 0.3s ease;
+                }
+                .lux-scroll-wrap::-webkit-scrollbar-thumb:hover {
+                    background: linear-gradient(180deg,
+                        #FFF3C4 0%,
+                        #FFE082 30%,
+                        #FFD54F 70%,
+                        #FFB300 100%);
+                    box-shadow:
+                        0 0 20px rgba(255,179,0,0.9),
+                        inset 0 1px 2px rgba(255,255,255,0.6);
+                    border-color: #FFD54F;
+                }
+                .lux-scroll-wrap::-webkit-scrollbar-thumb:active {
+                    background: linear-gradient(180deg, #FFD54F, #FFB300);
+                }
+
+                /* توهج علوي وسفلي للتنبيه بمحتوى مخفي */
+                .lux-scroll-wrap::before {
+                    content: "";
+                    position: sticky;
+                    top: 0;
+                    left: 0; right: 0;
+                    height: 12px;
+                    margin: -6px -10px 0 -4px;
+                    background: linear-gradient(180deg,
+                        rgba(20,26,43,0.9) 0%,
+                        transparent 100%);
+                    pointer-events: none;
+                    z-index: 3;
+                    display: block;
+                }
+                .lux-scroll-wrap::after {
+                    content: "";
+                    position: sticky;
+                    bottom: 0;
+                    left: 0; right: 0;
+                    height: 16px;
+                    margin: 0 -10px -6px -4px;
+                    background: linear-gradient(0deg,
+                        rgba(20,26,43,0.9) 0%,
+                        transparent 100%);
+                    pointer-events: none;
+                    z-index: 3;
+                    display: block;
+                }
+
                 .lux-list {
                     display: flex;
                     flex-direction: column;
-                    gap: 12px;
-                    max-height: 55vh;
-                    overflow-y: auto;
-                    padding: 4px 4px 4px 0;
-                    text-align: right;
-                }
-                .lux-list::-webkit-scrollbar { width: 5px; }
-                .lux-list::-webkit-scrollbar-track {
-                    background: rgba(0,0,0,0.3);
-                    border-radius: 5px;
-                }
-                .lux-list::-webkit-scrollbar-thumb {
-                    background: linear-gradient(180deg, #FFD54F, #FFB300, #FF8F00);
-                    border-radius: 5px;
-                    box-shadow: 0 0 12px rgba(255,179,0,0.5);
+                    gap: 10px;
+                    padding: 2px 0;
                 }
 
                 /* ═══════════════════════════════════════════════════
@@ -647,15 +742,14 @@ function showSessionsModal(sessions, subId, subName) {
                     position: relative;
                     display: flex;
                     align-items: center;
-                    gap: 14px;
-                    padding: 16px 18px;
-                    border-radius: 18px;
+                    gap: 13px;
+                    padding: 15px 16px;
+                    border-radius: 16px;
                     cursor: pointer;
                     overflow: hidden;
                     background:
                         linear-gradient(155deg,
-                            rgba(30,42,64,0.85) 0%,
-                            rgba(15,20,33,0.98) 100%);
+                            rgba(30,42,64,0.85) 0%, rgba(15,20,33,0.98) 100%);
                     border: 1.5px solid rgba(255,255,255,0.07);
                     box-shadow:
                         0 6px 24px rgba(0,0,0,0.45),
@@ -669,7 +763,6 @@ function showSessionsModal(sessions, subId, subName) {
                     to   { opacity: 1; transform: translateY(0) scale(1); }
                 }
 
-                /* شريط جانبي ملون + توهج */
                 .lux-sess-card::before {
                     content: "";
                     position: absolute;
@@ -681,13 +774,11 @@ function showSessionsModal(sessions, subId, subName) {
                     z-index: 3;
                 }
 
-                /* توهج داخلي عند الـ hover */
                 .lux-card-glow {
                     position: absolute;
                     inset: 0;
                     background: radial-gradient(400px circle at 100% 50%,
-                        var(--tglow),
-                        transparent 45%);
+                        var(--tglow), transparent 45%);
                     opacity: 0;
                     transition: opacity 0.45s ease;
                     pointer-events: none;
@@ -704,17 +795,14 @@ function showSessionsModal(sessions, subId, subName) {
                         inset 0 1px 0 rgba(255,255,255,0.1);
                     background:
                         linear-gradient(155deg,
-                            rgba(42,55,82,0.9) 0%,
-                            rgba(20,26,42,0.98) 100%);
+                            rgba(42,55,82,0.9) 0%, rgba(20,26,42,0.98) 100%);
                 }
                 .lux-sess-card:hover .lux-card-glow { opacity: 1; }
-
                 .lux-sess-card:active {
                     transform: translateY(-2px) scale(0.99);
                     transition-duration: 0.1s;
                 }
 
-                /* ═══ الأيقونة الكبيرة ═══ */
                 .lux-card-left {
                     position: relative;
                     z-index: 2;
@@ -722,15 +810,14 @@ function showSessionsModal(sessions, subId, subName) {
                 }
                 .lux-icon-wrap {
                     position: relative;
-                    width: 54px;
-                    height: 54px;
-                    border-radius: 16px;
+                    width: 52px;
+                    height: 52px;
+                    border-radius: 15px;
                     display: flex;
                     align-items: center;
                     justify-content: center;
                     background: linear-gradient(135deg,
-                        rgba(255,255,255,0.06),
-                        rgba(0,0,0,0.4));
+                        rgba(255,255,255,0.06), rgba(0,0,0,0.4));
                     border: 1.5px solid var(--tglow);
                     box-shadow:
                         0 0 20px var(--tglow),
@@ -738,7 +825,7 @@ function showSessionsModal(sessions, subId, subName) {
                     transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
                 }
                 .lux-icon-wrap i {
-                    font-size: 22px;
+                    font-size: 21px;
                     color: var(--tc);
                     filter: drop-shadow(0 0 10px var(--tglow));
                     transition: all 0.4s ease;
@@ -746,16 +833,13 @@ function showSessionsModal(sessions, subId, subName) {
                 .lux-icon-ring {
                     position: absolute;
                     inset: -4px;
-                    border-radius: 20px;
+                    border-radius: 19px;
                     border: 1px solid var(--tglow);
                     opacity: 0;
                     transition: all 0.4s ease;
                 }
                 .lux-sess-card:hover .lux-icon-wrap {
                     transform: scale(1.08) rotate(-6deg);
-                    box-shadow:
-                        0 0 32px var(--tglow),
-                        inset 0 0 20px rgba(0,0,0,0.4);
                 }
                 .lux-sess-card:hover .lux-icon-wrap i {
                     transform: scale(1.15);
@@ -769,7 +853,6 @@ function showSessionsModal(sessions, subId, subName) {
                     50%     { transform: scale(1.18); opacity: 0; }
                 }
 
-                /* ═══ جسم البطاقة ═══ */
                 .lux-card-body {
                     flex: 1;
                     min-width: 0;
@@ -781,7 +864,6 @@ function showSessionsModal(sessions, subId, subName) {
                     text-align: right;
                 }
 
-                /* شارة النوع */
                 .lux-type-badge {
                     display: inline-flex;
                     align-items: center;
@@ -794,8 +876,7 @@ function showSessionsModal(sessions, subId, subName) {
                     padding: 3px 11px;
                     border-radius: 20px;
                     background: linear-gradient(135deg,
-                        rgba(255,255,255,0.08),
-                        rgba(0,0,0,0.3));
+                        rgba(255,255,255,0.08), rgba(0,0,0,0.3));
                     border: 1px solid var(--tglow);
                     letter-spacing: 0.5px;
                     white-space: nowrap;
@@ -803,7 +884,6 @@ function showSessionsModal(sessions, subId, subName) {
                 }
                 .lux-type-badge i { font-size: 10px; }
 
-                /* العنوان */
                 .lux-title {
                     font-family: 'Plus Jakarta Sans', 'Cairo', sans-serif;
                     font-size: 17px;
@@ -828,7 +908,6 @@ function showSessionsModal(sessions, subId, subName) {
                         0 0 24px var(--tglow);
                 }
 
-                /* المنشئ */
                 .lux-creator {
                     display: inline-flex;
                     align-items: center;
@@ -837,8 +916,7 @@ function showSessionsModal(sessions, subId, subName) {
                     padding: 4px 11px 4px 5px;
                     border-radius: 20px;
                     background: linear-gradient(135deg,
-                        rgba(255,255,255,0.05),
-                        rgba(0,0,0,0.25));
+                        rgba(255,255,255,0.05), rgba(0,0,0,0.25));
                     border: 1px solid rgba(255,255,255,0.08);
                     transition: all 0.3s ease;
                 }
@@ -849,9 +927,7 @@ function showSessionsModal(sessions, subId, subName) {
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    background: linear-gradient(135deg,
-                        var(--cc),
-                        rgba(0,0,0,0.4));
+                    background: linear-gradient(135deg, var(--cc), rgba(0,0,0,0.4));
                     color: #0a0e17;
                     font-size: 10px;
                     box-shadow: 0 0 10px var(--cc);
@@ -873,7 +949,6 @@ function showSessionsModal(sessions, subId, subName) {
                     color: var(--cc);
                 }
 
-                /* ═══ السهم ═══ */
                 .lux-card-arrow {
                     position: relative;
                     z-index: 2;
@@ -901,16 +976,25 @@ function showSessionsModal(sessions, subId, subName) {
                 /* ═══ موبايل ═══ */
                 @media (max-width: 520px) {
                     .lux-modal-popup { padding: 20px 14px 16px !important; border-radius: 24px !important; }
-                    .lux-head { padding-bottom: 16px; margin-bottom: 14px; }
-                    .lux-head-icon { width: 54px; height: 54px; border-radius: 16px; margin-bottom: 12px; }
-                    .lux-head-icon i { font-size: 22px; }
-                    .lux-head-sub { font-size: 10.5px; padding: 3px 12px; }
+                    .lux-head { padding-bottom: 12px; margin-bottom: 12px; }
+                    .lux-head-icon { width: 50px; height: 50px; border-radius: 16px; margin-bottom: 10px; }
+                    .lux-head-icon i { font-size: 21px; }
+                    .lux-head-sub { font-size: 10.5px; padding: 3px 11px; }
                     .lux-head-title { font-size: 19px; }
-                    .lux-list { gap: 10px; }
-                    .lux-sess-card { padding: 13px 14px; gap: 11px; border-radius: 16px; }
-                    .lux-icon-wrap { width: 46px; height: 46px; border-radius: 14px; }
+                    .lux-summary { margin-bottom: 10px; gap: 6px; }
+                    .lux-summary-item { font-size: 10.5px; padding: 4px 10px; }
+                    .lux-summary-item b { font-size: 12px; }
+                    .lux-scroll-wrap {
+                        max-height: 58vh;
+                        padding: 4px 8px 4px 2px;
+                        margin: 0 -4px;
+                    }
+                    .lux-scroll-wrap::-webkit-scrollbar { width: 6px; }
+                    .lux-list { gap: 9px; }
+                    .lux-sess-card { padding: 13px 14px; gap: 11px; border-radius: 14px; }
+                    .lux-icon-wrap { width: 46px; height: 46px; border-radius: 13px; }
                     .lux-icon-wrap i { font-size: 18px; }
-                    .lux-title { font-size: 14.5px; }
+                    .lux-title { font-size: 15px; }
                     .lux-type-badge { font-size: 10px; padding: 3px 10px; }
                     .lux-creator-name { font-size: 10.5px; }
                     .lux-creator-avatar { width: 20px; height: 20px; font-size: 9px; }
@@ -918,7 +1002,7 @@ function showSessionsModal(sessions, subId, subName) {
                 }
             </style>
 
-            <!-- ═══ الهيدر الفاخر ═══ -->
+            <!-- ═══ الهيدر ═══ -->
             <div class="lux-head">
                 <div class="lux-head-icon">
                     <i class="fas fa-book-open"></i>
@@ -932,9 +1016,27 @@ function showSessionsModal(sessions, subId, subName) {
                 <div class="lux-head-title">${subName}</div>
             </div>
 
-            <!-- ═══ قائمة البطاقات ═══ -->
-            <div class="lux-list">
-                ${cardsHtml}
+            <!-- ═══ شريط الملخص ═══ -->
+            <div class="lux-summary">
+                ${countLect > 0 ? `
+                    <span class="lux-summary-item">
+                        <i class="fas fa-chalkboard-teacher" style="color:#FFB300;"></i>
+                        <b>${countLect}</b> محاضرة
+                    </span>
+                ` : ''}
+                ${countSec > 0 ? `
+                    <span class="lux-summary-item">
+                        <i class="fas fa-users" style="color:#3B82F6;"></i>
+                        <b>${countSec}</b> سكشن
+                    </span>
+                ` : ''}
+            </div>
+
+            <!-- ═══ قائمة السكرول ═══ -->
+            <div class="lux-scroll-wrap">
+                <div class="lux-list">
+                    ${cardsHtml}
+                </div>
             </div>
         `
     });

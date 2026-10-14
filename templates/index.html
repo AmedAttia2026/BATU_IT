@@ -183,7 +183,7 @@
         }
 
         /* ==========================================================
-           AUTH SCREEN
+           AUTH SCREEN — صفحة واحدة
            ========================================================== */
         #auth-screen {
             background: transparent !important;
@@ -224,7 +224,7 @@
             pointer-events: none;
         }
 
-        /* ✅ الدايرة الكبيرة — حجم متزايد */
+        /* ✅ الدايرة الكبيرة */
         .nx-logo-wrap {
             position: relative;
             width: 150px;
@@ -327,7 +327,7 @@
             font-weight: 500 !important;
         }
 
-        /* ✅ حقل رقمي: الـ placeholder على اليمين + الأرقام فقط */
+        /* ✅ حقل رقمي */
         .numeric-input {
             direction: rtl !important;
             text-align: right !important;
@@ -408,61 +408,6 @@
         .btn-primary:hover::after { left: 130%; }
         .btn-primary:active { transform: translateY(0); }
 
-        /* ✅ زر التالي (أزرق سماوي) */
-        .btn-next {
-            background: linear-gradient(135deg, #06B6D4 0%, #22d3ee 50%, #06B6D4 100%) !important;
-            background-size: 200% 100% !important;
-            color: #0a0e17 !important;
-            font-family: 'Cairo', sans-serif !important;
-            font-weight: 900 !important;
-            border-radius: 14px !important;
-            padding: 15px 20px !important;
-            font-size: 15.5px !important;
-            box-shadow:
-                0 12px 28px rgba(6,182,212,0.35),
-                inset 0 1px 0 rgba(255,255,255,0.5) !important;
-            position: relative;
-            overflow: hidden;
-            transition: all .3s ease;
-            cursor: pointer;
-            border: none;
-            width: 100%;
-        }
-        .btn-next::after {
-            content: "";
-            position: absolute;
-            top: 0; left: -60%;
-            width: 60%; height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent);
-            transform: skewX(-25deg);
-            transition: left .75s ease;
-        }
-        .btn-next:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 18px 40px rgba(6,182,212,0.5), inset 0 1px 0 rgba(255,255,255,0.6) !important;
-        }
-        .btn-next:hover::after { left: 130%; }
-
-        /* ✅ زر الرجوع (نص بسيط) */
-        .back-link {
-            background: transparent;
-            border: none;
-            color: var(--text-muted);
-            font-family: 'Cairo', sans-serif;
-            font-size: 12.5px;
-            font-weight: 700;
-            cursor: pointer;
-            padding: 10px;
-            margin-top: 6px;
-            width: 100%;
-            transition: color 0.25s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-        }
-        .back-link:hover { color: var(--nx-gold); }
-
         /* ==========================================================
            MAIN UI
            ========================================================== */
@@ -475,7 +420,7 @@
         }
 
         /* ==========================================================
-           ✅ NAVBAR — BATU يمين شوية + الأزرار على اليسار
+           NAVBAR
            ========================================================== */
         .navbar {
             background: rgba(10, 14, 23, 0.75) !important;
@@ -507,7 +452,6 @@
             height: 100% !important;
             text-align: initial !important;
 
-            /* ✅ التمركز البصري — يمين شوية */
             position: absolute !important;
             left: 58% !important;
             top: 50% !important;
@@ -539,7 +483,6 @@
             50%     { filter: drop-shadow(0 0 22px rgba(255,179,0,1)); }
         }
 
-        /* ✅ مجموعة الأزرار */
         .nav-actions {
             display: flex;
             align-items: center;
@@ -548,7 +491,6 @@
             z-index: 2;
         }
 
-        /* ✅ تصميم فخم للأزرار */
         .btn-outline, .btn-danger-outline {
             position: relative;
             overflow: hidden;
@@ -585,7 +527,6 @@
             left: 100%;
         }
 
-        /* زر سجل حضوري — ذهبي */
         .btn-outline {
             background: linear-gradient(135deg, rgba(255,179,0,0.12), rgba(255,179,0,0.04));
             border-color: rgba(255,179,0,0.45);
@@ -611,7 +552,6 @@
             transform: rotate(-15deg) scale(1.15);
         }
 
-        /* زر خروج — أحمر */
         .btn-danger-outline {
             background: linear-gradient(135deg, rgba(239,68,68,0.12), rgba(239,68,68,0.04));
             border-color: rgba(239,68,68,0.45);
@@ -644,7 +584,7 @@
         }
 
         /* ==========================================================
-           HERO BANNER — النسخة الأصلية الكبيرة (بدون تغيير)
+           HERO BANNER
            ========================================================== */
         .student-info-banner {
             position: relative;
@@ -842,17 +782,6 @@
             box-shadow: 0 0 22px rgba(6,182,212,0.22);
             transform: translateY(-1px);
         }
-        .chip-purple {
-            background: rgba(124,58,237,0.12);
-            color: #a78bfa;
-            border: 1px solid rgba(124,58,237,0.32);
-            box-shadow: 0 0 16px rgba(124,58,237,0.08);
-        }
-        .chip-purple:hover {
-            background: rgba(124,58,237,0.2);
-            box-shadow: 0 0 22px rgba(124,58,237,0.22);
-            transform: translateY(-1px);
-        }
         .chip i { font-size: 11px; }
 
         .banner-actions {
@@ -1037,7 +966,7 @@
         }
 
         /* ==========================================================
-           ✅ شارة حالة الجلسة (تحديث تلقائي)
+           شارة حالة الجلسة
            ========================================================== */
         .session-status-badge {
             display: flex;
@@ -1129,7 +1058,7 @@
         }
 
         /* ==========================================================
-           ✅ MODALS — مع إصلاح زرار الإغلاق
+           MODALS
            ========================================================== */
         .modal-screen {
             background: rgba(5,7,15,0.8) !important;
@@ -1468,7 +1397,6 @@
             .auth-title { font-size: 22px !important; }
             .auth-subtitle { letter-spacing: 6px !important; font-size: 11px !important; }
 
-            /* ✅ الدايرة على الموبايل */
             .nx-logo-wrap { width: 120px; height: 120px; margin-bottom: 24px; }
             .nx-logo-core { width: 102px; height: 102px; font-size: 20px; }
 
@@ -1525,7 +1453,7 @@
         <h3>Loading</h3>
     </div>
 
-    <!-- ===== شاشة تسجيل البيانات (على خطوتين) ===== -->
+    <!-- ===== شاشة تسجيل البيانات (صفحة واحدة) ===== -->
     <div id="auth-screen">
         <div class="auth-card">
             <div class="nx-logo-wrap">
@@ -1536,45 +1464,27 @@
             <h2 class="auth-title">Attendance System</h2>
             <p class="auth-subtitle">BATU</p>
 
-            <!-- ============ الخطوة 1: البيانات الأساسية ============ -->
-            <div id="auth-step-1">
-                <input type="text" id="login-name" class="auth-input" placeholder="اسم الطالب ثلاثي أو رباعي" autocomplete="off">
+            <input type="text" id="login-name" class="auth-input" placeholder="اسم الطالب ثلاثي أو رباعي" autocomplete="off">
 
-                <input type="text" id="login-id" class="auth-input numeric-input" placeholder="كود الطالب (7 أرقام)" maxlength="7" inputmode="numeric" autocomplete="off" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+            <input type="text" id="login-id" class="auth-input numeric-input" placeholder="كود الطالب (7 أرقام)" maxlength="7" inputmode="numeric" autocomplete="off" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
 
-                <select id="login-year" class="custom-select">
-                    <option value="" disabled selected>اختر الفرقة الدراسية</option>
-                    <option value="الفرقة الأولى">الفرقة الأولى</option>
-                    <option value="الفرقة الثانية">الفرقة الثانية</option>
-                    <option value="الفرقة الثالثة">الفرقة الثالثة</option>
-                    <option value="الفرقة الرابعة">الفرقة الرابعة</option>
-                </select>
+            <select id="login-year" class="custom-select">
+                <option value="" disabled selected>اختر الفرقة الدراسية</option>
+                <option value="الفرقة الأولى">الفرقة الأولى</option>
+                <option value="الفرقة الثانية">الفرقة الثانية</option>
+                <option value="الفرقة الثالثة">الفرقة الثالثة</option>
+                <option value="الفرقة الرابعة">الفرقة الرابعة</option>
+            </select>
 
-                <button type="button" id="next-step-btn" class="btn-next" style="margin-top: 8px;" onclick="goToClassStep()">
-                    التالي <i class="fas fa-arrow-left" style="margin-right:6px;"></i>
-                </button>
-            </div>
+            <select id="login-dept" class="custom-select" style="display:none;">
+                <option value="" disabled selected>اختر القسم / التخصص</option>
+                <option value="Software">قسم Software</option>
+                <option value="Network">قسم Network</option>
+            </select>
 
-            <!-- ============ الخطوة 2: القسم + الفصل ============ -->
-            <div id="auth-step-2" style="display:none;">
-                <div id="dept-group" style="display:none;">
-                    <select id="login-dept" class="custom-select">
-                        <option value="" disabled selected>اختر القسم / التخصص</option>
-                        <option value="Software">قسم Software</option>
-                        <option value="Network">قسم Network</option>
-                    </select>
-                </div>
-
-                <div id="class-group" style="display:none;"></div>
-
-                <button type="button" id="login-submit-btn" class="btn-primary" style="display:none !important; margin-top: 8px;" onclick="loginStudent()">
-                    <i class="fas fa-shield-halved" style="margin-left:6px;"></i> دخول
-                </button>
-
-                <button type="button" class="back-link" onclick="backToStep1()">
-                    <i class="fas fa-arrow-right"></i> رجوع
-                </button>
-            </div>
+            <button type="button" id="login-submit-btn" class="btn-primary" style="margin-top: 8px;" onclick="loginStudent()">
+                <i class="fas fa-shield-halved" style="margin-left:6px;"></i> دخول
+            </button>
         </div>
     </div>
 
@@ -1597,7 +1507,7 @@
 
         <div class="container">
 
-            <!-- ===================== HERO BANNER (الأصلي) ===================== -->
+            <!-- ===================== HERO BANNER ===================== -->
             <div class="student-info-banner">
                 <div class="banner-identity">
                     <div class="banner-avatar-wrap">
@@ -1620,10 +1530,6 @@
                             <span class="chip chip-cyan">
                                 <i class="fas fa-microchip"></i>
                                 <span id="display-dept">...</span>
-                            </span>
-                            <span class="chip chip-purple" id="display-class-chip" style="display:none;">
-                                <i class="fas fa-layer-group"></i>
-                                <span id="display-class">Class ...</span>
                             </span>
                         </div>
                     </div>

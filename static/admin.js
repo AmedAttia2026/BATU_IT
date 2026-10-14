@@ -2184,6 +2184,9 @@ async function toggleSession(id, isOpen) {
             sess.is_open = old;
             renderFilteredSessionsTable(currentSessionsFilter);
             Swal.fire({...swalDark, icon: 'error', text: data.message || 'خطأ'});
+        } else {
+            /* 🆕 تحديث فوري بعد الفتح/الإغلاق لجلب بيانات جديدة */
+            refreshDataSilently();
         }
     } catch (e) {
         sess.is_open = old;

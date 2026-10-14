@@ -23,8 +23,8 @@
         :root{
             --pad:   clamp(10px, 2.2vmin, 22px);
             --gap:   clamp(8px, 1.6vmin, 16px);
-            --qr:    min(680px, 92vw, 68vh);   /* 🔥 QR أكبر بكتير */
-            --qr-p:  min(500px, 84vw, 52vh);
+            --qr:    min(460px, 82vw, 52vh);
+            --qr-p:  min(400px, 76vw, 44vh);
             --logo:  clamp(64px, 11vmin, 120px);
             --hero:  clamp(44px, 8vmin, 70px);
             --code:  clamp(34px, 6.5vmin, 68px);
@@ -65,6 +65,9 @@
 
         @keyframes nxSpin { to { transform: rotate(360deg); } }
 
+        /* ============================================================
+           FULLSCREEN BUTTON
+           ============================================================ */
         #fs-btn {
             position: fixed;
             top: calc(12px + var(--safe-top));
@@ -86,6 +89,9 @@
         #fs-btn:hover { background: rgba(255,179,0,0.18); transform: translateY(-1px); }
         #fs-btn.show { display: inline-flex; }
 
+        /* ============================================================
+           PAIR SCREEN
+           ============================================================ */
         #pair-screen {
             position: relative;
             z-index: 2;
@@ -148,7 +154,7 @@
             align-items: center;
             margin-bottom: clamp(10px, 2vmin, 22px);
             width: 100%;
-            max-width: 700px;
+            max-width: 520px;
             flex-shrink: 0;
         }
 
@@ -236,7 +242,7 @@
             align-items: center;
             gap: clamp(10px, 1.8vmin, 16px);
             width: 100%;
-            max-width: 700px;
+            max-width: 520px;
             flex-shrink: 0;
         }
 
@@ -405,6 +411,9 @@
             border: 1px solid rgba(239,68,68,0.3);
         }
 
+        /* ============================================================
+           DISPLAY SCREEN
+           ============================================================ */
         #display-screen {
             display: none;
             flex-direction: column;
@@ -439,35 +448,12 @@
             border-radius: 12px;
         }
 
-        .nx-qr-block {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 14px;
-        }
-
-        /* ═══════════════════════════════════════════════════
-           🔥 QR WRAPPER — كليكابل للـ Fullscreen
-           ═══════════════════════════════════════════════════ */
         #qr-wrapper {
             background: #fff;
             padding: clamp(14px, 2.2vmin, 24px);
             border-radius: 28px;
-            box-shadow:
-                0 0 140px rgba(255,179,0,0.45),
-                0 30px 80px rgba(0,0,0,0.65);
+            box-shadow: 0 0 120px rgba(255,179,0,0.4), 0 30px 70px rgba(0,0,0,0.6);
             position: relative;
-            cursor: pointer;
-            transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.35s ease;
-        }
-        #qr-wrapper:hover {
-            transform: scale(1.02);
-            box-shadow:
-                0 0 180px rgba(255,179,0,0.6),
-                0 40px 100px rgba(0,0,0,0.75);
-        }
-        #qr-wrapper:active {
-            transform: scale(0.98);
         }
         #qr-wrapper::before {
             content: "";
@@ -480,210 +466,17 @@
             animation: borderFlow 6s linear infinite;
         }
 
-        /* 🆕 تلميح صغير فوق QR يوضح إنك تقدر تكبّر */
-        .qr-hint {
-            position: absolute;
-            top: -14px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 5px 14px;
-            border-radius: 20px;
-            background: linear-gradient(135deg, rgba(255,179,0,0.95), rgba(255,213,79,0.9));
-            color: #0a0e17;
-            font-family: 'Cairo', sans-serif;
-            font-size: 11px;
-            font-weight: 900;
-            white-space: nowrap;
-            box-shadow:
-                0 6px 20px rgba(255,179,0,0.5),
-                0 0 0 2px rgba(10,14,23,0.4);
-            z-index: 10;
-            pointer-events: none;
-            animation: qrHintBounce 2.5s ease-in-out infinite;
-        }
-        .qr-hint i { font-size: 10px; }
-        @keyframes qrHintBounce {
-            0%,100% { transform: translateX(-50%) translateY(0); }
-            50%     { transform: translateX(-50%) translateY(-3px); }
-        }
-
         #qr-canvas img, #qr-canvas canvas {
             display: block;
             width: var(--qr) !important;
             height: var(--qr) !important;
             image-rendering: pixelated;
             image-rendering: crisp-edges;
-            pointer-events: none; /* نمنع الـ drag ghost */
         }
 
-        /* ═══════════════════════════════════════════════════
-           🆕 FULLSCREEN MODE
-           ═══════════════════════════════════════════════════ */
-        #qr-wrapper.is-fullscreen,
-        #qr-wrapper:fullscreen {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: radial-gradient(circle at center, #0d1220 0%, #05070f 100%) !important;
-            padding: 20px;
-            border-radius: 0;
-            cursor: zoom-out;
-            width: 100vw;
-            height: 100vh;
-            max-width: none;
-            max-height: none;
-        }
-        #qr-wrapper.is-fullscreen::before,
-        #qr-wrapper:fullscreen::before {
-            inset: 0;
-            border-radius: 0;
-            background: radial-gradient(circle at 50% 50%, rgba(255,179,0,0.15), transparent 70%);
-            z-index: 0;
-        }
-        #qr-wrapper.is-fullscreen #qr-canvas,
-        #qr-wrapper:fullscreen #qr-canvas {
-            position: relative;
-            z-index: 2;
-            background: #fff;
-            padding: clamp(20px, 3vmin, 40px);
-            border-radius: 32px;
-            box-shadow:
-                0 0 120px rgba(255,179,0,0.5),
-                0 30px 80px rgba(0,0,0,0.8);
-        }
-        #qr-wrapper.is-fullscreen #qr-canvas img,
-        #qr-wrapper.is-fullscreen #qr-canvas canvas,
-        #qr-wrapper:fullscreen #qr-canvas img,
-        #qr-wrapper:fullscreen #qr-canvas canvas {
-            width: min(80vh, 80vw, 900px) !important;
-            height: min(80vh, 80vw, 900px) !important;
-        }
-        #qr-wrapper.is-fullscreen .qr-hint,
-        #qr-wrapper:fullscreen .qr-hint {
-            background: linear-gradient(135deg, #EF4444, #DC2626);
-            color: #fff;
-            box-shadow:
-                0 6px 20px rgba(239,68,68,0.6),
-                0 0 0 2px rgba(10,14,23,0.6);
-            top: auto;
-            bottom: -20px;
-        }
-        #qr-wrapper.is-fullscreen .qr-hint i,
-        #qr-wrapper:fullscreen .qr-hint i {
-            content: "\f00d";
-        }
-        #qr-wrapper.is-fullscreen .qr-hint .hint-text,
-        #qr-wrapper:fullscreen .qr-hint .hint-text {
-            /* يتغير النص عبر JS */
-        }
-
-        /* ═══════════════════════════════════════════════════
-           🔥 ROYAL GRADIENT BAR (تحت QR) — ملكي فخم
-           ═══════════════════════════════════════════════════ */
-        .qr-timer-block {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
-            width: min(680px, 92vw, 68vh);
-            margin-top: 4px;
-        }
-        #qr-timer-track {
-            width: 100%;
-            height: 10px;
-            background:
-                linear-gradient(90deg,
-                    rgba(255,179,0,0.08),
-                    rgba(124,58,237,0.08),
-                    rgba(6,182,212,0.08));
-            border-radius: 8px;
-            overflow: hidden;
-            position: relative;
-            border: 1.5px solid rgba(255,179,0,0.35);
-            box-shadow:
-                0 0 26px rgba(255,179,0,0.3),
-                0 0 40px rgba(124,58,237,0.15),
-                inset 0 2px 3px rgba(0,0,0,0.5);
-        }
-        #qr-timer-bar {
-            height: 100%;
-            /* 🔥 تدرج ملكي: ذهبي → بنفسجي → سماوي → ذهبي */
-            background: linear-gradient(90deg,
-                #FFB300 0%,
-                #FFD54F 20%,
-                #A78BFA 45%,
-                #22D3EE 65%,
-                #FFD54F 85%,
-                #FFB300 100%);
-            background-size: 250% 100%;
-            width: 100%;
-            border-radius: 6px;
-            box-shadow:
-                0 0 18px rgba(255,179,0,0.7),
-                0 0 30px rgba(124,58,237,0.4),
-                0 0 40px rgba(6,182,212,0.3),
-                inset 0 1px 2px rgba(255,255,255,0.5);
-            transition: width 0.2s linear;
-            animation: qrBarRoyalFlow 4s linear infinite;
-        }
-        @keyframes qrBarRoyalFlow {
-            0%   { background-position: 0% 0; }
-            100% { background-position: -250% 0; }
-        }
-        #qr-seconds-label {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            font-family: 'Cairo', sans-serif;
-            font-size: clamp(12px, 1.8vmin, 15px);
-            font-weight: 900;
-            letter-spacing: 0.5px;
-            padding: 6px 16px;
-            border-radius: 22px;
-            /* 🔥 خلفية ملكية */
-            background:
-                linear-gradient(135deg,
-                    rgba(255,179,0,0.15),
-                    rgba(124,58,237,0.15),
-                    rgba(6,182,212,0.15));
-            border: 1.5px solid rgba(255,179,0,0.45);
-            box-shadow:
-                0 0 24px rgba(255,179,0,0.25),
-                0 0 40px rgba(124,58,237,0.15),
-                inset 0 1px 0 rgba(255,255,255,0.1);
-            transition: all 0.3s ease;
-            /* 🆕 تدرج نصي */
-            color: #FFD54F;
-            text-shadow: 0 0 12px rgba(255,179,0,0.6);
-        }
-        #qr-seconds-label i {
-            font-size: 12px;
-            color: #FFD54F;
-            filter: drop-shadow(0 0 8px rgba(255,179,0,0.8));
-            animation: qrSecPulse 1s ease-in-out infinite;
-        }
-        @keyframes qrSecPulse {
-            0%,100% { transform: scale(1); opacity: 1; }
-            50%     { transform: scale(1.2); opacity: 0.6; }
-        }
-        #qr-seconds-label .qr-num {
-            font-family: 'Plus Jakarta Sans', monospace;
-            font-size: clamp(15px, 2.3vmin, 19px);
-            font-weight: 900;
-            /* 🆕 رقم بتدرج ملكي */
-            background: linear-gradient(135deg, #FFD54F, #A78BFA, #22D3EE);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-            min-width: 24px;
-            text-align: center;
-            display: inline-block;
-            filter: drop-shadow(0 0 10px rgba(255,213,79,0.5));
-        }
-
+        /* ============================================================
+           CODE SECTION — الشريط + الثواني على نفس السطر
+           ============================================================ */
         #code-section {
             display: none;
             flex-direction: column;
@@ -691,6 +484,8 @@
             gap: 6px;
             margin-top: 8px;
             animation: fadeIn 0.3s ease;
+            width: min(420px, 80vw);
+            max-width: 100%;
         }
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(-8px); }
@@ -714,13 +509,23 @@
             line-height: 1;
             padding-top: 6px;
         }
+
+        /* 🆕 صف الشريط + الثواني في نفس السطر */
+        .timer-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            margin-top: 8px;
+        }
+
         #timer-track {
-            width: min(360px, 70vw);
+            flex: 1;
             height: 8px;
             background: rgba(255,255,255,0.08);
             border-radius: 5px;
             overflow: hidden;
-            margin-top: 8px;
+            min-width: 0;
         }
         #timer-bar {
             height: 100%;
@@ -729,6 +534,27 @@
             transition: width 0.2s linear;
             box-shadow: 0 0 14px #FFB300;
             border-radius: 5px;
+        }
+
+        /* 🆕 عرض الثواني على اليسار */
+        .timer-seconds {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-family: 'Plus Jakarta Sans', monospace;
+            font-size: clamp(11px, 1.6vmin, 13px);
+            color: #8b93a7;
+            font-weight: 700;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .timer-seconds b {
+            color: #FFB300;
+            font-size: clamp(13px, 2vmin, 16px);
+            font-weight: 900;
+            text-shadow: 0 0 10px rgba(255,179,0,0.6);
+            min-width: 22px;
+            text-align: center;
         }
 
         #status-badge {
@@ -798,6 +624,9 @@
             box-shadow: 0 10px 26px rgba(239,68,68,0.3);
         }
 
+        /* ============================================================
+           SHORT SCREENS
+           ============================================================ */
         @media (max-height: 640px) {
             .nx-hero-icon { display: none; }
             .nx-hero-divider { display: none; }
@@ -808,7 +637,6 @@
             .nx-manual-toggle { padding: 8px 16px; font-size: 12px; }
             .bottom-actions { bottom: calc(8px + var(--safe-bottom)); gap: 8px; }
             .disp-btn { padding: 8px 12px; font-size: 11px; }
-            .qr-timer-block { gap: 7px; }
         }
 
         @media (max-height: 500px) {
@@ -819,6 +647,7 @@
             #display-screen { justify-content: flex-start; }
         }
 
+        /* الوضع الأفقي القصير */
         @media (orientation: landscape) and (max-height: 500px) {
             #display-screen {
                 flex-direction: row;
@@ -827,11 +656,10 @@
                 padding: calc(var(--pad) + var(--safe-top)) var(--pad) calc(var(--pad) + 60px + var(--safe-bottom));
             }
             #display-screen .info-wrap { order: 1; max-width: 40%; }
-            .nx-qr-block { order: 2; }
+            #qr-wrapper { order: 2; }
             #code-section { order: 3; max-width: 40%; }
             #manual-code { font-size: clamp(28px, 8vmin, 54px); }
-            #timer-track { width: min(240px, 40vw); }
-            .qr-timer-block { width: min(420px, 60vw); }
+            .timer-row { width: min(240px, 40vw); }
 
             #pair-screen { flex-direction: row; justify-content: center; gap: 20px; }
             #pair-screen .nx-logo-wrap,
@@ -857,6 +685,7 @@
 
     <div class="nx-particles" id="nx-particles" aria-hidden="true"></div>
 
+    <!-- زر تفعيل وضع ملء الشاشة -->
     <button id="fs-btn" type="button" title="ملء الشاشة" aria-label="ملء الشاشة">
         <i class="fas fa-expand"></i>
     </button>
@@ -916,34 +745,24 @@
             <div id="session-title">...</div>
         </div>
 
-        <div class="nx-qr-block">
-            <!-- 🆕 clickable wrapper -->
-            <div id="qr-wrapper" onclick="toggleQrFullscreen()" title="اضغط لتكبير الشاشة">
-                <div class="qr-hint" id="qr-hint">
-                    <i class="fas fa-expand"></i>
-                    <span class="hint-text">اضغط للـ ملء الشاشة</span>
-                </div>
-                <div id="qr-canvas"></div>
-            </div>
-
-            <!-- 🔥 Royal gradient bar -->
-            <div class="qr-timer-block">
-                <div id="qr-timer-track">
-                    <div id="qr-timer-bar"></div>
-                </div>
-                <div id="qr-seconds-label">
-                    <i class="fas fa-sync-alt"></i>
-                    <span>يتجدد بعد</span>
-                    <span id="qr-seconds" class="qr-num">3</span>
-                    <span>ث</span>
-                </div>
-            </div>
+        <div id="qr-wrapper">
+            <div id="qr-canvas"></div>
         </div>
 
         <div id="code-section">
             <div id="code-label">أو اكتب الرمز يدوياً (6 خانات)</div>
             <div id="manual-code">------</div>
-            <div id="timer-track"><div id="timer-bar"></div></div>
+
+            <!-- 🆕 الشريط + الثواني على نفس السطر -->
+            <div class="timer-row">
+                <div id="timer-track">
+                    <div id="timer-bar"></div>
+                </div>
+                <div class="timer-seconds">
+                    <b id="timer-seconds-value">10</b>
+                    <span>ث</span>
+                </div>
+            </div>
         </div>
 
         <div class="bottom-actions">
@@ -958,10 +777,10 @@
 
 <script>
     /* ============================================================
-       🖥️ Display Screen Logic — v9 (Royal Bar + Click-Fullscreen)
+       🖥️ Display Screen Logic — v7 (Big QR + Compact Timer)
        ============================================================ */
 
-    /* ---------- FULLSCREEN (زر عام) ---------- */
+    /* ---------- FULLSCREEN ---------- */
     (function () {
         const fsBtn = document.getElementById('fs-btn');
         const icon  = fsBtn.querySelector('i');
@@ -1079,6 +898,9 @@
         return _origFetch(url, opts);
     };
 
+    /* ============================================================
+       STATE
+       ============================================================ */
     let currentSession = null;
     let currentSecret = null;
     let qrGenerator = null;
@@ -1094,68 +916,8 @@
     let manualModeVisible = false;
 
     /* ============================================================
-       🆕 TOGGLE QR FULLSCREEN — CSS class-based (يدعم iOS Safari)
+       LIVE CODE POLLING
        ============================================================ */
-    let qrIsFullscreen = false;
-
-    function toggleQrFullscreen() {
-        const wrapper = document.getElementById('qr-wrapper');
-        const hintIcon = document.querySelector('#qr-hint i');
-        const hintText = document.querySelector('#qr-hint .hint-text');
-        if (!wrapper) return;
-
-        qrIsFullscreen = !qrIsFullscreen;
-
-        if (qrIsFullscreen) {
-            wrapper.classList.add('is-fullscreen');
-            if (hintIcon) hintIcon.className = 'fas fa-compress';
-            if (hintText) hintText.textContent = 'اضغط للتصغير';
-            document.body.style.overflow = 'hidden';
-
-            /* محاولة استخدام الـ native Fullscreen API كمان */
-            try {
-                if (wrapper.requestFullscreen) wrapper.requestFullscreen().catch(() => {});
-                else if (wrapper.webkitRequestFullscreen) wrapper.webkitRequestFullscreen();
-            } catch (e) {}
-        } else {
-            wrapper.classList.remove('is-fullscreen');
-            if (hintIcon) hintIcon.className = 'fas fa-expand';
-            if (hintText) hintText.textContent = 'اضغط للـ ملء الشاشة';
-            document.body.style.overflow = '';
-
-            /* إنهاء الـ native fullscreen لو مفتوح */
-            try {
-                if (document.fullscreenElement ||
-                    document.webkitFullscreenElement) {
-                    if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
-                    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-                }
-            } catch (e) {}
-        }
-    }
-
-    /* لو المستخدم خرج من الـ native fullscreen بـ ESC، نزامن الحالة */
-    ['fullscreenchange','webkitfullscreenchange','mozfullscreenchange','MSFullscreenChange']
-        .forEach(ev => document.addEventListener(ev, () => {
-            const nativeFs = !!(document.fullscreenElement ||
-                              document.webkitFullscreenElement ||
-                              document.mozFullScreenElement ||
-                              document.msFullscreenElement);
-            const wrapper = document.getElementById('qr-wrapper');
-            const hintIcon = document.querySelector('#qr-hint i');
-            const hintText = document.querySelector('#qr-hint .hint-text');
-
-            if (!nativeFs && wrapper && wrapper.classList.contains('is-fullscreen') && qrIsFullscreen) {
-                /* المستخدم ضغط ESC */
-                qrIsFullscreen = false;
-                wrapper.classList.remove('is-fullscreen');
-                if (hintIcon) hintIcon.className = 'fas fa-expand';
-                if (hintText) hintText.textContent = 'اضغط للـ ملء الشاشة';
-                document.body.style.overflow = '';
-            }
-        }));
-
-    /* ---------- POLLING ---------- */
     function stopPolling() {
         if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
     }
@@ -1167,6 +929,9 @@
         pollInterval = setInterval(fetchScreenCode, 1000);
     }
 
+    /* ============================================================
+       Request New Pairing Token
+       ============================================================ */
     async function requestNewToken() {
         try {
             const res = await fetch('/api/screen-new-token', { method: 'POST', cache: 'no-store' });
@@ -1177,6 +942,9 @@
         } catch (e) {}
     }
 
+    /* ============================================================
+       Draw Pair QR — كود كبير بحجم عالي
+       ============================================================ */
     function drawPairQR(token) {
         const container = document.getElementById('pair-qr-canvas');
         if (!container) return;
@@ -1184,14 +952,17 @@
         qrTokenGenerator = null;
         try {
             qrTokenGenerator = new QRCode(container, {
-                width: 1000,
-                height: 1000,
+                width: 700,
+                height: 700,
                 correctLevel: QRCode.CorrectLevel.H
             });
             qrTokenGenerator.makeCode(token);
         } catch (e) {}
     }
 
+    /* ============================================================
+       Check Pairing
+       ============================================================ */
     async function checkPairing() {
         if (!currentToken) return;
         try {
@@ -1221,6 +992,9 @@
         if (tokenPollInterval) { clearInterval(tokenPollInterval); tokenPollInterval = null; }
     }
 
+    /* ============================================================
+       QR Watchdog
+       ============================================================ */
     function startQrWatchdog() {
         stopQrWatchdog();
         qrWatchdogInterval = setInterval(() => {
@@ -1238,6 +1012,9 @@
         if (qrWatchdogInterval) { clearInterval(qrWatchdogInterval); qrWatchdogInterval = null; }
     }
 
+    /* ============================================================
+       Manual Entry Toggle
+       ============================================================ */
     function toggleManualEntry() {
         manualModeVisible = !manualModeVisible;
         const box = document.getElementById('manual-entry-box');
@@ -1256,18 +1033,13 @@
         }
     }
 
+    /* ============================================================
+       Show Pair Screen
+       ============================================================ */
     function showPairScreen(message) {
         stopPolling();
         stopTokenPolling();
         stopQrWatchdog();
-
-        /* نخرج من fullscreen لو كنا فيه */
-        if (qrIsFullscreen) {
-            qrIsFullscreen = false;
-            const wrapper = document.getElementById('qr-wrapper');
-            if (wrapper) wrapper.classList.remove('is-fullscreen');
-            document.body.style.overflow = '';
-        }
 
         isPaired = false;
         currentSecret = null;
@@ -1300,6 +1072,9 @@
         startQrWatchdog();
     }
 
+    /* ============================================================
+       Manual Pair
+       ============================================================ */
     async function pairScreen(code) {
         const errEl = document.getElementById('pair-error');
         errEl.textContent = '';
@@ -1344,6 +1119,9 @@
         }
     }
 
+    /* ============================================================
+       Start Display — كود كبير بحجم عالي
+       ============================================================ */
     function startDisplay() {
         stopTokenPolling();
         stopPolling();
@@ -1360,8 +1138,8 @@
         const canvas = document.getElementById('qr-canvas');
         canvas.innerHTML = '';
         qrGenerator = new QRCode(canvas, {
-            width: 1200,
-            height: 1200,
+            width: 700,
+            height: 700,
             correctLevel: QRCode.CorrectLevel.H
         });
         lastQrCode = null;
@@ -1370,6 +1148,9 @@
         startPolling();
     }
 
+    /* ============================================================
+       Fetch Live Code
+       ============================================================ */
     async function fetchScreenCode() {
         if (!currentSecret) return;
         try {
@@ -1399,25 +1180,14 @@
 
             const interval = data.manual_interval || 10;
             const remaining = data.manual_remaining || 0;
+
+            // 🆕 تحديث الشريط
             const barEl = document.getElementById('timer-bar');
             if (barEl) barEl.style.width = ((remaining / interval) * 100) + '%';
 
-            const qrInterval = data.qr_interval || 3;
-            const qrRemaining = (data.qr_remaining !== undefined) ? data.qr_remaining : 0;
-
-            const qrBarEl = document.getElementById('qr-timer-bar');
-            if (qrBarEl) {
-                const pct = Math.max(0, Math.min(100, (qrRemaining / qrInterval) * 100));
-                qrBarEl.style.width = pct + '%';
-            }
-
-            const qrSecEl = document.getElementById('qr-seconds');
-            if (qrSecEl) {
-                const secs = Math.max(0, Math.ceil(qrRemaining));
-                if (qrSecEl.textContent !== String(secs)) {
-                    qrSecEl.textContent = secs;
-                }
-            }
+            // 🆕 تحديث رقم الثواني على اليسار
+            const secValEl = document.getElementById('timer-seconds-value');
+            if (secValEl) secValEl.textContent = Math.ceil(remaining);
 
             const qrCode = data.qr_code;
             if (qrCode && qrCode !== lastQrCode && qrGenerator) {
@@ -1427,6 +1197,9 @@
         } catch (e) { setStatus(false); }
     }
 
+    /* ============================================================
+       Status Badge
+       ============================================================ */
     function setStatus(isOpen) {
         const badge = document.getElementById('status-badge');
         if (!badge) return;
@@ -1439,6 +1212,9 @@
         }
     }
 
+    /* ============================================================
+       Toggle Code Section
+       ============================================================ */
     function toggleCodeSection() {
         codeVisible = !codeVisible;
         const sec = document.getElementById('code-section');
@@ -1452,6 +1228,9 @@
         }
     }
 
+    /* ============================================================
+       Unpair
+       ============================================================ */
     function unpairScreen() {
         Swal.fire({
             background: '#1a1f2c', color: '#fff',
@@ -1470,6 +1249,9 @@
         });
     }
 
+    /* ============================================================
+       Init
+       ============================================================ */
     document.addEventListener('DOMContentLoaded', () => {
         const pairBtn = document.getElementById('pair-btn');
         if (pairBtn) {
@@ -1492,6 +1274,9 @@
         showPairScreen('');
     });
 
+    /* ============================================================
+       Lifecycle
+       ============================================================ */
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
             stopPolling();

@@ -448,6 +448,14 @@
             border-radius: 12px;
         }
 
+        /* ═══ WRAPPER للـ QR + الخط الأحمر ═══ */
+        .nx-qr-block {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+
         #qr-wrapper {
             background: #fff;
             padding: clamp(14px, 2.2vmin, 24px);
@@ -474,6 +482,79 @@
             image-rendering: crisp-edges;
         }
 
+        /* ═══════════════════════════════════════════════════
+           🆕 LINE ROUGE · عدّاد الـ QR (3 ثواني)
+           ═══════════════════════════════════════════════════ */
+        .qr-timer-block {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            width: min(460px, 82vw, 52vh);
+            margin-top: 4px;
+        }
+        #qr-timer-track {
+            width: 100%;
+            height: 7px;
+            background: rgba(239,68,68,0.15);
+            border-radius: 5px;
+            overflow: hidden;
+            position: relative;
+            border: 1px solid rgba(239,68,68,0.3);
+            box-shadow:
+                0 0 20px rgba(239,68,68,0.25),
+                inset 0 1px 2px rgba(0,0,0,0.4);
+        }
+        #qr-timer-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #EF4444, #F87171, #EF4444);
+            background-size: 200% 100%;
+            width: 100%;
+            border-radius: 5px;
+            box-shadow: 0 0 14px rgba(239,68,68,0.8), inset 0 1px 1px rgba(255,255,255,0.3);
+            transition: width 0.2s linear;
+            animation: qrBarShimmer 2s linear infinite;
+        }
+        @keyframes qrBarShimmer {
+            0%   { background-position: 0% 0; }
+            100% { background-position: -200% 0; }
+        }
+        #qr-seconds-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-family: 'Cairo', sans-serif;
+            font-size: clamp(12px, 1.8vmin, 15px);
+            font-weight: 900;
+            color: #f87171;
+            letter-spacing: 0.5px;
+            padding: 5px 14px;
+            border-radius: 20px;
+            background: rgba(239,68,68,0.12);
+            border: 1px solid rgba(239,68,68,0.4);
+            box-shadow: 0 0 18px rgba(239,68,68,0.2);
+            transition: all 0.3s ease;
+        }
+        #qr-seconds-label i {
+            font-size: 11px;
+            animation: qrSecPulse 1s ease-in-out infinite;
+        }
+        @keyframes qrSecPulse {
+            0%,100% { transform: scale(1); opacity: 1; }
+            50%     { transform: scale(1.2); opacity: 0.6; }
+        }
+        #qr-seconds-label .qr-num {
+            font-family: 'Plus Jakarta Sans', monospace;
+            font-size: clamp(14px, 2.2vmin, 18px);
+            font-weight: 900;
+            color: #fff;
+            text-shadow: 0 0 12px rgba(239,68,68,0.8);
+            min-width: 20px;
+            text-align: center;
+            display: inline-block;
+        }
+
+        /* ═══ CODE SECTION (الكود اليدوي - بتظهر بالزرار) ═══ */
         #code-section {
             display: none;
             flex-direction: column;
@@ -601,6 +682,7 @@
             .nx-manual-toggle { padding: 8px 16px; font-size: 12px; }
             .bottom-actions { bottom: calc(8px + var(--safe-bottom)); gap: 8px; }
             .disp-btn { padding: 8px 12px; font-size: 11px; }
+            .qr-timer-block { gap: 5px; }
         }
 
         @media (max-height: 500px) {
@@ -620,10 +702,11 @@
                 padding: calc(var(--pad) + var(--safe-top)) var(--pad) calc(var(--pad) + 60px + var(--safe-bottom));
             }
             #display-screen .info-wrap { order: 1; max-width: 40%; }
-            #qr-wrapper { order: 2; }
+            .nx-qr-block { order: 2; }
             #code-section { order: 3; max-width: 40%; }
             #manual-code { font-size: clamp(28px, 8vmin, 54px); }
             #timer-track { width: min(240px, 40vw); }
+            .qr-timer-block { width: min(320px, 60vw); }
 
             #pair-screen { flex-direction: row; justify-content: center; gap: 20px; }
             #pair-screen .nx-logo-wrap,
@@ -649,7 +732,6 @@
 
     <div class="nx-particles" id="nx-particles" aria-hidden="true"></div>
 
-    <!-- زر تفعيل وضع ملء الشاشة -->
     <button id="fs-btn" type="button" title="ملء الشاشة" aria-label="ملء الشاشة">
         <i class="fas fa-expand"></i>
     </button>
@@ -709,8 +791,24 @@
             <div id="session-title">...</div>
         </div>
 
-        <div id="qr-wrapper">
-            <div id="qr-canvas"></div>
+        <!-- ═══ QR + الخط الأحمر ═══ -->
+        <div class="nx-qr-block">
+            <div id="qr-wrapper">
+                <div id="qr-canvas"></div>
+            </div>
+
+            <!-- 🆕 الخط الأحمر للـ QR -->
+            <div class="qr-timer-block">
+                <div id="qr-timer-track">
+                    <div id="qr-timer-bar"></div>
+                </div>
+                <div id="qr-seconds-label">
+                    <i class="fas fa-sync-alt"></i>
+                    <span>يتجدد بعد</span>
+                    <span id="qr-seconds" class="qr-num">3</span>
+                    <span>ث</span>
+                </div>
+            </div>
         </div>
 
         <div id="code-section">
@@ -731,7 +829,7 @@
 
 <script>
     /* ============================================================
-       🖥️ Display Screen Logic — v6 (Big QR Edition)
+       🖥️ Display Screen Logic — v7 (Big QR + Red Timer Bar)
        ============================================================ */
 
     /* ---------- FULLSCREEN ---------- */
@@ -897,7 +995,7 @@
     }
 
     /* ============================================================
-       Draw Pair QR — كود كبير بحجم عالي
+       Draw Pair QR
        ============================================================ */
     function drawPairQR(token) {
         const container = document.getElementById('pair-qr-canvas');
@@ -1074,7 +1172,7 @@
     }
 
     /* ============================================================
-       Start Display — كود كبير بحجم عالي
+       Start Display
        ============================================================ */
     function startDisplay() {
         stopTokenPolling();
@@ -1128,6 +1226,7 @@
                 if (titleEl.textContent !== newTitle) titleEl.textContent = newTitle;
             }
 
+            /* ═══ الكود اليدوي ═══ */
             const manualCode = data.manual_code || '------';
             const manualEl = document.getElementById('manual-code');
             if (manualEl.textContent !== manualCode) manualEl.textContent = manualCode;
@@ -1137,6 +1236,27 @@
             const barEl = document.getElementById('timer-bar');
             if (barEl) barEl.style.width = ((remaining / interval) * 100) + '%';
 
+            /* ═══════════════════════════════════════════════
+               🆕 تحديث الخط الأحمر + ثواني QR
+               ═══════════════════════════════════════════════ */
+            const qrInterval = data.qr_interval || 3;
+            const qrRemaining = (data.qr_remaining !== undefined) ? data.qr_remaining : 0;
+
+            const qrBarEl = document.getElementById('qr-timer-bar');
+            if (qrBarEl) {
+                const pct = Math.max(0, Math.min(100, (qrRemaining / qrInterval) * 100));
+                qrBarEl.style.width = pct + '%';
+            }
+
+            const qrSecEl = document.getElementById('qr-seconds');
+            if (qrSecEl) {
+                const secs = Math.max(0, Math.ceil(qrRemaining));
+                if (qrSecEl.textContent !== String(secs)) {
+                    qrSecEl.textContent = secs;
+                }
+            }
+
+            /* ═══ تحديث QR Code ═══ */
             const qrCode = data.qr_code;
             if (qrCode && qrCode !== lastQrCode && qrGenerator) {
                 lastQrCode = qrCode;

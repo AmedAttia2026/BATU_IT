@@ -1,5 +1,5 @@
 # ============================================================
-#  Nexus Attendance System · index.py (2026 Secure Edition)
+#  Nexus Attendance System · index.py (2026 · No Group Edition)
 # ============================================================
 import os
 import time
@@ -39,13 +39,11 @@ STATIC_DIR = (
 
 app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR, static_url_path='/static')
 
-# 🔥 منع الكاش نهائياً (server-side template cache + static files)
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 app.jinja_env.auto_reload = True
 app.jinja_env.cache = {}
 
-# ---------- Secrets from ENV ----------
 SECRET_KEY = os.environ.get("SECRET_KEY", "Nexus_Attendance_Super_Key_2026_Fixed_ChangeMe")
 app.secret_key = SECRET_KEY
 app.permanent_session_lifetime = timedelta(days=7)
@@ -58,7 +56,6 @@ app.config.update(
     MAX_CONTENT_LENGTH=8 * 1024 * 1024,
 )
 
-# ---------- Rate Limiter ----------
 limiter = Limiter(
     get_remote_address,
     app=app,
@@ -68,7 +65,7 @@ limiter = Limiter(
 
 
 # ============================================================
-#  🗄️ MongoDB Atlas
+#  🗄️ MongoDB
 # ============================================================
 _db_user = urllib.parse.quote_plus(os.environ.get('MONGO_USER', 'ahmedattia20041120_db_user'))
 _db_pass = urllib.parse.quote_plus(os.environ.get('MONGO_PASS', 'wjXYBO8Pbj5GijfS'))
@@ -90,7 +87,6 @@ subjects_col = db['subjects']
 sessions_col = db['sessions']
 attendance_col = db['attendance']
 students_col = db['students']
-classes_col = db['classes']
 
 
 # ============================================================
@@ -106,8 +102,6 @@ _safe_create_index(users_col, "username", unique=True)
 _safe_create_index(students_col, "student_id", unique=True)
 _safe_create_index(attendance_col, [("student_id", 1), ("session_id", 1)], unique=True)
 _safe_create_index(sessions_col, "session_id", unique=True)
-_safe_create_index(classes_col, [("subject_id", 1), ("class_number", 1)], unique=True)
-_safe_create_index(classes_col, "class_id", unique=True)
 _safe_create_index(sessions_col, "screen_secret", sparse=True)
 
 
@@ -130,7 +124,7 @@ if not _existing_admin:
 
 
 # ============================================================
-#  🔑 Crypto Salts & Constants
+#  🔑 Crypto
 # ============================================================
 SECRET_SALT        = b"NEXUS_ATTENDANCE_CORE_SECRET_2026_PROD"
 QR_SECRET_SALT     = b"NEXUS_QR_ATTENDANCE_SECRET_2026_PROD"
@@ -145,14 +139,39 @@ MANUAL_GRACE_PERIOD  = 2.0
 SCREEN_STEP_INTERVAL = 20
 SCREEN_GRACE_PERIOD  = 2.0
 
+TA_SESSION_AUTO_CLOSE_MINUTES = 15
+
 _SAFE_ERROR_MSG = "حدث خطأ، حاول لاحقاً"
 
-# 🆕 تخزين مؤقت للتوكنات (in-memory)
 _screen_pending = {}
 
 
 # ============================================================
-#  🔢 Code generation / verification
+#  🆕 Auto-close TA sessions (15 min)
+# ============================================================
+def _auto_close_ta_sessions():
+    try:
+        cutoff = datetime.utcnow() - timedelta(minutes=TA_SESSION_AUTO_CLOSE_MINUTES)
+        sessions_col.update_many(
+            {
+                "is_open": True,
+                "creator_role": "ta",
+                "created_at_dt": {"$lt": cutoff}
+            },
+            {
+                "$set": {
+                    "is_open": False,
+                    "auto_closed": True,
+                    "closed_at": _cairo_now()
+                }
+            }
+        )
+    except Exception:
+        pass
+
+
+# ============================================================
+#  🔢 Code gen
 # ============================================================
 def _generate_code(secret_salt: bytes, step: int, session_id: str) -> str:
     key = secret_salt + session_id.encode('utf-8')
@@ -204,7 +223,7 @@ def verify_qr_code(user_code: str, session_id: str) -> bool:
 
 
 # ============================================================
-#  🖥️ Screen pairing code (8 digits, rotates every 20s)
+#  🖥️ Screen pairing
 # ============================================================
 def generate_screen_secret() -> str:
     return ''.join(random.choices('0123456789abcdef', k=32))
@@ -247,9 +266,21 @@ try:
 except Exception:
     pass
 
+try:
+    for sess in sessions_col.find({"created_at_dt": {"$exists": False}}):
+        sessions_col.update_one(
+            {"_id": sess["_id"]},
+            {"$set": {
+                "created_at_dt": datetime.utcnow(),
+                "creator_role": sess.get("creator_role", "doctor")
+            }}
+        )
+except Exception:
+    pass
+
 
 # ============================================================
-#  🛡️ Security Headers + NO-CACHE
+#  🛡️ Headers
 # ============================================================
 @app.after_request
 def set_security_headers(response):
@@ -258,11 +289,9 @@ def set_security_headers(response):
     response.headers['X-XSS-Protection'] = '1; mode=block'
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     response.headers['Permissions-Policy'] = 'camera=(self), microphone=(), geolocation=()'
-
     response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0, private, no-transform'
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'
-
     return response
 
 
@@ -319,23 +348,17 @@ def admin_ui():
 
 @app.route('/dis')
 def display_screen():
-    """
-    شاشة العرض — بدون أي كاش نهائياً (server + browser)
-    """
     try:
         app.jinja_env.cache = {}
     except Exception:
         pass
-
     display_path = os.path.join(TEMPLATE_DIR, 'display.html')
     try:
         with open(display_path, 'r', encoding='utf-8') as f:
             html_content = f.read()
     except Exception:
         html_content = render_template('display.html')
-
     resp = make_response(html_content)
-
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0, private, no-transform, proxy-revalidate'
     resp.headers['Pragma'] = 'no-cache'
     resp.headers['Expires'] = '0'
@@ -343,7 +366,6 @@ def display_screen():
     resp.headers['Vary'] = '*'
     resp.headers['Clear-Site-Data'] = '"cache"'
     resp.headers['Content-Type'] = 'text/html; charset=utf-8'
-
     return resp
 
 
@@ -354,17 +376,18 @@ def logout():
 
 
 # ============================================================
-#  🎓 Student Routes
+#  🎓 Student
 # ============================================================
 @app.route('/api/student-login', methods=['POST'])
 @limiter.limit("30 per minute")
 def student_login():
+    _auto_close_ta_sessions()
+
     data = request.get_json(force=True, silent=True) or {}
     s_name = _clean_str(data.get('student_name'), 100)
     s_id = _clean_str(data.get('student_id'), 20)
     year = _clean_str(data.get('year'), 40)
     dept = _clean_str(data.get('department', 'عام (IT)'), 60)
-    class_number = _clean_str(data.get('class_number'), 6)
 
     if len(s_name) < 3:
         return jsonify({"status": "error", "message": "يرجى كتابة اسم الطالب بشكل صحيح!"}), 400
@@ -372,21 +395,8 @@ def student_login():
         return jsonify({"status": "error", "message": "كود الطالب يجب أن يتكون من 7 أرقام!"}), 400
     if not year:
         return jsonify({"status": "error", "message": "يرجى اختيار الفرقة الدراسية!"}), 400
-    if not class_number or not class_number.isdigit():
-        return jsonify({"status": "error", "message": "يرجى اختيار الفصل (Class)!"}), 400
-
-    sub_query = {"year": year}
-    if dept:
-        sub_query["department"] = {"$in": [dept, "عام (IT)"]}
-    subject_ids = [s['id'] for s in subjects_col.find(sub_query, {"id": 1, "_id": 0})]
-
-    if subject_ids:
-        exists = classes_col.find_one({
-            "subject_id": {"$in": subject_ids},
-            "class_number": int(class_number)
-        })
-        if not exists:
-            return jsonify({"status": "error", "message": "هذا الفصل غير متاح لفرقتك/قسمك!"}), 400
+    if year in ('الفرقة الثالثة', 'الفرقة الرابعة') and not dept:
+        return jsonify({"status": "error", "message": "يرجى اختيار القسم!"}), 400
 
     students_col.update_one(
         {"student_id": s_id},
@@ -396,7 +406,6 @@ def student_login():
             "email": f"{s_id}@batechu.com",
             "year": year,
             "department": dept,
-            "class_number": class_number,
             "last_active": _cairo_now()
         }},
         upsert=True
@@ -407,40 +416,17 @@ def student_login():
         "student": {
             "student_id": s_id, "name": s_name,
             "email": f"{s_id}@batechu.com",
-            "year": year, "department": dept,
-            "class_number": class_number
+            "year": year, "department": dept
         }
     })
 
 
-@app.route('/api/available-classes')
-def available_classes():
-    year = _clean_str(request.args.get('year'), 40)
-    dept = _clean_str(request.args.get('dept'), 60)
-
-    if not year:
-        return jsonify({"status": "success", "classes": []})
-
-    sub_query = {"year": year}
-    if dept:
-        sub_query["department"] = {"$in": [dept, "عام (IT)"]}
-
-    subject_ids = [s['id'] for s in subjects_col.find(sub_query, {"id": 1, "_id": 0})]
-
-    if not subject_ids:
-        return jsonify({"status": "success", "classes": []})
-
-    raw = classes_col.distinct("class_number", {"subject_id": {"$in": subject_ids}})
-    nums = sorted({int(c) for c in raw if str(c).isdigit()})
-
-    return jsonify({"status": "success", "classes": nums})
-
-
 @app.route('/api/student-init')
 def student_init():
+    _auto_close_ta_sessions()
+
     year = _clean_str(request.args.get('year'), 40)
     dept = _clean_str(request.args.get('dept'), 60)
-    s_id = _clean_str(request.args.get('student_id'), 20)
 
     query = {}
     if year:
@@ -449,29 +435,15 @@ def student_init():
             query["department"] = {"$in": [dept, "عام (IT)"]}
 
     subs = list(subjects_col.find(query, {"_id": 0}))
-
-    student = students_col.find_one({"student_id": s_id}) if s_id else None
-    student_class = str(student.get('class_number', '')) if student else ''
-
     subject_ids = [s['id'] for s in subs]
 
     all_sessions = list(sessions_col.find({"is_open": True}, {"_id": 0, "screen_secret": 0}))
-    filtered = []
-    for s in all_sessions:
-        if s.get('subject_id') not in subject_ids:
-            continue
-        if s.get('type') == 'Lecture':
-            filtered.append(s)
-            continue
-        if s.get('type') == 'Section':
-            if student_class and str(s.get('class_number', '')) == student_class:
-                filtered.append(s)
+    filtered = [s for s in all_sessions if s.get('subject_id') in subject_ids]
 
     return jsonify({
         "status": "success",
         "subjects": subs,
-        "sessions": filtered,
-        "student_class": student_class
+        "sessions": filtered
     })
 
 
@@ -503,12 +475,6 @@ def submit_attendance():
     sess = sessions_col.find_one({"session_id": session_id, "is_open": True})
     if not sess:
         return jsonify({"status": "error", "message": "عفواً، هذه الجلسة مغلقة حالياً أو انتهت!"}), 400
-
-    if sess.get('type') == 'Section':
-        st = students_col.find_one({"student_id": s_id})
-        st_class = str(st.get('class_number', '')) if st else ''
-        if st_class and str(sess.get('class_number', '')) != st_class:
-            return jsonify({"status": "error", "message": "هذه الجلسة ليست لفصلك!"}), 403
 
     if scan_type == 'qr':
         is_valid = verify_qr_code(code, session_id)
@@ -542,7 +508,6 @@ def submit_attendance():
         "session_id": session_id,
         "session_title": sess['title'],
         "session_type": sess.get('type', 'Lecture'),
-        "class_number": sess.get('class_number', ''),
         "timestamp": _cairo_now(),
         "device_token": device_token,
         "ip": _client_ip(),
@@ -584,8 +549,7 @@ def admin_login():
                 "username": user['username'],
                 "name": user.get('name', user['username']),
                 "role": user.get('role', 'doctor'),
-                "allowed_subjects": user.get('allowed_subjects', []),
-                "allowed_classes": user.get('allowed_classes', [])
+                "allowed_subjects": user.get('allowed_subjects', [])
             }
             return jsonify({"status": "success", "admin": session['admin']})
 
@@ -597,13 +561,13 @@ def get_admin_data():
     if not _is_admin():
         return jsonify({"status": "unauthorized"}), 401
 
+    _auto_close_ta_sessions()
+
     role = session['admin']['role']
     curr_username = session['admin']['username']
     curr_admin = users_col.find_one({"username": curr_username})
     allowed_subs = curr_admin.get('allowed_subjects', []) if curr_admin else []
-    allowed_classes = curr_admin.get('allowed_classes', []) if curr_admin else []
 
-    classes_list = []
     subjects = []
     sessions_list = []
     staff_list = []
@@ -612,18 +576,15 @@ def get_admin_data():
         subjects = list(subjects_col.find({}, {"_id": 0}))
         sessions_list = list(sessions_col.find(
             {}, {"_id": 0, "screen_secret": 0}
-        ).sort("created_at", -1))
+        ).sort("created_at_dt", -1))
         staff_list = list(users_col.find({"role": {"$ne": "super_admin"}}, {"_id": 0, "password": 0}))
-        classes_list = list(classes_col.find({}, {"_id": 0}).sort([("subject_id", 1), ("class_number", 1)]))
 
     elif role == 'doctor':
         subjects = list(subjects_col.find({"id": {"$in": allowed_subs}}, {"_id": 0}))
         sessions_list = list(sessions_col.find(
             {"subject_id": {"$in": allowed_subs}},
             {"_id": 0, "screen_secret": 0}
-        ).sort("created_at", -1))
-        classes_list = list(classes_col.find({"subject_id": {"$in": allowed_subs}}, {"_id": 0})
-                            .sort([("subject_id", 1), ("class_number", 1)]))
+        ).sort("created_at_dt", -1))
 
         all_tas = list(users_col.find({"role": "ta"}, {"_id": 0, "password": 0}))
         filtered = []
@@ -633,8 +594,6 @@ def get_admin_data():
             created_by_him = (ta.get('created_by') == curr_username)
             if has_common or created_by_him:
                 ta['allowed_subjects'] = [s for s in ta_subs if s in allowed_subs]
-                ta['allowed_classes'] = [c for c in ta.get('allowed_classes', [])
-                                         if c.split('|')[0] in allowed_subs]
                 filtered.append(ta)
         staff_list = filtered
 
@@ -644,22 +603,7 @@ def get_admin_data():
             "subject_id": {"$in": allowed_subs},
             "type": "Section",
             "created_by_username": curr_username
-        }, {"_id": 0, "screen_secret": 0}).sort("created_at", -1))
-
-        allowed_pairs = []
-        for item in allowed_classes:
-            parts = item.split('|')
-            if len(parts) == 2:
-                sub_id = parts[0]
-                try:
-                    cls_num_int = int((parts[1] or '').replace('Class', ''))
-                    allowed_pairs.append({"subject_id": sub_id, "class_number": cls_num_int})
-                except Exception:
-                    pass
-
-        if allowed_pairs:
-            classes_list = list(classes_col.find({"$or": allowed_pairs}, {"_id": 0}))
-
+        }, {"_id": 0, "screen_secret": 0}).sort("created_at_dt", -1))
         staff_list = []
 
     return jsonify({
@@ -668,13 +612,11 @@ def get_admin_data():
             "username": session['admin']['username'],
             "name": session['admin']['name'],
             "role": session['admin']['role'],
-            "allowed_subjects": allowed_subs,
-            "allowed_classes": allowed_classes
+            "allowed_subjects": allowed_subs
         },
         "subjects": subjects,
         "sessions": sessions_list,
-        "staff": staff_list,
-        "classes": classes_list
+        "staff": staff_list
     })
 
 
@@ -688,74 +630,23 @@ def get_session_attendance():
     if not sess:
         return jsonify({"status": "error", "message": "الجلسة غير موجودة!"}), 404
 
-    role = session['admin']['role']
-    if role == 'ta':
-        curr_admin = users_col.find_one({"username": session['admin']['username']})
-        allowed_classes = curr_admin.get('allowed_classes', [])
-        key = f"{sess.get('subject_id')}|Class{sess.get('class_number', '')}"
-        if key not in allowed_classes or sess.get('type') != 'Section':
-            return jsonify({"status": "error", "message": "غير مصرح"}), 403
+    if not _can_access_session(session['admin'], sess_id):
+        return jsonify({"status": "error", "message": "غير مصرح"}), 403
 
     records = list(attendance_col.find({"session_id": sess_id}, {"_id": 0})
                    .sort("timestamp", -1).limit(1000))
     return jsonify({"status": "success", "session": sess, "records": records})
 
 
-@app.route('/api/class-tas')
-def get_class_tas():
-    if not _is_admin():
-        return jsonify({"status": "unauthorized"}), 401
-
-    class_id = _clean_str(request.args.get('class_id'), 64)
-    cls = classes_col.find_one({"class_id": class_id}, {"_id": 0})
-    if not cls:
-        return jsonify({"status": "error", "message": "الفصل غير موجود!"}), 404
-
-    role = session['admin']['role']
-    if role == 'doctor':
-        curr_admin = users_col.find_one({"username": session['admin']['username']})
-        if cls.get('subject_id') not in curr_admin.get('allowed_subjects', []):
-            return jsonify({"status": "error", "message": "غير مصرح"}), 403
-
-    class_key = f"{cls['subject_id']}|Class{cls['class_number']}"
-
-    all_sessions = list(sessions_col.find({
-        "subject_id": cls['subject_id'],
-        "class_number": str(cls['class_number']),
-        "type": "Section"
-    }, {"_id": 0, "screen_secret": 0}).sort("created_at", -1))
-
-    session_ids = [s['session_id'] for s in all_sessions]
-    counts_map = {}
-    if session_ids:
-        pipeline = [
-            {"$match": {"session_id": {"$in": session_ids}}},
-            {"$group": {"_id": "$session_id", "count": {"$sum": 1}}}
-        ]
-        counts_map = {d['_id']: d['count'] for d in attendance_col.aggregate(pipeline)}
-
-    sessions_by_ta = defaultdict(list)
-    for s in all_sessions:
-        s['attendance_count'] = counts_map.get(s['session_id'], 0)
-        sessions_by_ta[s.get('created_by_username')].append(s)
-
-    all_tas = list(users_col.find({"role": "ta"}, {"_id": 0, "password": 0}))
-    assigned_tas = []
-    for ta in all_tas:
-        if class_key in (ta.get('allowed_classes') or []):
-            ta['class_sessions'] = sessions_by_ta.get(ta['username'], [])
-            assigned_tas.append(ta)
-
-    return jsonify({"status": "success", "class": cls, "tas": assigned_tas})
-
-
 # ============================================================
-#  🎬 Live Codes (broadcast / QR)
+#  🎬 Live Codes
 # ============================================================
 @app.route('/api/live-code')
 def get_live_code():
     if not _is_admin():
         return jsonify({"status": "unauthorized"}), 401
+
+    _auto_close_ta_sessions()
 
     session_id = _clean_str(request.args.get('session_id'), 64)
     if not session_id:
@@ -788,7 +679,7 @@ def get_live_code():
 
 
 def _can_access_session(admin: dict, session_id: str) -> bool:
-    sess = sessions_col.find_one({"session_id": session_id}, {"subject_id": 1, "type": 1, "class_number": 1, "created_by_username": 1})
+    sess = sessions_col.find_one({"session_id": session_id}, {"subject_id": 1, "type": 1, "created_by_username": 1})
     if not sess:
         return False
     role = admin.get('role')
@@ -801,17 +692,15 @@ def _can_access_session(admin: dict, session_id: str) -> bool:
     if sess.get('subject_id') not in subs:
         return False
     if role == 'doctor':
-        return sess.get('type') == 'Lecture'
+        return True
     if role == 'ta':
-        key = f"{sess.get('subject_id')}|Class{sess.get('class_number', '')}"
         return (sess.get('type') == 'Section'
-                and key in (curr.get('allowed_classes') or [])
                 and sess.get('created_by_username') == curr.get('username'))
     return False
 
 
 # ============================================================
-#  🖥️ Screen Code — للآدمن (بيتعرض في البوب أب)
+#  🖥️ Screen Code
 # ============================================================
 @app.route('/api/session-screen-code')
 @limiter.limit("120 per minute")
@@ -849,44 +738,32 @@ def session_screen_code():
 
 
 # ============================================================
-#  🆕 Screen Pairing via QR Token — NEW FLOW
+#  🖥️ Screen Pairing
 # ============================================================
 @app.route('/api/screen-new-token', methods=['POST'])
 @limiter.limit("60 per minute")
 def screen_new_token():
-    """
-    الشاشة بتطلب توكن جديد كل دقيقة → تعرضه كـ QR
-    """
     token = 'SCR_' + ''.join(random.choices('0123456789abcdef', k=16))
-
     _screen_pending[token] = {
         'created': time.time(),
         'session_id': None,
         'secret': None,
         'session_info': None
     }
-
-    # تنظيف التوكنات القديمة (أكثر من 10 دقائق)
     cutoff = time.time() - 600
     for k in list(_screen_pending.keys()):
         if _screen_pending[k].get('created', 0) < cutoff:
             del _screen_pending[k]
-
     return jsonify({"status": "success", "token": token})
 
 
 @app.route('/api/screen-check-pair')
 @limiter.limit("600 per minute")
 def screen_check_pair():
-    """
-    الشاشة بتسأل: هل اتربطت بجلسة؟
-    """
     token = _clean_str(request.args.get('token'), 80)
     if not token or token not in _screen_pending:
         return jsonify({"status": "expired"})
-
     data = _screen_pending[token]
-
     if data.get('session_id'):
         return jsonify({
             "status": "paired",
@@ -894,16 +771,12 @@ def screen_check_pair():
             "screen_secret": data['secret'],
             "session_info": data['session_info']
         })
-
     return jsonify({"status": "waiting"})
 
 
 @app.route('/api/screen-pair-token', methods=['POST'])
 @limiter.limit("30 per minute")
 def screen_pair_token():
-    """
-    التعيد بيبعت التوكن + الجلسة → السيرفر يربطهم
-    """
     if not _is_admin():
         return jsonify({"status": "unauthorized"}), 401
 
@@ -912,44 +785,31 @@ def screen_pair_token():
     session_id = _clean_str(data.get('session_id'), 64)
 
     if token not in _screen_pending:
-        return jsonify({
-            "status": "error",
-            "message": "QR الشاشة انتهت صلاحيته — اعمل refresh للشاشة"
-        }), 400
+        return jsonify({"status": "error", "message": "QR الشاشة انتهت صلاحيته — اعمل refresh للشاشة"}), 400
 
     if not _can_access_session(session['admin'], session_id):
         return jsonify({"status": "error", "message": "غير مصرح"}), 403
 
     sess = sessions_col.find_one({"session_id": session_id, "is_open": True})
     if not sess:
-        return jsonify({
-            "status": "error",
-            "message": "الجلسة غير موجودة أو مغلقة"
-        }), 404
+        return jsonify({"status": "error", "message": "الجلسة غير موجودة أو مغلقة"}), 404
 
     secret = sess.get('screen_secret')
     if not secret:
         secret = generate_screen_secret()
-        sessions_col.update_one(
-            {"session_id": session_id},
-            {"$set": {"screen_secret": secret}}
-        )
+        sessions_col.update_one({"session_id": session_id}, {"$set": {"screen_secret": secret}})
 
     _screen_pending[token]['session_id'] = session_id
     _screen_pending[token]['secret'] = secret
     _screen_pending[token]['session_info'] = {
         "subject_name": sess.get('subject_name', ''),
         "title": sess.get('title', ''),
-        "type": sess.get('type', 'Lecture'),
-        "class_number": sess.get('class_number', '')
+        "type": sess.get('type', 'Lecture')
     }
 
     return jsonify({"status": "success", "message": "تم ربط الشاشة بالجلسة!"})
 
 
-# ============================================================
-#  🖥️ Screen Pairing — الكود اليدوي (Legacy Fallback)
-# ============================================================
 @app.route('/api/screen-pair', methods=['POST'])
 @limiter.limit("20 per minute")
 def screen_pair():
@@ -973,20 +833,18 @@ def screen_pair():
                     "subject_name": sess.get('subject_name', ''),
                     "title": sess.get('title', ''),
                     "type": sess.get('type', 'Lecture'),
-                    "class_number": sess.get('class_number', ''),
                     "created_by": sess.get('created_by', '')
                 }
             })
 
-    return jsonify({"status": "error", "message": "الكود انتهت صلاحيته أو غير صحيح — اطلب الكود الجديد"}), 404
+    return jsonify({"status": "error", "message": "الكود انتهت صلاحيته أو غير صحيح"}), 404
 
 
-# ============================================================
-#  🖥️ Screen Live Code
-# ============================================================
 @app.route('/api/screen-live-code')
 @limiter.limit("300 per minute")
 def screen_live_code():
+    _auto_close_ta_sessions()
+
     secret = _clean_str(request.args.get('secret'), 80)
     legacy_code = _clean_str(request.args.get('screen_code'), 12)
 
@@ -1001,9 +859,8 @@ def screen_live_code():
             if sc and verify_screen_code(legacy_code, sc):
                 sess = s
                 break
-
         if not sess:
-            return jsonify({"status": "closed", "message": "انتهت صلاحية الكود — اطلب كود جديد"})
+            return jsonify({"status": "closed", "message": "انتهت صلاحية الكود"})
     else:
         return jsonify({"status": "error", "message": "invalid"}), 400
 
@@ -1017,8 +874,7 @@ def screen_live_code():
             "session_info": {
                 "subject_name": sess.get('subject_name', ''),
                 "title": sess.get('title', ''),
-                "type": sess.get('type', 'Lecture'),
-                "class_number": sess.get('class_number', '')
+                "type": sess.get('type', 'Lecture')
             }
         })
 
@@ -1038,8 +894,7 @@ def screen_live_code():
         "session_info": {
             "subject_name": sess.get('subject_name', ''),
             "title": sess.get('title', ''),
-            "type": sess.get('type', 'Lecture'),
-            "class_number": sess.get('class_number', '')
+            "type": sess.get('type', 'Lecture')
         },
         "manual_code": manual_code,
         "manual_remaining": m_remaining,
@@ -1076,166 +931,30 @@ def admin_action():
         )
         return jsonify({"status": "success"})
 
-    # ---------- CREATE CLASS ----------
-    elif action == 'create_class':
-        sub_id = _clean_str(data.get('subject_id'), 60)
-        try:
-            class_num = int(data.get('class_number', 0))
-        except Exception:
-            class_num = 0
-
-        if not sub_id or class_num < 1 or class_num > 100:
-            return jsonify({"status": "error", "message": "بيانات ناقصة!"}), 400
-
-        if role == 'super_admin':
-            pass
-        elif role == 'doctor':
-            if sub_id not in curr_user.get('allowed_subjects', []):
-                return jsonify({"status": "error", "message": "غير مصرح لك بهذه المادة!"}), 403
-        else:
-            return jsonify({"status": "error", "message": "المعيد لا يمكنه إنشاء فصول!"}), 403
-
-        subject = subjects_col.find_one({"id": sub_id})
-        if not subject:
-            return jsonify({"status": "error", "message": "المادة غير موجودة!"}), 404
-
-        existing = classes_col.find_one({"subject_id": sub_id, "class_number": class_num})
-        if existing:
-            return jsonify({"status": "error", "message": f"Class {class_num} موجود بالفعل!"}), 409
-
-        class_id = f"CLS_{int(time.time() * 1000)}_{class_num}"
-        classes_col.insert_one({
-            "class_id": class_id,
-            "subject_id": sub_id,
-            "subject_name": subject.get('name', ''),
-            "class_number": class_num,
-            "created_by": curr['name'],
-            "created_by_username": curr['username'],
-            "created_at": _cairo_now()
-        })
-        return jsonify({
-            "status": "success",
-            "message": f"تم إنشاء Class {class_num}",
-            "class_id": class_id,
-            "class_number": class_num,
-            "subject_id": sub_id,
-            "subject_name": subject.get('name', '')
-        })
-
-    # ---------- DELETE CLASS ----------
-    elif action == 'delete_class':
-        class_id = _clean_str(data.get('class_id'), 64)
-        if not class_id:
-            return jsonify({"status": "error", "message": "بيانات ناقصة!"}), 400
-
-        cls = classes_col.find_one({"class_id": class_id})
-        if not cls:
-            return jsonify({"status": "error", "message": "الفصل غير موجود!"}), 404
-
-        if role == 'super_admin':
-            pass
-        elif role == 'doctor':
-            if cls.get('subject_id') not in curr_user.get('allowed_subjects', []):
-                return jsonify({"status": "error", "message": "غير مصرح!"}), 403
-        else:
-            return jsonify({"status": "error", "message": "غير مصرح!"}), 403
-
-        classes_col.delete_one({"class_id": class_id})
-
-        key = f"{cls['subject_id']}|Class{cls['class_number']}"
-        users_col.update_many(
-            {"role": "ta", "allowed_classes": key},
-            {"$pull": {"allowed_classes": key}}
-        )
-
-        return jsonify({"status": "success", "message": "تم حذف الفصل"})
-
-    # ---------- ASSIGN CLASS TAs ----------
-    elif action == 'assign_class_tas':
-        class_id = _clean_str(data.get('class_id'), 64)
-        ta_usernames = data.get('ta_usernames', [])
-
-        if not class_id:
-            return jsonify({"status": "error", "message": "بيانات ناقصة!"}), 400
-
-        if not isinstance(ta_usernames, list):
-            ta_usernames = []
-        ta_usernames = [_clean_str(u, 100) for u in ta_usernames][:200]
-
-        cls = classes_col.find_one({"class_id": class_id})
-        if not cls:
-            return jsonify({"status": "error", "message": "الفصل غير موجود!"}), 404
-
-        if role == 'super_admin':
-            pass
-        elif role == 'doctor':
-            if cls.get('subject_id') not in curr_user.get('allowed_subjects', []):
-                return jsonify({"status": "error", "message": "غير مصرح!"}), 403
-        else:
-            return jsonify({"status": "error", "message": "غير مصرح!"}), 403
-
-        subject_id = cls['subject_id']
-        class_number = cls['class_number']
-        class_key = f"{subject_id}|Class{class_number}"
-        target_set = set(ta_usernames)
-
-        all_tas = list(users_col.find({"role": "ta"}))
-        operations = []
-
-        for ta in all_tas:
-            ta_username = ta.get('username')
-            current_classes = ta.get('allowed_classes', []) or []
-            has_subject = subject_id in (ta.get('allowed_subjects') or [])
-            should_have = has_subject and ta_username in target_set
-            has_now = class_key in current_classes
-
-            if should_have and not has_now:
-                operations.append(UpdateOne(
-                    {"username": ta_username},
-                    {"$addToSet": {"allowed_classes": class_key}}
-                ))
-            elif not should_have and has_now:
-                operations.append(UpdateOne(
-                    {"username": ta_username},
-                    {"$pull": {"allowed_classes": class_key}}
-                ))
-
-        if operations:
-            users_col.bulk_write(operations, ordered=False)
-
-        return jsonify({
-            "status": "success",
-            "message": f"تم التعيين ({len(target_set)} معيد)",
-            "updated": len(operations)
-        })
-
     # ---------- CREATE SESSION ----------
     elif action == 'create_session':
         s_data = data.get('session', {}) or {}
         sub_id = _clean_str(s_data.get('subject_id'), 60)
         session_type = _clean_str(s_data.get('type', 'Lecture'), 20)
-        class_number = _clean_str(s_data.get('class_number'), 6)
         custom_title = _clean_str(s_data.get('title', ''), 100)
         subject_name = _clean_str(s_data.get('subject_name', ''), 200)
 
         if session_type not in ('Lecture', 'Section'):
             return jsonify({"status": "error", "message": "نوع الجلسة غير صحيح"}), 400
 
+        if not custom_title:
+            return jsonify({"status": "error", "message": "يرجى إدخال عنوان الجلسة!"}), 400
+
         if role == 'super_admin':
             pass
         elif role == 'doctor':
             if sub_id not in curr_user.get('allowed_subjects', []):
                 return jsonify({"status": "error", "message": "غير مصرح لك بفتح جلسة في هذه المادة!"}), 403
-            if session_type != 'Lecture':
-                return jsonify({"status": "error", "message": "الدكتور يمكنه فتح محاضرات فقط!"}), 403
         elif role == 'ta':
             if session_type != 'Section':
                 return jsonify({"status": "error", "message": "المعيد يمكنه فتح سكاشن فقط!"}), 403
-            if not class_number:
-                return jsonify({"status": "error", "message": "يجب تحديد الفصل!"}), 400
-            key = f"{sub_id}|Class{class_number}"
-            if key not in curr_user.get('allowed_classes', []):
-                return jsonify({"status": "error", "message": f"غير مصرح لك بفتح جلسة في Class {class_number}!"}), 403
+            if sub_id not in curr_user.get('allowed_subjects', []):
+                return jsonify({"status": "error", "message": "غير مصرح لك بفتح جلسة في هذه المادة!"}), 403
         else:
             return jsonify({"status": "error", "message": "غير مصرح"}), 403
 
@@ -1245,19 +964,19 @@ def admin_action():
             "subject_id": sub_id,
             "subject_name": subject_name,
             "type": session_type,
-            "title": custom_title or 'عام',
+            "title": custom_title,
             "is_open": True,
             "created_by": curr['name'],
             "created_by_username": curr['username'],
+            "creator_role": role,
             "created_at": _cairo_now(),
+            "created_at_dt": datetime.utcnow(),
             "screen_secret": generate_screen_secret(),
         }
-        if session_type == 'Section':
-            new_session['class_number'] = class_number
 
         sessions_col.insert_one(new_session)
 
-        safe_session = {k: v for k, v in new_session.items() if k != 'screen_secret' and k != '_id'}
+        safe_session = {k: v for k, v in new_session.items() if k not in ('screen_secret', '_id', 'created_at_dt')}
         return jsonify({"status": "success", "session": safe_session})
 
     # ---------- UPDATE SESSION TITLE ----------
@@ -1268,17 +987,8 @@ def admin_action():
         if not sess_id or not new_title:
             return jsonify({"status": "error", "message": "بيانات ناقصة!"}), 400
 
-        sess = sessions_col.find_one({"session_id": sess_id})
-        if not sess:
-            return jsonify({"status": "error", "message": "الجلسة غير موجودة!"}), 404
-
-        if role == 'doctor':
-            if sess.get('subject_id') not in curr_user.get('allowed_subjects', []):
-                return jsonify({"status": "error", "message": "غير مصرح!"}), 403
-        elif role == 'ta':
-            key = f"{sess.get('subject_id')}|Class{sess.get('class_number', '')}"
-            if key not in curr_user.get('allowed_classes', []):
-                return jsonify({"status": "error", "message": "غير مصرح!"}), 403
+        if not _can_access_session(curr, sess_id):
+            return jsonify({"status": "error", "message": "غير مصرح!"}), 403
 
         sessions_col.update_one({"session_id": sess_id}, {"$set": {"title": new_title}})
         return jsonify({"status": "success", "message": "تم تحديث العنوان"})
@@ -1286,16 +996,8 @@ def admin_action():
     # ---------- TOGGLE SESSION ----------
     elif action == 'toggle_session':
         sess_id = _clean_str(data.get('session_id'), 64)
-        sess = sessions_col.find_one({"session_id": sess_id})
-        if not sess:
-            return jsonify({"status": "error", "message": "الجلسة غير موجودة!"}), 404
-
-        if role == 'doctor' and sess.get('subject_id') not in curr_user.get('allowed_subjects', []):
+        if not _can_access_session(curr, sess_id):
             return jsonify({"status": "error", "message": "غير مصرح!"}), 403
-        if role == 'ta':
-            key = f"{sess.get('subject_id')}|Class{sess.get('class_number', '')}"
-            if key not in curr_user.get('allowed_classes', []) or sess.get('type') != 'Section':
-                return jsonify({"status": "error", "message": "غير مصرح!"}), 403
 
         sessions_col.update_one({"session_id": sess_id}, {"$set": {"is_open": bool(data.get('is_open'))}})
         return jsonify({"status": "success"})
@@ -1303,16 +1005,8 @@ def admin_action():
     # ---------- DELETE SESSION ----------
     elif action == 'delete_session':
         sess_id = _clean_str(data.get('session_id'), 64)
-        sess = sessions_col.find_one({"session_id": sess_id})
-        if not sess:
-            return jsonify({"status": "error", "message": "الجلسة غير موجودة!"}), 404
-
-        if role == 'doctor' and sess.get('subject_id') not in curr_user.get('allowed_subjects', []):
+        if not _can_access_session(curr, sess_id):
             return jsonify({"status": "error", "message": "غير مصرح!"}), 403
-        if role == 'ta':
-            key = f"{sess.get('subject_id')}|Class{sess.get('class_number', '')}"
-            if key not in curr_user.get('allowed_classes', []) or sess.get('type') != 'Section':
-                return jsonify({"status": "error", "message": "غير مصرح!"}), 403
 
         sessions_col.delete_one({"session_id": sess_id})
         attendance_col.delete_many({"session_id": sess_id})
@@ -1327,14 +1021,12 @@ def admin_action():
         if len(s_id) != 7 or not s_id.isdigit():
             return jsonify({"status": "error", "message": "كود الطالب غير صحيح!"}), 400
 
+        if not _can_access_session(curr, sess_id):
+            return jsonify({"status": "error", "message": "غير مصرح!"}), 403
+
         sess = sessions_col.find_one({"session_id": sess_id})
         if not sess:
             return jsonify({"status": "error", "message": "الجلسة غير موجودة!"}), 404
-
-        if role == 'ta':
-            key = f"{sess.get('subject_id')}|Class{sess.get('class_number', '')}"
-            if key not in curr_user.get('allowed_classes', []) or sess.get('type') != 'Section':
-                return jsonify({"status": "error", "message": "غير مصرح!"}), 403
 
         if attendance_col.find_one({"student_id": s_id, "session_id": sess_id}):
             return jsonify({"status": "error", "message": "الطالب مسجل حضوره بالفعل!"}), 409
@@ -1353,7 +1045,6 @@ def admin_action():
             "session_id": sess_id,
             "session_title": sess['title'],
             "session_type": sess.get('type', 'Lecture'),
-            "class_number": sess.get('class_number', ''),
             "timestamp": _cairo_now(),
             "device_token": "MANUAL_BY_ADMIN",
             "ip": "ADMIN",
@@ -1423,14 +1114,12 @@ def admin_action():
             if new_name and new_name != target.get('name'):
                 sessions_col.update_many({"subject_id": sub_id}, {"$set": {"subject_name": new_name}})
                 attendance_col.update_many({"subject_id": sub_id}, {"$set": {"subject_name": new_name}})
-                classes_col.update_many({"subject_id": sub_id}, {"$set": {"subject_name": new_name}})
 
         elif sub_act == 'delete':
             sub_id = _clean_str(data.get('id', ''), 60)
             subjects_col.delete_one({"id": sub_id})
             sessions_col.delete_many({"subject_id": sub_id})
             attendance_col.delete_many({"subject_id": sub_id})
-            classes_col.delete_many({"subject_id": sub_id})
 
         return jsonify({"status": "success"})
 
@@ -1448,23 +1137,15 @@ def admin_action():
                 new_role = 'ta'
 
             allowed_subjects = staff_data.get('allowed_subjects', [])
-            allowed_classes = staff_data.get('allowed_classes', [])
             if not isinstance(allowed_subjects, list):
                 allowed_subjects = []
-            if not isinstance(allowed_classes, list):
-                allowed_classes = []
             allowed_subjects = [_clean_str(s, 60) for s in allowed_subjects][:200]
-            allowed_classes = [_clean_str(c, 100) for c in allowed_classes][:500]
 
             if role == 'doctor':
                 new_role = 'ta'
                 my_subs = curr_user.get('allowed_subjects', [])
                 if not all(s in my_subs for s in allowed_subjects):
                     return jsonify({"status": "error", "message": "لا يمكنك منح صلاحية في مادة لا تدرسها!"}), 403
-                for cls_item in allowed_classes:
-                    cls_sub = cls_item.split('|')[0]
-                    if cls_sub not in my_subs:
-                        return jsonify({"status": "error", "message": "فصل لا يتبع لموادك!"}), 403
 
             target_user = _clean_str(staff_data.get('username', ''), 100)
             password = str(staff_data.get('password', ''))
@@ -1484,7 +1165,6 @@ def admin_action():
                 "password": generate_password_hash(password),
                 "role": new_role,
                 "allowed_subjects": allowed_subjects,
-                "allowed_classes": allowed_classes,
                 "is_active": True,
                 "created_by": curr['username'],
                 "created_at": datetime.utcnow()
@@ -1511,51 +1191,9 @@ def admin_action():
 
             users_col.delete_one({"username": target_username})
 
-        elif sub_act == 'edit':
-            target_username = _clean_str(data.get('old_username', ''), 100)
-            target = users_col.find_one({"username": target_username})
-            if not target:
-                return jsonify({"status": "error", "message": "العضو غير موجود!"}), 404
-
-            new_subjects = staff_data.get('allowed_subjects', [])
-            new_classes = staff_data.get('allowed_classes', [])
-            if not isinstance(new_subjects, list):
-                new_subjects = []
-            if not isinstance(new_classes, list):
-                new_classes = []
-            new_subjects = [_clean_str(s, 60) for s in new_subjects][:200]
-            new_classes = [_clean_str(c, 100) for c in new_classes][:500]
-
-            if role == 'super_admin':
-                users_col.update_one(
-                    {"username": target_username},
-                    {"$set": {"allowed_subjects": new_subjects, "allowed_classes": new_classes}}
-                )
-            elif role == 'doctor':
-                if target.get('role') != 'ta':
-                    return jsonify({"status": "error", "message": "يمكنك تعديل المعيدين فقط!"}), 403
-                my_subs = curr_user.get('allowed_subjects', [])
-                if not all(s in my_subs for s in new_subjects):
-                    return jsonify({"status": "error", "message": "يمكنك تعديل المواد التي تدرسها فقط!"}), 403
-
-                target_subs = target.get('allowed_subjects', [])
-                target_classes = target.get('allowed_classes', [])
-                other_subs = [s for s in target_subs if s not in my_subs]
-                other_classes = [c for c in target_classes if c.split('|')[0] not in my_subs]
-
-                final_subs = list(set(other_subs + new_subjects))
-                final_classes = list(set(other_classes + new_classes))
-
-                users_col.update_one(
-                    {"username": target_username},
-                    {"$set": {"allowed_subjects": final_subs, "allowed_classes": final_classes}}
-                )
-            else:
-                return jsonify({"status": "error", "message": "غير مصرح"}), 403
-
         return jsonify({"status": "success"})
 
-    # ---------- EDIT STAFF (preserve_classes) ----------
+    # ---------- EDIT STAFF ----------
     elif action == 'edit_staff':
         target_username = _clean_str(data.get('target_username', ''), 100)
         if not target_username:
@@ -1569,7 +1207,6 @@ def admin_action():
             return jsonify({"status": "error", "message": "لا يمكنك تعديل حسابك!"}), 403
 
         staff_data = data.get('staff', {}) or {}
-        preserve_classes = bool(data.get('preserve_classes', False))
         updates = {}
 
         if role == 'super_admin':
@@ -1585,12 +1222,6 @@ def admin_action():
             if new_role in ('doctor', 'ta'):
                 updates['role'] = new_role
             updates['allowed_subjects'] = new_subs
-
-            if not preserve_classes:
-                nc = staff_data.get('allowed_classes', target.get('allowed_classes', []))
-                if not isinstance(nc, list):
-                    nc = []
-                updates['allowed_classes'] = [_clean_str(c, 100) for c in nc][:500]
 
         elif role == 'doctor':
             if target.get('role') != 'ta':
@@ -1611,18 +1242,8 @@ def admin_action():
             if not all(s in my_subs for s in new_subs):
                 return jsonify({"status": "error", "message": "يمكنك تعديل المواد التي تدرسها فقط!"}), 403
 
-            target_classes = target.get('allowed_classes', [])
             other_subs = [s for s in target_subs if s not in my_subs]
-            other_classes = [c for c in target_classes if c.split('|')[0] not in my_subs]
-
             updates['allowed_subjects'] = list(set(other_subs + new_subs))
-
-            if not preserve_classes:
-                nc = staff_data.get('allowed_classes', [])
-                if not isinstance(nc, list):
-                    nc = []
-                nc = [_clean_str(c, 100) for c in nc][:500]
-                updates['allowed_classes'] = list(set(other_classes + nc))
 
         else:
             return jsonify({"status": "error", "message": "غير مصرح"}), 403
@@ -1699,8 +1320,7 @@ def export_attendance_csv():
         if sess:
             if role == 'ta':
                 curr = users_col.find_one({"username": session['admin']['username']})
-                key = f"{sess.get('subject_id')}|Class{sess.get('class_number', '')}"
-                if key not in (curr.get('allowed_classes') or []):
+                if sess.get('created_by_username') != curr.get('username'):
                     return "Unauthorized", 403
             elif role == 'doctor':
                 curr = users_col.find_one({"username": session['admin']['username']})
@@ -1714,7 +1334,7 @@ def export_attendance_csv():
     output.write('\ufeff')
     writer = csv.writer(output)
     writer.writerow(['كود الطالب', 'اسم الطالب', 'الفرقة', 'القسم', 'المادة',
-                     'نوع الجلسة', 'Class', 'عنوان الجلسة', 'توقيت الحضور', 'طريقة التسجيل', 'IP'])
+                     'نوع الجلسة', 'عنوان الجلسة', 'توقيت الحضور', 'طريقة التسجيل', 'IP'])
 
     for r in records:
         scan_type = r.get('scan_type', '')
@@ -1731,7 +1351,6 @@ def export_attendance_csv():
             r.get('department', ''),
             r.get('subject_name', ''),
             r.get('session_type', ''),
-            r.get('class_number', ''),
             r.get('session_title', ''),
             r.get('timestamp', ''),
             method,

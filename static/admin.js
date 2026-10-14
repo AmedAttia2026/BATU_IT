@@ -1,5 +1,5 @@
 const swalDark = { background: '#1a1f2c', color: '#fff', confirmButtonColor: '#FFB300' };
-let allData = { subjects:[], sessions:[], staff:[], classes:[] };
+let allData = { subjects:[], sessions:[], staff:[] };
 let activeLiveSession = null;
 let qrGenerator = null;
 let liveCodeInterval = null;
@@ -10,7 +10,6 @@ let currentSessionRecords = [];
 let currentSessionsFilter = null;
 let currentAdminRole = 'super_admin';
 let currentAdminUsername = '';
-let currentAdminAllowedClasses = [];
 let lastQrCodeRendered = null;
 let manualCodeVisible = false;
 
@@ -168,7 +167,6 @@ function adminLogout() {
 function applyAdminData(data) {
     currentAdminRole = data.currentAdmin.role || 'super_admin';
     currentAdminUsername = data.currentAdmin.username || '';
-    currentAdminAllowedClasses = data.currentAdmin.allowed_classes || [];
 
     const adminName = (data.currentAdmin.name || '').trim() || 'مرحباً';
     const roleMap = {
@@ -273,20 +271,9 @@ function backToSubjects() {
    ========================================================= */
 function renderSubjectDetails(subId) {
     const isTA = (currentAdminRole === 'ta');
-    const isDoctorOrAdmin = (currentAdminRole === 'doctor' || currentAdminRole === 'super_admin');
-
-    const classesSection = document.getElementById('classes-section');
-    const addClassBtn = document.getElementById('btn-add-class');
     const lecturesTitle = document.getElementById('lectures-section-title');
     const newSessionBtn = document.getElementById('btn-new-session');
     const newSessionBtnText = document.getElementById('btn-new-session-text');
-
-    if (classesSection) {
-        classesSection.style.display = isTA ? 'none' : 'block';
-    }
-    if (addClassBtn) {
-        addClassBtn.style.display = isDoctorOrAdmin ? 'inline-flex' : 'none';
-    }
 
     if (lecturesTitle) {
         lecturesTitle.innerText = isTA ? 'السكاشن' : 'المحاضرات';
@@ -298,7 +285,7 @@ function renderSubjectDetails(subId) {
 
     if (newSessionBtn) {
         if (isTA) {
-            newSessionBtn.setAttribute('onclick', 'openNewSectionChoiceModal()');
+            newSessionBtn.setAttribute('onclick', 'openNewSectionModal()');
         } else {
             newSessionBtn.setAttribute('onclick', 'createSessionModal()');
         }
@@ -306,8 +293,6 @@ function renderSubjectDetails(subId) {
     }
 
     renderFilteredSessionsTable(subId);
-
-    if (!isTA) renderClassesTable(subId);
 }
 
 /* =========================================================
@@ -374,10 +359,8 @@ function renderFilteredSessionsTable(subId) {
 
     tbody.innerHTML = filtered.map(s => {
         const typeInfo = getSessionTypeDisplay(s);
-        const classInfo = s.class_number
-            ? `<span style="color:#22d3ee; font-size:10.5px; font-family:monospace;">
-                <i class="fas fa-layer-group"></i> Class ${s.class_number}
-               </span>`
+        const isAutoClosed = s.auto_closed
+            ? `<span style="display:inline-block; margin-top:4px; font-size:10px; color:#f59e0b;"><i class="fas fa-clock"></i> أُغلقت تلقائياً</span>`
             : '';
 
         return `
@@ -386,7 +369,7 @@ function renderFilteredSessionsTable(subId) {
                 <span class="sess-type-badge ${typeInfo.cls}">
                     <i class="fas ${typeInfo.icon}"></i> ${typeInfo.label}
                 </span>
-                ${classInfo ? `<div style="margin-top:5px;">${classInfo}</div>` : ''}
+                ${isAutoClosed}
             </td>
             <td>
                 <b>${s.title}</b>
@@ -417,7 +400,7 @@ function renderFilteredSessionsTable(subId) {
 }
 
 /* =========================================================
-   🖥️ نافذة ربط الشاشة — QR Flow (جديد)
+   🖥️ نافذة ربط الشاشة — QR Flow
    ========================================================= */
 let _adminQrScanner = null;
 
@@ -526,7 +509,6 @@ async function startDisplayQrScan(sessionId) {
 
     await new Promise(r => setTimeout(r, 150));
 
-    // تأكد إن html5-qrcode محمّل
     if (typeof Html5Qrcode === 'undefined') {
         const script = document.createElement('script');
         script.src = 'https://unpkg.com/html5-qrcode';
@@ -751,7 +733,7 @@ async function editSessionTitle(sessionId, currentTitle) {
         title: 'تعديل عنوان الجلسة',
         input: 'text',
         inputValue: currentTitle,
-        inputPlaceholder: 'مثال: LEC 5 أو Class1_Sec1',
+        inputPlaceholder: 'مثال: W_LAB1 أو Section A أو أي اسم',
         showCancelButton: true,
         confirmButtonText: '<i class="fas fa-save"></i> حفظ',
         cancelButtonText: 'إلغاء',
@@ -795,108 +777,9 @@ async function editSessionTitle(sessionId, currentTitle) {
 }
 
 /* =========================================================
-   ✅ جدول الفصول
+   ✅ فتح سكشن جديد — الواجهة الاحترافية الذكية
    ========================================================= */
-function renderClassesTable(subId) {
-    const tbody = document.getElementById('classes-table-body');
-    if (!tbody) return;
-
-    const filtered = (allData.classes || []).filter(c => c.subject_id === subId);
-
-    const badge = document.getElementById('classes-count-badge');
-    if (badge) badge.innerText = filtered.length;
-
-    if (filtered.length === 0) {
-        tbody.innerHTML = `
-            <tr><td colspan="4" style="padding:30px 20px;">
-                <div style="text-align:center;">
-                    <i class="fas fa-layer-group fa-2x" style="color:var(--nx-line-strong); margin-bottom:10px;"></i>
-                    <h3 style="color:#fff; font-size:13px; margin:0;">لا توجد فصول</h3>
-                    <p style="color:var(--text-muted); font-size:11.5px; margin-top:5px;">اضغط "إضافة فصل جديد" لإنشاء أول فصل</p>
-                </div>
-            </td></tr>`;
-        return;
-    }
-
-    filtered.sort((a, b) => (parseInt(a.class_number) || 0) - (parseInt(b.class_number) || 0));
-
-    tbody.innerHTML = filtered.map(c => {
-        const classKey = `${c.subject_id}|Class${c.class_number}`;
-
-        const allClassSessions = allData.sessions.filter(s =>
-            s.subject_id === c.subject_id &&
-            s.type === 'Section' &&
-            String(s.class_number) === String(c.class_number)
-        );
-
-        const assignedTAs = (allData.staff || []).filter(u =>
-            u.role === 'ta' && (u.allowed_classes || []).includes(classKey)
-        );
-
-        let chipsHtml = '';
-        if (assignedTAs.length === 0) {
-            chipsHtml = `<span style="color:#6b7385; font-size:11px;">— لا يوجد معيدون</span>`;
-        } else {
-            chipsHtml = assignedTAs.map(ta =>
-                `<span style="display:inline-flex; align-items:center; gap:5px; background:rgba(16,185,129,0.12); color:#10B981; padding:3px 10px; border-radius:8px; font-size:11px; font-weight:700; margin:2px;">
-                    <i class="fas fa-user-graduate"></i> ${ta.name}
-                </span>`
-            ).join('');
-        }
-
-        const actionsHtml = `
-            <div style="display:flex; gap:6px; justify-content:center; flex-wrap:wrap;">
-                <button type="button" class="btn btn-green"
-                    onclick="event.stopPropagation(); openAssignTAsModal('${c.class_id}')"
-                    style="padding:7px 14px; font-size:12px;">
-                    <i class="fas fa-user-plus"></i> تعيين
-                    ${assignedTAs.length > 0 ? `<span style="background:rgba(255,255,255,0.2); padding:1px 7px; border-radius:8px; font-size:10.5px;">${assignedTAs.length}</span>` : ''}
-                </button>
-                <button type="button" class="btn btn-outline"
-                    onclick="event.stopPropagation(); openClassDetailsModal('${c.class_id}')"
-                    style="padding:7px 14px; font-size:12px;">
-                    <i class="fas fa-eye"></i> عرض
-                </button>
-            </div>
-        `;
-
-        const deleteBtnHtml = `
-            <button class="btn btn-red" style="padding:5px 12px; font-size:11.5px;"
-                onclick="event.stopPropagation(); deleteClass('${c.class_id}')">
-                <i class="fas fa-trash"></i>
-            </button>
-        `;
-
-        const sessionCount = allClassSessions.length;
-
-        return `
-        <tr class="clickable-row" ondblclick="openClassSessionsModal('${c.class_id}')" title="اضغط مرتين لعرض السكاشن">
-            <td>
-                <span style="display:inline-flex; align-items:center; gap:6px; background:rgba(6,182,212,0.12); color:#22d3ee; padding:6px 16px; border-radius:10px; font-family:monospace; font-weight:900; font-size:14px;">
-                    <i class="fas fa-layer-group"></i> Class ${c.class_number}
-                </span>
-                ${sessionCount > 0 ? `
-                    <div style="margin-top:5px; font-size:10.5px; color:#8b93a7;">
-                        <i class="fas fa-users"></i> ${sessionCount} سكشن
-                    </div>
-                ` : ''}
-            </td>
-            <td style="min-width:180px; text-align:center; padding:10px 14px;">
-                <div style="display:flex; flex-wrap:wrap; gap:2px; justify-content:center;">
-                    ${chipsHtml}
-                </div>
-            </td>
-            <td>${actionsHtml}</td>
-            <td>${deleteBtnHtml}</td>
-        </tr>
-        `;
-    }).join('');
-}
-
-/* =========================================================
-   ✅ نافذة فتح سكشن جديد — للمعيد
-   ========================================================= */
-async function openNewSectionChoiceModal() {
+async function openNewSectionModal() {
     const subjectId = currentSessionsFilter;
     if (!subjectId) {
         return Swal.fire({...swalDark, icon: 'error', text: 'لم يتم اختيار مادة!'});
@@ -907,69 +790,529 @@ async function openNewSectionChoiceModal() {
         return Swal.fire({...swalDark, icon: 'error', text: 'المادة غير موجودة!'});
     }
 
-    const allowedClasses = getTaClassesForSubject(subjectId);
+    /* ═══ حساب أرقام افتراضية ذكية من السكاشن السابقة ═══ */
+    const allSections = allData.sessions.filter(s =>
+        s.subject_id === subjectId && s.type === 'Section'
+    );
 
-    if (allowedClasses.length === 0) {
-        return Swal.fire({
-            ...swalDark,
-            icon: 'warning',
-            title: 'لا توجد فصول مُعيَّنة',
-            html: `
-                <div style="text-align:center; line-height:1.9;">
-                    <p style="color:#fff; margin-bottom:8px;">لم يتم تعيينك لأي فصل في مادة</p>
-                    <p style="color:#FFB300; font-weight:900; font-size:14px; margin-bottom:12px;">${subject.name}</p>
-                    <p style="color:#9CA3AF; font-size:12px;">تواصل مع الدكتور لتعيينك على فصل.</p>
+    let maxLab = 0;
+    allSections.forEach(s => {
+        const m = (s.title || '').match(/LAB(\d+)/i);
+        if (m) {
+            const n = parseInt(m[1], 10);
+            if (n > maxLab) maxLab = n;
+        }
+    });
+
+    const defaultGroup = 1;
+    const defaultClass = 1;
+    const defaultLab = maxLab + 1;
+    const defaultType = 'W';
+
+    /* ═══ بناء واجهة المودال ═══ */
+    const modalHtml = `
+        <style>
+            /* ═══════════════════════════════════════════════
+               SECTION BUILDER · LUXURY UI
+               ═══════════════════════════════════════════════ */
+            .sb-subject {
+                display: flex; align-items: center; gap: 10px;
+                padding: 12px 16px;
+                margin-bottom: 16px;
+                border-radius: 14px;
+                background: linear-gradient(135deg, rgba(255,179,0,0.10), rgba(124,58,237,0.05));
+                border: 1px solid rgba(255,179,0,0.35);
+                color: #FFD54F;
+                font-family: 'Cairo', sans-serif;
+                font-weight: 800;
+                font-size: 14px;
+                text-align: right;
+            }
+            .sb-subject i { font-size: 15px; flex-shrink: 0; }
+            .sb-subject span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+            .sb-row {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+                margin-bottom: 14px;
+            }
+            @media (max-width: 520px) {
+                .sb-row { grid-template-columns: 1fr; }
+            }
+
+            .sb-field {
+                background: linear-gradient(145deg, rgba(20,26,40,0.95), rgba(11,15,26,0.98));
+                border: 1.5px solid rgba(255,255,255,0.08);
+                border-radius: 14px;
+                padding: 12px 14px;
+                transition: all 0.25s ease;
+                text-align: right;
+            }
+            .sb-field:focus-within {
+                border-color: rgba(255,179,0,0.6);
+                box-shadow: 0 0 22px rgba(255,179,0,0.15), inset 0 0 12px rgba(255,179,0,0.05);
+                transform: translateY(-1px);
+            }
+            .sb-label {
+                display: flex; align-items: center; gap: 6px;
+                font-family: 'Cairo', sans-serif;
+                font-size: 11px;
+                font-weight: 800;
+                color: #8b93a7;
+                letter-spacing: 0.5px;
+                margin-bottom: 8px;
+                text-transform: uppercase;
+            }
+            .sb-label i {
+                color: #FFB300;
+                font-size: 11px;
+            }
+            .sb-label .sb-letter {
+                margin-right: auto;
+                background: rgba(255,179,0,0.15);
+                color: #FFD54F;
+                border: 1px solid rgba(255,179,0,0.4);
+                padding: 2px 8px;
+                border-radius: 6px;
+                font-family: 'Plus Jakarta Sans', monospace;
+                font-size: 10px;
+                font-weight: 900;
+                letter-spacing: 1px;
+            }
+
+            .sb-counter {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                direction: ltr;
+            }
+            .sb-counter button {
+                width: 34px; height: 34px;
+                border-radius: 10px;
+                background: rgba(255,179,0,0.10);
+                border: 1px solid rgba(255,179,0,0.35);
+                color: #FFD54F;
+                font-size: 15px;
+                font-weight: 900;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                display: flex; align-items: center; justify-content: center;
+                padding: 0;
+                flex-shrink: 0;
+                font-family: 'Plus Jakarta Sans', sans-serif;
+            }
+            .sb-counter button:hover {
+                background: #FFB300;
+                color: #0a0e17;
+                transform: scale(1.05);
+                box-shadow: 0 0 16px rgba(255,179,0,0.5);
+            }
+            .sb-counter button:active { transform: scale(0.95); }
+            .sb-counter input {
+                flex: 1;
+                background: rgba(0,0,0,0.55);
+                border: 1.5px solid rgba(255,179,0,0.35);
+                border-radius: 10px;
+                color: #FFD54F;
+                font-family: 'Plus Jakarta Sans', monospace;
+                font-size: 17px;
+                font-weight: 900;
+                text-align: center;
+                padding: 6px 4px;
+                outline: none;
+                min-width: 0;
+                transition: all 0.2s ease;
+            }
+            .sb-counter input:focus {
+                border-color: #FFB300;
+                box-shadow: 0 0 18px rgba(255,179,0,0.3);
+                background: rgba(0,0,0,0.75);
+            }
+            .sb-counter input::-webkit-outer-spin-button,
+            .sb-counter input::-webkit-inner-spin-button {
+                -webkit-appearance: none; margin: 0;
+            }
+            .sb-counter input[type=number] { -moz-appearance: textfield; }
+
+            .sb-type-wrap {
+                display: flex;
+                gap: 8px;
+                margin-top: 4px;
+            }
+            .sb-type-btn {
+                flex: 1;
+                padding: 10px 8px;
+                border-radius: 12px;
+                background: rgba(0,0,0,0.5);
+                border: 1.5px solid rgba(255,255,255,0.1);
+                color: #8b93a7;
+                font-family: 'Cairo', sans-serif;
+                font-size: 12px;
+                font-weight: 800;
+                cursor: pointer;
+                transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 3px;
+                letter-spacing: 0.3px;
+            }
+            .sb-type-btn .sb-type-letter {
+                font-family: 'Plus Jakarta Sans', monospace;
+                font-size: 17px;
+                font-weight: 900;
+                line-height: 1;
+            }
+            .sb-type-btn .sb-type-name {
+                font-size: 10px;
+                opacity: 0.85;
+                letter-spacing: 0.5px;
+            }
+            .sb-type-btn:hover {
+                border-color: rgba(255,179,0,0.4);
+                color: #fff;
+                transform: translateY(-1px);
+            }
+            .sb-type-btn.active {
+                background: linear-gradient(135deg, rgba(255,179,0,0.22), rgba(255,179,0,0.06));
+                border-color: #FFB300;
+                color: #FFD54F;
+                box-shadow: 0 0 20px rgba(255,179,0,0.3), inset 0 0 14px rgba(255,179,0,0.08);
+                transform: translateY(-1px);
+            }
+            .sb-type-btn.active .sb-type-letter {
+                text-shadow: 0 0 14px rgba(255,179,0,0.8);
+            }
+            .sb-type-btn[data-type="U"].active {
+                background: linear-gradient(135deg, rgba(59,130,246,0.22), rgba(59,130,246,0.06));
+                border-color: #60A5FA;
+                color: #93C5FD;
+                box-shadow: 0 0 20px rgba(59,130,246,0.3), inset 0 0 14px rgba(59,130,246,0.08);
+            }
+
+            .sb-preview {
+                position: relative;
+                margin: 18px 0 10px;
+                padding: 18px 16px 14px;
+                border-radius: 18px;
+                background:
+                    radial-gradient(400px circle at 50% 0%, rgba(255,179,0,0.12), transparent 60%),
+                    linear-gradient(165deg, rgba(30,41,59,0.85), rgba(11,15,26,0.98));
+                border: 1.5px solid rgba(255,179,0,0.4);
+                box-shadow:
+                    0 0 30px rgba(255,179,0,0.15),
+                    inset 0 1px 0 rgba(255,255,255,0.06);
+                overflow: hidden;
+                text-align: center;
+            }
+            .sb-preview::before {
+                content: "";
+                position: absolute;
+                top: 0; left: 0; right: 0;
+                height: 2px;
+                background: linear-gradient(90deg, transparent, #FFB300, #FFD54F, #FFB300, transparent);
+                background-size: 200% 100%;
+                animation: sbShimmer 3s linear infinite;
+            }
+            @keyframes sbShimmer {
+                0%   { background-position: -200% 0; }
+                100% { background-position:  200% 0; }
+            }
+
+            .sb-preview-label {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                font-family: 'Cairo', sans-serif;
+                font-size: 10.5px;
+                font-weight: 800;
+                color: #FFD54F;
+                letter-spacing: 0.8px;
+                padding: 3px 12px;
+                border-radius: 20px;
+                background: rgba(255,179,0,0.10);
+                border: 1px solid rgba(255,179,0,0.3);
+                margin-bottom: 12px;
+                text-transform: uppercase;
+            }
+            .sb-preview-label i {
+                font-size: 10px;
+                animation: sbEye 2s ease-in-out infinite;
+            }
+            @keyframes sbEye {
+                0%,100% { transform: scale(1); opacity: 1; }
+                50%     { transform: scale(1.15); opacity: 0.7; }
+            }
+
+            .sb-preview-value {
+                font-family: 'Plus Jakarta Sans', 'Cairo', monospace;
+                font-size: 26px;
+                font-weight: 900;
+                color: #fff;
+                letter-spacing: 1.5px;
+                direction: ltr;
+                line-height: 1.2;
+                word-break: break-all;
+                text-shadow:
+                    0 0 20px rgba(255,179,0,0.5),
+                    0 2px 8px rgba(0,0,0,0.6);
+                padding: 0 8px;
+                transition: all 0.3s ease;
+                min-height: 34px;
+            }
+            .sb-preview-value .pv-g { color: #FFD54F; }
+            .sb-preview-value .pv-c { color: #60A5FA; }
+            .sb-preview-value .pv-w { color: #34D399; }
+            .sb-preview-value .pv-u { color: #A78BFA; }
+            .sb-preview-value .pv-lab { color: #F472B6; }
+            .sb-preview-value .pv-dash {
+                color: rgba(255,255,255,0.3);
+                font-size: 22px;
+                padding: 0 2px;
+            }
+
+            .sb-manual-toggle-wrap {
+                display: flex;
+                justify-content: center;
+                margin-top: 10px;
+            }
+            .sb-manual-toggle {
+                display: inline-flex;
+                align-items: center;
+                gap: 7px;
+                padding: 7px 16px;
+                border-radius: 12px;
+                background: transparent;
+                border: 1px dashed rgba(255,179,0,0.4);
+                color: #FFB300;
+                font-family: 'Cairo', sans-serif;
+                font-size: 11.5px;
+                font-weight: 800;
+                cursor: pointer;
+                transition: all 0.25s ease;
+            }
+            .sb-manual-toggle:hover {
+                background: rgba(255,179,0,0.10);
+                border-color: #FFB300;
+                transform: translateY(-1px);
+                box-shadow: 0 6px 18px rgba(255,179,0,0.15);
+            }
+            .sb-manual-toggle i { font-size: 11px; }
+
+            .sb-manual-field {
+                display: none;
+                margin-top: 12px;
+                animation: sbFadeIn 0.3s ease;
+            }
+            .sb-manual-field.active { display: block; }
+            @keyframes sbFadeIn {
+                from { opacity: 0; transform: translateY(-8px); }
+                to   { opacity: 1; transform: translateY(0); }
+            }
+            .sb-manual-input {
+                width: 100%;
+                padding: 14px 16px;
+                border-radius: 12px;
+                background: rgba(0,0,0,0.55);
+                border: 1.5px solid rgba(255,179,0,0.4);
+                color: #FFD54F;
+                font-family: 'Plus Jakarta Sans', monospace;
+                font-size: 15px;
+                font-weight: 800;
+                text-align: center;
+                letter-spacing: 1px;
+                outline: none;
+                transition: all 0.25s ease;
+            }
+            .sb-manual-input:focus {
+                border-color: #FFB300;
+                background: rgba(0,0,0,0.75);
+                box-shadow: 0 0 22px rgba(255,179,0,0.3);
+                transform: translateY(-1px);
+            }
+            .sb-manual-input::placeholder {
+                color: #6b7385;
+                font-weight: 600;
+                letter-spacing: 0.5px;
+            }
+
+            .sb-auto-section { display: block; }
+            .sb-auto-section.hidden { display: none; }
+        </style>
+
+        <div class="sb-subject">
+            <i class="fas fa-book"></i>
+            <span>${subject.name}</span>
+        </div>
+
+        <div class="sb-auto-section" id="sb-auto-section">
+
+            <div class="sb-row">
+                <div class="sb-field">
+                    <div class="sb-label">
+                        <i class="fas fa-users"></i>
+                        <span>Group</span>
+                        <span class="sb-letter">G</span>
+                    </div>
+                    <div class="sb-counter">
+                        <button type="button" onclick="sbAdjust('sb-group', -1)">−</button>
+                        <input type="number" id="sb-group" value="${defaultGroup}" min="1" max="99">
+                        <button type="button" onclick="sbAdjust('sb-group', 1)">+</button>
+                    </div>
                 </div>
-            `
-        });
-    }
 
-    const isSingle = allowedClasses.length === 1;
-    const initialClass = allowedClasses[0];
-
-    let classFieldHtml = '';
-    if (isSingle) {
-        classFieldHtml = `
-            <div class="locked-subject-field" style="margin-bottom:14px;">
-                <i class="fas fa-layer-group"></i>
-                <span>Class ${initialClass}</span>
+                <div class="sb-field">
+                    <div class="sb-label">
+                        <i class="fas fa-layer-group"></i>
+                        <span>Class</span>
+                        <span class="sb-letter">C</span>
+                    </div>
+                    <div class="sb-counter">
+                        <button type="button" onclick="sbAdjust('sb-class', -1)">−</button>
+                        <input type="number" id="sb-class" value="${defaultClass}" min="1" max="99">
+                        <button type="button" onclick="sbAdjust('sb-class', 1)">+</button>
+                    </div>
+                </div>
             </div>
-        `;
-    } else {
-        const classOptions = allowedClasses.map(n =>
-            `<option value="${n}">Class ${n}</option>`
-        ).join('');
-        classFieldHtml = `
-            <select id="cs-class-num"
-                class="login-input"
-                style="font-size:15px; padding:14px 18px; font-weight:800; text-align:center; font-family:'Plus Jakarta Sans',monospace; color:#22d3ee; margin-bottom:14px;">
-                ${classOptions}
-            </select>
-        `;
-    }
 
-    const initialTitle = generateClassTitle(subjectId, initialClass);
+            <div class="sb-row">
+                <div class="sb-field">
+                    <div class="sb-label">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span>المكان</span>
+                    </div>
+                    <div class="sb-type-wrap">
+                        <button type="button" class="sb-type-btn active" data-type="W" onclick="sbSetType('W')">
+                            <span class="sb-type-letter">W</span>
+                            <span class="sb-type-name">Waha</span>
+                        </button>
+                        <button type="button" class="sb-type-btn" data-type="U" onclick="sbSetType('U')">
+                            <span class="sb-type-letter">U</span>
+                            <span class="sb-type-name">University</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="sb-field">
+                    <div class="sb-label">
+                        <i class="fas fa-flask"></i>
+                        <span>LAB</span>
+                        <span class="sb-letter">LAB</span>
+                    </div>
+                    <div class="sb-counter">
+                        <button type="button" onclick="sbAdjust('sb-lab', -1)">−</button>
+                        <input type="number" id="sb-lab" value="${defaultLab}" min="1" max="99">
+                        <button type="button" onclick="sbAdjust('sb-lab', 1)">+</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sb-preview">
+                <div class="sb-preview-label">
+                    <i class="fas fa-eye"></i>
+                    <span>الاسم النهائي</span>
+                </div>
+                <div class="sb-preview-value" id="sb-preview-value">
+                    G1-C1-W_LAB1
+                </div>
+            </div>
+
+        </div>
+
+        <div class="sb-manual-toggle-wrap">
+            <button type="button" class="sb-manual-toggle" id="sb-manual-toggle" onclick="sbToggleManual()">
+                <i class="fas fa-keyboard"></i>
+                <span>أو اكتب الاسم يدوياً</span>
+            </button>
+        </div>
+
+        <div class="sb-manual-field" id="sb-manual-field">
+            <input type="text" id="sb-manual-input" class="sb-manual-input"
+                   placeholder="مثلاً: W_LAB1 أو أي اسم"
+                   oninput="sbUpdateManualPreview(this.value)">
+        </div>
+    `;
+
+    window._sbState = {
+        type: defaultType,
+        manual: false
+    };
+
+    window.sbAdjust = function(id, delta) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        let v = parseInt(el.value, 10) || 1;
+        v = Math.max(1, Math.min(99, v + delta));
+        el.value = v;
+        sbUpdatePreview();
+    };
+
+    window.sbSetType = function(type) {
+        window._sbState.type = type;
+        document.querySelectorAll('.sb-type-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.type === type);
+        });
+        sbUpdatePreview();
+    };
+
+    window.sbToggleManual = function() {
+        window._sbState.manual = !window._sbState.manual;
+
+        const autoSection = document.getElementById('sb-auto-section');
+        const manualField = document.getElementById('sb-manual-field');
+        const toggleBtn = document.getElementById('sb-manual-toggle');
+
+        if (window._sbState.manual) {
+            autoSection.classList.add('hidden');
+            manualField.classList.add('active');
+            toggleBtn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i><span>العودة للوضع التلقائي</span>';
+            setTimeout(() => {
+                const inp = document.getElementById('sb-manual-input');
+                if (inp) inp.focus();
+            }, 100);
+        } else {
+            autoSection.classList.remove('hidden');
+            manualField.classList.remove('active');
+            toggleBtn.innerHTML = '<i class="fas fa-keyboard"></i><span>أو اكتب الاسم يدوياً</span>';
+            sbUpdatePreview();
+        }
+    };
+
+    window.sbUpdateManualPreview = function(val) {
+        const pv = document.getElementById('sb-preview-value');
+        if (!pv) return;
+        if (!val || !val.trim()) {
+            pv.innerHTML = '<span style="opacity:0.4;">اكتب اسم السكشن...</span>';
+        } else {
+            pv.textContent = val.trim();
+        }
+    };
+
+    window.sbUpdatePreview = function() {
+        const g = document.getElementById('sb-group');
+        const c = document.getElementById('sb-class');
+        const l = document.getElementById('sb-lab');
+        const pv = document.getElementById('sb-preview-value');
+        if (!g || !c || !l || !pv) return;
+
+        const gn = parseInt(g.value, 10) || 1;
+        const cn = parseInt(c.value, 10) || 1;
+        const ln = parseInt(l.value, 10) || 1;
+        const t = window._sbState.type;
+
+        pv.innerHTML = `
+            <span class="pv-g">G${gn}</span><span class="pv-dash">-</span>
+            <span class="pv-c">C${cn}</span><span class="pv-dash">-</span>
+            <span class="${t === 'W' ? 'pv-w' : 'pv-u'}">${t}_</span><span class="pv-lab">LAB${ln}</span>
+        `;
+    };
 
     const { value: form } = await Swal.fire({
         ...swalDark,
         title: 'فتح سكشن جديد',
-        width: 480,
-        html: `
-            <div class="locked-subject-field" style="margin-bottom:12px;">
-                <i class="fas fa-book"></i>
-                <span>${subject.name}</span>
-            </div>
-
-            ${classFieldHtml}
-
-            <input id="cs-title" class="login-input" placeholder="اسم السكشن (مثلاً: Class1_Sec1)" value="${initialTitle}"
-                style="font-family:monospace; font-weight:800; text-align:center; font-size:15px; margin-bottom:0;">
-
-            <p style="color:#8b93a7; font-size:11px; margin:10px 0 0; text-align:right;">
-                <i class="fas fa-info-circle" style="color:var(--nx-gold);"></i>
-                العنوان الافتراضي جاهز — يمكنك تعديله يدوياً.
-            </p>
-        `,
+        width: 580,
+        html: modalHtml,
         showCancelButton: true,
         confirmButtonText: '<i class="fas fa-check"></i> فتح السكشن',
         cancelButtonText: 'إلغاء',
@@ -978,95 +1321,42 @@ async function openNewSectionChoiceModal() {
         reverseButtons: true,
         focusConfirm: false,
         didOpen: () => {
-            if (!isSingle) {
-                const classSel = document.getElementById('cs-class-num');
-                const titleInput = document.getElementById('cs-title');
-                if (classSel && titleInput) {
-                    classSel.addEventListener('change', () => {
-                        titleInput.value = generateClassTitle(subjectId, classSel.value);
+            ['sb-group', 'sb-class', 'sb-lab'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.addEventListener('input', sbUpdatePreview);
+                    el.addEventListener('keydown', (e) => {
+                        if (e.key === 'ArrowUp') { e.preventDefault(); sbAdjust(id, 1); }
+                        if (e.key === 'ArrowDown') { e.preventDefault(); sbAdjust(id, -1); }
                     });
                 }
-            }
+            });
+
+            sbUpdatePreview();
         },
         preConfirm: () => {
-            const titleEl = document.getElementById('cs-title');
-            const title = titleEl ? titleEl.value.trim() : '';
-            if (!title) {
-                Swal.showValidationMessage('يرجى إدخال اسم السكشن!');
-                return false;
-            }
+            let finalTitle = '';
 
-            let classNumber;
-            if (isSingle) {
-                classNumber = initialClass;
-            } else {
-                const sel = document.getElementById('cs-class-num');
-                classNumber = sel ? sel.value : null;
-                if (!classNumber) {
-                    Swal.showValidationMessage('يرجى اختيار الفصل!');
+            if (window._sbState.manual) {
+                const inp = document.getElementById('sb-manual-input');
+                finalTitle = inp ? inp.value.trim() : '';
+                if (!finalTitle) {
+                    Swal.showValidationMessage('يرجى كتابة اسم السكشن!');
                     return false;
                 }
+            } else {
+                const g = parseInt(document.getElementById('sb-group').value, 10) || 1;
+                const c = parseInt(document.getElementById('sb-class').value, 10) || 1;
+                const l = parseInt(document.getElementById('sb-lab').value, 10) || 1;
+                const t = window._sbState.type;
+                finalTitle = `G${g}-C${c}-${t}_LAB${l}`;
             }
 
             return {
                 subject_id: subjectId,
                 subject_name: subject.name,
                 type: 'Section',
-                title: title,
-                class_number: classNumber
-            };
-        }
-    });
-
-    if (form) {
-        await sendCreateSession(form);
-    }
-}
-
-/* =========================================================
-   ✅ createSessionForClass
-   ========================================================= */
-async function createSessionForClass(subjectId, classNumber) {
-    const subject = allData.subjects.find(s => s.id === subjectId);
-    if (!subject) return Swal.fire({...swalDark, icon: 'error', text: 'المادة غير موجودة!'});
-
-    const initialTitle = generateClassTitle(subjectId, classNumber);
-
-    const { value: form } = await Swal.fire({
-        ...swalDark,
-        title: 'فتح سكشن جديد',
-        width: 480,
-        html: `
-            <div class="locked-subject-field" style="margin-bottom:12px;">
-                <i class="fas fa-book"></i>
-                <span>${subject.name}</span>
-            </div>
-            <div class="locked-subject-field" style="margin-bottom:14px;">
-                <i class="fas fa-layer-group"></i>
-                <span>Class ${classNumber}</span>
-            </div>
-            <input id="cs-title" class="login-input" placeholder="اسم السكشن" value="${initialTitle}"
-                style="font-family:monospace; font-weight:800; text-align:center; font-size:15px; margin-bottom:0;">
-        `,
-        showCancelButton: true,
-        confirmButtonText: '<i class="fas fa-check"></i> فتح السكشن',
-        cancelButtonText: 'إلغاء',
-        confirmButtonColor: '#10B981',
-        cancelButtonColor: '#374151',
-        reverseButtons: true,
-        focusConfirm: false,
-        preConfirm: () => {
-            const title = document.getElementById('cs-title').value.trim();
-            if (!title) {
-                Swal.showValidationMessage('يرجى إدخال اسم السكشن!');
-                return false;
-            }
-            return {
-                subject_id: subjectId,
-                subject_name: subject.name,
-                type: 'Section',
-                title: title,
-                class_number: classNumber
+                title: finalTitle
             };
         }
     });
@@ -1074,563 +1364,6 @@ async function createSessionForClass(subjectId, classNumber) {
     if (form) await sendCreateSession(form);
 }
 
-/* =========================================================
-   ✅ نافذة عرض سكاشن فصل
-   ========================================================= */
-function openClassSessionsModal(classId) {
-    const cls = (allData.classes || []).find(c => c.class_id === classId);
-    if (!cls) return;
-
-    const isTA = (currentAdminRole === 'ta');
-
-    let classSessions = allData.sessions.filter(s =>
-        s.subject_id === cls.subject_id &&
-        s.type === 'Section' &&
-        String(s.class_number) === String(cls.class_number)
-    );
-
-    if (isTA) {
-        classSessions = classSessions.filter(s =>
-            s.created_by_username === currentAdminUsername
-        );
-    }
-
-    classSessions.sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
-
-    let sessionsHtml = '';
-
-    if (classSessions.length === 0) {
-        let emptyMsg = isTA
-            ? 'لم تفتح أي سكشن في هذا الفصل بعد'
-            : 'المعيد عليه فتح سكشن جديد من حسابه';
-
-        sessionsHtml = `
-            <div style="text-align:center; padding:30px 20px; background:rgba(0,0,0,0.25); border-radius:14px; border:1px dashed rgba(255,255,255,0.15);">
-                <i class="fas fa-user-slash fa-2x" style="color:var(--text-muted); margin-bottom:10px;"></i>
-                <p style="color:#fff; font-size:13px; margin:0;">لا توجد سكاشن في هذا الفصل</p>
-                <p style="color:#9CA3AF; font-size:11.5px; margin-top:6px;">${emptyMsg}</p>
-            </div>
-        `;
-    } else {
-        sessionsHtml = classSessions.map(s => {
-            const isOpen = s.is_open;
-            const statusClass = isOpen ? 'sess-status-open' : 'sess-status-closed';
-            const statusText = isOpen ? 'مفتوحة' : 'مغلقة';
-
-            return `
-                <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:12px 14px; margin-bottom:8px; text-align:right;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:8px; flex-wrap:wrap;">
-                        <div style="display:flex; align-items:center; gap:8px;">
-                            <span style="background:rgba(59,130,246,0.15); color:#3B82F6; padding:4px 12px; border-radius:8px; font-size:11.5px; font-weight:800; font-family:monospace;">
-                                <i class="fas fa-users"></i> ${s.title}
-                            </span>
-                            <span class="sess-status ${statusClass}" style="padding:4px 12px; font-size:10.5px;">
-                                <i class="fas fa-circle"></i> ${statusText}
-                            </span>
-                        </div>
-                        <div style="font-size:10.5px; color:#8b93a7;">
-                            ${s.created_at || ''}
-                        </div>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
-                        <div style="font-size:11px; color:#8b93a7;">
-                            <i class="fas fa-user-graduate"></i> ${s.created_by || '—'}
-                        </div>
-                        <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                            <button type="button" class="btn btn-gold" 
-                                onclick="event.stopPropagation(); Swal.close(); startLiveBroadcast('${s.session_id}', '${s.title}', '${s.subject_name}')"
-                                style="padding:5px 12px; font-size:11px;">
-                                <i class="fas fa-qrcode"></i> بث
-                            </button>
-                            <button type="button" class="btn btn-outline" 
-                                onclick="event.stopPropagation(); Swal.close(); openSessionAttendanceModal('${s.session_id}')"
-                                style="padding:5px 12px; font-size:11px;">
-                                <i class="fas fa-users"></i> الكشف
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-    }
-
-    Swal.fire({
-        ...swalDark,
-        title: `📁 Class ${cls.class_number} · سكاشن الفصل`,
-        width: 620,
-        html: `
-            <div style="text-align:right; max-height:65vh; overflow-y:auto;">
-                <div style="background:rgba(6,182,212,0.08); border:1px solid rgba(6,182,212,0.25); padding:10px 14px; border-radius:12px; margin-bottom:14px;">
-                    <p style="color:#22d3ee; font-size:12.5px; margin:0; font-weight:800;">
-                        <i class="fas fa-book"></i> ${cls.subject_name}
-                    </p>
-                    <p style="color:#8b93a7; font-size:11px; margin:4px 0 0;">
-                        <i class="fas fa-users"></i> ${classSessions.length} سكشن في هذا الفصل
-                    </p>
-                </div>
-                ${sessionsHtml}
-            </div>
-        `,
-        confirmButtonText: 'إغلاق',
-        confirmButtonColor: '#FFB300',
-        showCancelButton: (!isTA && classSessions.length > 0),
-        cancelButtonText: '📋 عرض كل السكاشن',
-        cancelButtonColor: '#3B82F6'
-    }).then((result) => {
-        if (result.dismiss === Swal.DismissReason.cancel) {
-            openClassDetailsModal(classId);
-        }
-    });
-}
-
-/* =========================================================
-   ✅ نافذة تفاصيل الفصل الكامل
-   ========================================================= */
-async function openClassDetailsModal(classId) {
-    Swal.fire({
-        title: 'جاري التحميل...',
-        background: '#161b26', color: '#fff',
-        didOpen: () => Swal.showLoading(),
-        allowOutsideClick: false
-    });
-
-    const res = await fetch(`/api/class-tas?class_id=${classId}`);
-    const data = await res.json();
-    Swal.close();
-
-    if (data.status !== 'success') {
-        return Swal.fire({...swalDark, icon: 'error', text: data.message || 'فشل التحميل'});
-    }
-
-    const cls = data.class;
-    const tas = data.tas || [];
-
-    let contentHtml = '';
-    if (tas.length === 0) {
-        contentHtml = `
-            <div style="text-align:center; padding:30px 20px; background:rgba(0,0,0,0.25); border-radius:14px; border:1px dashed rgba(255,255,255,0.15);">
-                <i class="fas fa-user-slash fa-2x" style="color:var(--text-muted); margin-bottom:10px;"></i>
-                <p style="color:#fff; font-size:13px; margin:0;">لا يوجد معيدون معيّنون لهذا الفصل</p>
-                <p style="color:#9CA3AF; font-size:11.5px; margin-top:6px;">اضغط "تعيين" لإضافة معيدين</p>
-            </div>
-        `;
-    } else {
-        contentHtml = tas.map(ta => {
-            const sessions = ta.class_sessions || [];
-            let sessionsHtml = '';
-            if (sessions.length === 0) {
-                sessionsHtml = `<p style="color:#6b7385; font-size:11px; text-align:center; padding:8px; margin:0;">لا توجد جلسات بعد</p>`;
-            } else {
-                sessionsHtml = sessions.map(s => `
-                    <div style="display:flex; justify-content:space-between; align-items:center; padding:7px 12px; background:rgba(0,0,0,0.3); border-radius:8px; margin-top:5px; font-size:11.5px;">
-                        <span style="color:#FFB300; font-weight:800; font-family:monospace;">${s.title}</span>
-                        <span style="color:#9CA3AF; font-size:10.5px;">${s.created_at || ''}</span>
-                        <span style="background:rgba(16,185,129,0.15); color:#10B981; padding:2px 8px; border-radius:6px; font-weight:800; font-size:10.5px;">
-                            <i class="fas fa-users"></i> ${s.attendance_count || 0}
-                        </span>
-                    </div>
-                `).join('');
-            }
-
-            return `
-                <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:12px 14px; margin-bottom:10px; text-align:right;">
-                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
-                        <div style="width:34px; height:34px; border-radius:50%; background:linear-gradient(135deg, #10B981, #059669); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:900; font-size:13px; flex-shrink:0;">
-                            ${(ta.name || '?').charAt(0)}
-                        </div>
-                        <div style="flex:1; min-width:0;">
-                            <div style="color:#fff; font-weight:900; font-size:13.5px;">${ta.name}</div>
-                            <div style="color:#8b93a7; font-size:10.5px; font-family:monospace;">@${ta.username}</div>
-                        </div>
-                    </div>
-                    <p style="color:#8b93a7; font-size:10.5px; margin:0 0 4px;">جلسات هذا المعيد في Class ${cls.class_number}:</p>
-                    ${sessionsHtml}
-                </div>
-            `;
-        }).join('');
-    }
-
-    Swal.fire({
-        ...swalDark,
-        title: `📁 Class ${cls.class_number} · ${cls.subject_name}`,
-        width: 560,
-        html: `
-            <div style="text-align:right; max-height:60vh; overflow-y:auto;">
-                <div style="background:rgba(6,182,212,0.08); border:1px solid rgba(6,182,212,0.25); padding:10px 14px; border-radius:12px; margin-bottom:14px;">
-                    <p style="color:#22d3ee; font-size:12.5px; margin:0; font-weight:800;">
-                        <i class="fas fa-users"></i> ${tas.length} معيد معيّن
-                    </p>
-                </div>
-                ${contentHtml}
-            </div>
-        `,
-        confirmButtonText: 'إغلاق',
-        confirmButtonColor: '#FFB300'
-    });
-}
-
-/* =========================================================
-   ✅ نافذة تعيين معيدين لفصل
-   ========================================================= */
-async function openAssignTAsModal(classId) {
-    const cls = (allData.classes || []).find(c => c.class_id === classId);
-    if (!cls) return;
-
-    const classKey = `${cls.subject_id}|Class${cls.class_number}`;
-
-    const availableTAs = (allData.staff || []).filter(u =>
-        u.role === 'ta' && (u.allowed_subjects || []).includes(cls.subject_id)
-    );
-
-    if (availableTAs.length === 0) {
-        return Swal.fire({
-            ...swalDark,
-            icon: 'info',
-            title: 'لا يوجد معيدون متاحون',
-            html: `
-                <div style="text-align:center; line-height:1.9;">
-                    <p style="color:#fff; margin-bottom:8px;">لا يوجد معيدون معيّنون على مادة</p>
-                    <p style="color:#FFB300; font-weight:900; font-size:14px; margin-bottom:12px;">${cls.subject_name}</p>
-                    <p style="color:#9CA3AF; font-size:12px;">
-                        اذهب إلى <b style="color:#FFB300;">"إدارة الطاقم"</b> أولاً لإضافة معيدين لهذه المادة.
-                    </p>
-                </div>
-            `
-        });
-    }
-
-    const taListHtml = availableTAs.map(ta => {
-        const isAssigned = (ta.allowed_classes || []).includes(classKey);
-        return `
-            <label class="ta-assign-item"
-                style="display:flex; align-items:center; gap:10px; padding:11px 14px; background:${isAssigned ? 'rgba(16,185,129,0.08)' : 'rgba(255,255,255,0.03)'}; border:1px solid ${isAssigned ? 'rgba(16,185,129,0.35)' : 'rgba(255,255,255,0.08)'}; border-radius:12px; cursor:pointer; margin-bottom:7px; text-align:right; transition:all 0.2s ease;">
-                <input type="checkbox" class="assign-ta-checkbox" value="${ta.username}" ${isAssigned ? 'checked' : ''}
-                       style="width:18px; height:18px; accent-color:#10B981; flex-shrink:0; cursor:pointer;">
-                <div style="flex:1; min-width:0;">
-                    <div style="color:#fff; font-weight:800; font-size:13.5px;">${ta.name}</div>
-                    <div style="color:#8b93a7; font-size:11px; font-family:monospace; margin-top:2px;">@${ta.username}</div>
-                </div>
-                ${isAssigned ? '<i class="fas fa-check-circle" style="color:#10B981; font-size:16px;"></i>' : ''}
-            </label>
-        `;
-    }).join('');
-
-    const { value: selectedUsernames, isConfirmed } = await Swal.fire({
-        ...swalDark,
-        title: `تعيين معيدين · Class ${cls.class_number}`,
-        width: 540,
-        html: `
-            <div style="text-align:right;">
-                <div style="background:rgba(6,182,212,0.08); border:1px solid rgba(6,182,212,0.25); padding:10px 14px; border-radius:12px; margin-bottom:14px;">
-                    <p style="color:#22d3ee; font-size:12.5px; margin:0; font-weight:800;">
-                        <i class="fas fa-book"></i> ${cls.subject_name}
-                    </p>
-                </div>
-
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                    <p style="color:#8b93a7; font-size:11px; margin:0;">
-                        <i class="fas fa-users"></i> المتاحون: <b style="color:#fff;">${availableTAs.length}</b>
-                    </p>
-                    <button type="button" onclick="toggleAllTaAssign()" 
-                        style="background:transparent; border:1px solid rgba(255,179,0,0.4); color:#FFB300; padding:4px 10px; border-radius:8px; font-size:11px; font-weight:800; cursor:pointer; font-family:'Cairo',sans-serif;">
-                        <i class="fas fa-check-double"></i> تحديد / إلغاء الكل
-                    </button>
-                </div>
-
-                <div style="max-height:340px; overflow-y:auto; padding-left:4px;">
-                    ${taListHtml}
-                </div>
-            </div>
-        `,
-        showCancelButton: true,
-        confirmButtonText: '<i class="fas fa-save"></i> حفظ',
-        cancelButtonText: 'إلغاء',
-        confirmButtonColor: '#10B981',
-        cancelButtonColor: '#374151',
-        reverseButtons: true,
-        focusConfirm: false,
-        preConfirm: () => {
-            const selected = Array.from(document.querySelectorAll('.assign-ta-checkbox:checked')).map(cb => cb.value);
-            return selected;
-        }
-    });
-
-    if (!isConfirmed) return;
-
-    const targetSet = new Set(selectedUsernames || []);
-    availableTAs.forEach(ta => {
-        const classes = ta.allowed_classes || [];
-        const has = classes.includes(classKey);
-        const should = targetSet.has(ta.username);
-        if (should && !has) {
-            ta.allowed_classes = [...classes, classKey];
-        } else if (!should && has) {
-            ta.allowed_classes = classes.filter(c => c !== classKey);
-        }
-    });
-    renderClassesTable(currentSessionsFilter);
-
-    const res = await fetch('/api/admin-action', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            action: 'assign_class_tas',
-            class_id: classId,
-            ta_usernames: selectedUsernames || []
-        })
-    });
-    const data = await res.json();
-
-    if (data.status === 'success') {
-        Swal.fire({
-            ...swalDark,
-            icon: 'success',
-            title: 'تم الحفظ ✅',
-            timer: 1400,
-            showConfirmButton: false
-        });
-        refreshDataSilently();
-    } else {
-        Swal.fire({...swalDark, icon: 'error', title: 'خطأ', text: data.message});
-        refreshDataSilently();
-    }
-}
-
-function toggleAllTaAssign() {
-    const checkboxes = document.querySelectorAll('.assign-ta-checkbox');
-    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
-    checkboxes.forEach(cb => { cb.checked = !allChecked; });
-}
-
-/* =========================================================
-   ✅ إضافة فصل جديد
-   ========================================================= */
-async function addClass() {
-    if (!currentSessionsFilter) return;
-    const subjectId = currentSessionsFilter;
-    const subject = allData.subjects.find(s => s.id === subjectId);
-    if (!subject) return;
-
-    const existingClasses = (allData.classes || []).filter(c => c.subject_id === subjectId);
-    const maxNum = existingClasses.reduce((m, c) => Math.max(m, parseInt(c.class_number) || 0), 0);
-    const suggested = maxNum + 1;
-
-    const { value: classNum } = await Swal.fire({
-        ...swalDark,
-        title: 'إضافة فصل جديد',
-        html: `
-            <div style="text-align:right;">
-                <p style="color:#9aa2b5; font-size:12px; margin-bottom:10px;">
-                    المادة: <b style="color:#FFB300;">${subject.name}</b>
-                </p>
-                <label style="color:#9aa2b5; font-size:12px; display:block; margin-bottom:6px;">
-                    Class رقم
-                </label>
-                <input id="new-class-num" class="login-input ltr-input" type="number" 
-                    min="1" max="100" value="${suggested}">
-            </div>
-        `,
-        showCancelButton: true,
-        confirmButtonText: '<i class="fas fa-plus"></i> إضافة',
-        cancelButtonText: 'إلغاء',
-        focusConfirm: false,
-        preConfirm: () => {
-            const val = document.getElementById('new-class-num').value.trim();
-            if (!val || isNaN(val) || parseInt(val) < 1) {
-                Swal.showValidationMessage('يرجى إدخال رقم Class صحيح!');
-                return false;
-            }
-            const dup = existingClasses.find(c => String(c.class_number) === String(val));
-            if (dup) {
-                Swal.showValidationMessage(`Class ${val} موجود بالفعل!`);
-                return false;
-            }
-            return val;
-        }
-    });
-
-    if (!classNum) return;
-
-    const tempClass = {
-        class_id: 'TEMP_' + Date.now(),
-        subject_id: subjectId,
-        subject_name: subject.name,
-        class_number: parseInt(classNum),
-        created_by: 'أنت',
-        created_by_username: currentAdminUsername,
-        created_at: 'الآن'
-    };
-    allData.classes.push(tempClass);
-    renderClassesTable(subjectId);
-
-    try {
-        const res = await fetch('/api/admin-action', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'create_class',
-                subject_id: subjectId,
-                class_number: parseInt(classNum)
-            })
-        });
-        const data = await res.json();
-
-        if (data.status === 'success') {
-            const idx = allData.classes.findIndex(c => c.class_id === tempClass.class_id);
-            if (idx >= 0 && data.class_id) {
-                allData.classes[idx] = {
-                    class_id: data.class_id,
-                    subject_id: data.subject_id,
-                    subject_name: data.subject_name,
-                    class_number: data.class_number,
-                    created_by: 'أنت',
-                    created_by_username: currentAdminUsername,
-                    created_at: 'الآن'
-                };
-            }
-            renderClassesTable(subjectId);
-            Swal.fire({...swalDark, icon: 'success', title: `تم إنشاء Class ${classNum} ✅`, timer: 1200, showConfirmButton: false});
-            refreshDataSilently();
-        } else {
-            allData.classes = allData.classes.filter(c => c.class_id !== tempClass.class_id);
-            renderClassesTable(subjectId);
-            Swal.fire({...swalDark, icon: 'error', title: 'خطأ', text: data.message});
-        }
-    } catch (e) {
-        allData.classes = allData.classes.filter(c => c.class_id !== tempClass.class_id);
-        renderClassesTable(subjectId);
-        Swal.fire({...swalDark, icon: 'error', title: 'خطأ', text: 'تعذر الاتصال'});
-    }
-}
-
-/* =========================================================
-   ✅ حذف فصل — Cascade Delete
-   ========================================================= */
-async function deleteClass(classId) {
-    const cls = (allData.classes || []).find(c => c.class_id === classId);
-    if (!cls) return;
-
-    const relatedSessions = allData.sessions.filter(s =>
-        s.subject_id === cls.subject_id &&
-        s.type === 'Section' &&
-        String(s.class_number) === String(cls.class_number)
-    );
-    const sessionsCount = relatedSessions.length;
-
-    const affectedTAs = (allData.staff || []).filter(u => {
-        const c = (u.allowed_classes || []);
-        return c.includes(`${cls.subject_id}|Class${cls.class_number}`);
-    });
-
-    let warnHtml = '';
-    if (affectedTAs.length > 0) {
-        warnHtml += `
-            <div style="background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.35); border-radius:10px; padding:10px 14px; margin:10px 0;">
-                <p style="color:#f87171; font-size:12.5px; font-weight:800; margin:0;">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    ${affectedTAs.length} معيد معيّن على هذا الفصل — سيتم إزالة الصلاحية
-                </p>
-            </div>
-        `;
-    }
-    if (sessionsCount > 0) {
-        warnHtml += `
-            <div style="background:rgba(255,179,0,0.12); border:1px solid rgba(255,179,0,0.4); border-radius:10px; padding:10px 14px; margin:10px 0;">
-                <p style="color:#FFB300; font-size:12.5px; font-weight:800; margin:0;">
-                    <i class="fas fa-users"></i>
-                    سيتم حذف <b>${sessionsCount} سكشن</b> مرتبط بالفصل + سجلات حضورهم
-                </p>
-            </div>
-        `;
-    }
-
-    const result = await Swal.fire({
-        ...swalDark, icon: 'warning', title: 'حذف الفصل',
-        html: `
-            <div style="text-align:center;">
-                <p style="color:#fff; margin-bottom:10px;">سيتم حذف الفصل:</p>
-                <p style="color:#22d3ee; font-weight:900; font-size:18px; font-family:monospace; margin-bottom:12px;">
-                    Class ${cls.class_number}
-                </p>
-                ${warnHtml}
-            </div>
-        `,
-        showCancelButton: true,
-        confirmButtonText: '<i class="fas fa-trash"></i> حذف نهائي',
-        cancelButtonText: 'إلغاء',
-        confirmButtonColor: '#EF4444',
-        cancelButtonColor: '#374151',
-        reverseButtons: true,
-        focusCancel: true
-    });
-
-    if (!result.isConfirmed) return;
-
-    const idx = allData.classes.findIndex(c => c.class_id === classId);
-    const removed = idx >= 0 ? allData.classes.splice(idx, 1)[0] : null;
-    const subjectId = cls.subject_id;
-
-    const removedSessions = allData.sessions.filter(s =>
-        s.subject_id === cls.subject_id &&
-        s.type === 'Section' &&
-        String(s.class_number) === String(cls.class_number)
-    );
-    allData.sessions = allData.sessions.filter(s =>
-        !(s.subject_id === cls.subject_id &&
-          s.type === 'Section' &&
-          String(s.class_number) === String(cls.class_number))
-    );
-
-    const classKey = `${cls.subject_id}|Class${cls.class_number}`;
-    allData.staff.forEach(u => {
-        if (u.allowed_classes && u.allowed_classes.includes(classKey)) {
-            u.allowed_classes = u.allowed_classes.filter(c => c !== classKey);
-        }
-    });
-
-    renderClassesTable(subjectId);
-    renderFilteredSessionsTable(subjectId);
-
-    try {
-        const res = await fetch('/api/admin-action', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'delete_class', class_id: classId })
-        });
-        const data = await res.json();
-
-        if (data.status === 'success') {
-            Swal.fire({
-                ...swalDark,
-                icon: 'success',
-                title: 'تم الحذف',
-                html: data.deleted_sessions > 0
-                    ? `<p style="color:#fff;">تم حذف الفصل + <b style="color:#FFB300;">${data.deleted_sessions}</b> جلسة</p>`
-                    : `<p style="color:#fff;">تم حذف الفصل</p>`,
-                timer: 1400,
-                showConfirmButton: false
-            });
-            refreshDataSilently();
-        } else {
-            if (removed) allData.classes.splice(idx, 0, removed);
-            allData.sessions = [...allData.sessions, ...removedSessions];
-            renderClassesTable(subjectId);
-            renderFilteredSessionsTable(subjectId);
-            Swal.fire({...swalDark, icon: 'error', text: data.message});
-            refreshDataSilently();
-        }
-    } catch (e) {
-        if (removed) allData.classes.splice(idx, 0, removed);
-        allData.sessions = [...allData.sessions, ...removedSessions];
-        renderClassesTable(subjectId);
-        renderFilteredSessionsTable(subjectId);
-        Swal.fire({...swalDark, icon: 'error', text: 'تعذر الاتصال'});
-    }
-}
-
-function renderSessions(list) { renderSessionsView(); }
-
-/* =========================================================
-   أدوات مساعدة
-   ========================================================= */
 function toggleSidebar() {
     const sidebar = document.querySelector('.sidebar');
     const overlay = document.getElementById('mobile-overlay');
@@ -2118,7 +1851,7 @@ async function deleteSubject(id) {
                 <p style="color:#fff; margin-bottom:10px;">هل تريد حذف هذه المادة؟</p>
                 ${subName ? `<p style="color:#FFB300; font-weight:900; font-size:15px; margin-bottom:12px;">${subName}</p>` : ''}
                 <p style="color:#f87171; font-size:12.5px;">
-                    <i class="fas fa-exclamation-triangle"></i> سيتم حذف الجلسات والفصول والسجلات
+                    <i class="fas fa-exclamation-triangle"></i> سيتم حذف الجلسات والسجلات
                 </p>
             </div>
         `,
@@ -2143,7 +1876,7 @@ async function deleteSubject(id) {
 }
 
 /* =========================================================
-   ✅ توليد العناوين
+   ✅ توليد عناوين المحاضرات
    ========================================================= */
 function generateLectureTitle(subjectId) {
     const prefix = 'LEC';
@@ -2161,41 +1894,6 @@ function generateLectureTitle(subjectId) {
     return `${prefix} ${maxNum + 1}`;
 }
 
-function generateClassTitle(subjectId, classNumber) {
-    let maxSec = 0;
-    const regex = /^Class\d+_Sec(\d+)$/i;
-
-    allData.sessions.forEach(s => {
-        if (s.subject_id === subjectId
-            && s.type === 'Section'
-            && String(s.class_number) === String(classNumber)) {
-            const match = (s.title || '').trim().match(regex);
-            if (match) {
-                const n = parseInt(match[1], 10);
-                if (n > maxSec) maxSec = n;
-            }
-        }
-    });
-
-    return `Class${classNumber}_Sec${maxSec + 1}`;
-}
-
-/* =========================================================
-   ✅ الفصول المتاحة للمعيد
-   ========================================================= */
-function getTaClassesForSubject(subjectId) {
-    const classes = [];
-    currentAdminAllowedClasses.forEach(item => {
-        const parts = item.split('|');
-        if (parts[0] === subjectId && parts[1] && parts[1].startsWith('Class')) {
-            const num = parts[1].replace('Class', '');
-            if (!classes.includes(num)) classes.push(num);
-        }
-    });
-    classes.sort((a, b) => parseInt(a) - parseInt(b));
-    return classes;
-}
-
 /* =========================================================
    ✅ فتح محاضرة جديدة
    ========================================================= */
@@ -2208,7 +1906,7 @@ async function createSessionModal() {
 
     if (currentAdminRole === 'super_admin') return createSessionModalSuperAdmin(subjectsToShow, isInsideSubject);
     if (currentAdminRole === 'doctor') return createSessionModalDoctor(subjectsToShow, isInsideSubject);
-    if (currentAdminRole === 'ta') return openNewSectionChoiceModal();
+    if (currentAdminRole === 'ta') return openNewSectionModal();
 }
 
 async function createSessionModalSuperAdmin(subjectsToShow, isInsideSubject) {
@@ -2234,32 +1932,23 @@ async function createSessionModalSuperAdmin(subjectsToShow, isInsideSubject) {
                 <option value="Lecture">محاضرة (Lecture)</option>
                 <option value="Section">سكشن (Section)</option>
             </select>
-            <div id="sec-fields" style="display:none; background:rgba(0,0,0,0.35); padding:12px; border-radius:12px; margin-bottom:12px;">
-                <label style="color:#9aa2b5; font-size:11px; display:block; text-align:right; margin-bottom:6px;">Class رقم</label>
-                <input id="sw-class-num" class="login-input ltr-input" type="number" min="1" max="100" value="1">
-            </div>
             <input id="sw-title" class="login-input" placeholder="عنوان الجلسة" value="${initialTitle}">
         `,
         didOpen: () => {
             const typeSel = document.getElementById('sw-type');
             const subSel = document.getElementById('sw-sub');
             const titleInput = document.getElementById('sw-title');
-            const secFields = document.getElementById('sec-fields');
-            const classNum = document.getElementById('sw-class-num');
 
             const update = () => {
                 const subId = subSel.value;
                 const type = typeSel.value;
                 if (type === 'Lecture') {
-                    secFields.style.display = 'none';
                     titleInput.value = generateLectureTitle(subId);
                 } else {
-                    secFields.style.display = 'block';
-                    titleInput.value = generateClassTitle(subId, classNum.value || '1');
+                    titleInput.value = 'W_LAB1';
                 }
             };
             typeSel.addEventListener('change', update);
-            classNum.addEventListener('input', update);
             if (subSel && !isInsideSubject) subSel.addEventListener('change', update);
             update();
         },
@@ -2267,13 +1956,13 @@ async function createSessionModalSuperAdmin(subjectsToShow, isInsideSubject) {
             const sel = document.getElementById('sw-sub');
             const type = document.getElementById('sw-type').value;
             const title = document.getElementById('sw-title').value.trim();
-            const result = {
+            if (!title) return Swal.showValidationMessage('يرجى إدخال عنوان الجلسة!');
+            return {
                 subject_id: sel.value,
                 subject_name: sel.getAttribute('data-name'),
-                type: type, title: title || 'عام'
+                type: type,
+                title: title
             };
-            if (type === 'Section') result.class_number = document.getElementById('sw-class-num').value || '1';
-            return result;
         }
     });
 
@@ -2338,7 +2027,6 @@ async function sendCreateSession(form) {
         created_by_username: currentAdminUsername,
         created_at: 'الآن'
     };
-    if (form.type === 'Section') tempSession.class_number = form.class_number;
 
     allData.sessions.unshift(tempSession);
     if (currentSessionsFilter === form.subject_id) {
@@ -2569,7 +2257,7 @@ function canEditStaff(targetUser) {
 /* =========================================================
    ✅ عرض المواد
    ========================================================= */
-function getGroupedSubjectsHTML(allowedSubjects = [], allowedClasses = [], subjectsList = null) {
+function getSubjectsListHTML(allowedSubjects = [], subjectsList = null) {
     const subs = subjectsList || allData.subjects;
 
     if (subs.length === 0) {
@@ -2579,56 +2267,6 @@ function getGroupedSubjectsHTML(allowedSubjects = [], allowedClasses = [], subje
         </div>`;
     }
 
-    const classesCountMap = {};
-    allowedClasses.forEach(item => {
-        const parts = item.split('|');
-        if (parts.length === 2) {
-            classesCountMap[parts[0]] = (classesCountMap[parts[0]] || 0) + 1;
-        }
-    });
-
-    if (!document.getElementById('nx-sub-name-fix')) {
-        const st = document.createElement('style');
-        st.id = 'nx-sub-name-fix';
-        st.textContent = `
-            .sub-name-text {
-                display: block !important;
-                color: #ffffff !important;
-                background: none !important;
-                background-image: none !important;
-                -webkit-background-clip: border-box !important;
-                background-clip: border-box !important;
-                -webkit-text-fill-color: #ffffff !important;
-                -webkit-text-stroke: 0 !important;
-                text-shadow: none !important;
-                font-family: 'Plus Jakarta Sans', 'Cairo', Arial, sans-serif !important;
-                font-weight: 700 !important;
-                font-size: 14px !important;
-                line-height: 1.6 !important;
-                padding: 3px 0 !important;
-                margin: 0 !important;
-                overflow: hidden !important;
-                text-overflow: ellipsis !important;
-                white-space: nowrap !important;
-                letter-spacing: 0.3px !important;
-                -webkit-font-smoothing: antialiased !important;
-                -moz-osx-font-smoothing: grayscale !important;
-                min-height: 22px !important;
-                direction: ltr !important;
-                text-align: left !important;
-            }
-            .sub-block {
-                overflow: visible !important;
-                min-height: 48px !important;
-            }
-            .sub-block label {
-                background: none !important;
-                background-image: none !important;
-            }
-        `;
-        document.head.appendChild(st);
-    }
-
     let html = `
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; padding:0 4px; gap:10px;">
             <span style="color:#8b93a7; font-size:12px; font-weight:700; white-space:nowrap;">
@@ -2636,19 +2274,16 @@ function getGroupedSubjectsHTML(allowedSubjects = [], allowedClasses = [], subje
                 المواد المتاحة: <b style="color:#fff;">${subs.length}</b>
             </span>
             <button type="button" onclick="toggleAllSubjectsInModal()" 
-                style="background:transparent; border:1px solid rgba(255,179,0,0.35); color:#FFB300; padding:5px 12px; border-radius:8px; font-size:11px; font-weight:800; cursor:pointer; font-family:'Cairo',sans-serif; white-space:nowrap; transition:all 0.2s ease;"
-                onmouseover="this.style.background='rgba(255,179,0,0.12)'"
-                onmouseout="this.style.background='transparent'">
-                <i class="fas fa-check-double"></i> تحديد الكل / إلغاء
+                style="background:transparent; border:1px solid rgba(255,179,0,0.35); color:#FFB300; padding:5px 12px; border-radius:8px; font-size:11px; font-weight:800; cursor:pointer; font-family:'Cairo',sans-serif; white-space:nowrap;">
+                <i class="fas fa-check-double"></i> تحديد / إلغاء الكل
             </button>
         </div>
-        <div class="subjects-list-container" style="display:flex; flex-direction:column; gap:8px; max-height:400px; overflow-y:auto; padding:4px 4px 4px 2px;">
+        <div class="subjects-list-container" style="display:flex; flex-direction:column; gap:8px; max-height:400px; overflow-y:auto; padding:4px;">
     `;
 
     subs.forEach(s => {
         const subId = s.id;
         const isSubjectChecked = allowedSubjects.includes(subId);
-        const assignedCount = classesCountMap[subId] || 0;
 
         html += `
             <div class="sub-block" data-sub-id="${subId}"
@@ -2656,34 +2291,16 @@ function getGroupedSubjectsHTML(allowedSubjects = [], allowedClasses = [], subje
                         border:1px solid rgba(255,255,255,0.08);
                         border-radius:12px;
                         padding:12px 14px;
-                        transition:all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+                        transition:all 0.25s ease;
                         position:relative;">
-
                 <div class="sub-block-indicator" style="position:absolute; right:0; top:0; bottom:0; width:3px;
                     background:${isSubjectChecked ? 'linear-gradient(180deg, #FFB300, #FFD54F)' : 'transparent'};
-                    border-radius:0 12px 12px 0; transition:background 0.3s ease;
-                    box-shadow:${isSubjectChecked ? '0 0 12px rgba(255,179,0,0.5)' : 'none'};"></div>
-
-                <div style="display:flex; align-items:center; gap:10px; direction:rtl;">
-
-                    <label style="display:flex; align-items:center; gap:12px; cursor:pointer; margin:0; flex:1; min-width:0;">
-                        <input type="checkbox" class="sub-checkbox" value="${subId}" data-name="${s.name}" ${isSubjectChecked}
-                               style="width:18px; height:18px; accent-color:#FFB300; cursor:pointer; flex-shrink:0; margin:0;">
-
-                        <span class="sub-name-text">${s.name}</span>
-                    </label>
-
-                    ${assignedCount > 0 ? `
-                        <span style="background:rgba(6,182,212,0.12); color:#22d3ee;
-                            padding:3px 10px; border-radius:8px; font-size:10.5px;
-                            font-weight:800; font-family:'Plus Jakarta Sans',monospace;
-                            white-space:nowrap; border:1px solid rgba(6,182,212,0.3);
-                            display:inline-flex; align-items:center; gap:4px;
-                            flex-shrink:0;">
-                            <i class="fas fa-layer-group" style="font-size:9px;"></i> ${assignedCount}
-                        </span>
-                    ` : ''}
-                </div>
+                    border-radius:0 12px 12px 0;"></div>
+                <label style="display:flex; align-items:center; gap:12px; cursor:pointer; margin:0;">
+                    <input type="checkbox" class="sub-checkbox" value="${subId}" data-name="${s.name}" ${isSubjectChecked}
+                           style="width:18px; height:18px; accent-color:#FFB300; cursor:pointer; flex-shrink:0; margin:0;">
+                    <span class="sub-name-text">${s.name}</span>
+                </label>
             </div>
         `;
     });
@@ -2693,13 +2310,11 @@ function getGroupedSubjectsHTML(allowedSubjects = [], allowedClasses = [], subje
     html += `
         <div style="margin-top:12px; padding:10px 12px;
              background:rgba(6,182,212,0.06); border:1px solid rgba(6,182,212,0.2);
-             border-radius:10px; display:flex; align-items:flex-start; gap:8px;">
+             border-radius:10px; display:flex; gap:8px;">
             <i class="fas fa-info-circle" style="color:#22d3ee; font-size:13px; margin-top:2px; flex-shrink:0;"></i>
             <p style="color:#8b93a7; font-size:11.5px; margin:0; line-height:1.6; text-align:right;">
                 من هنا تختار <b style="color:#fff;">المواد فقط</b>.<br>
-                لتعيين <b style="color:#22d3ee;">فصول معيّنة</b> للمعيد، اذهب إلى
-                <b style="color:#FFB300;">"الجلسات والبث"</b> ← اختر المادة ← اضغط
-                <b style="color:#FFB300;">"تعيين"</b> على الفصل المطلوب.
+                المعيد سيقدر يفتح سكاشن بالاسم اللي هو عايزه في المواد دي.
             </p>
         </div>
     `;
@@ -2707,9 +2322,6 @@ function getGroupedSubjectsHTML(allowedSubjects = [], allowedClasses = [], subje
     return html;
 }
 
-/* =========================================================
-   ✅ تحديد / إلغاء كل المواد
-   ========================================================= */
 function toggleAllSubjectsInModal() {
     const checkboxes = document.querySelectorAll('.sub-checkbox');
     if (!checkboxes.length) return;
@@ -2738,9 +2350,6 @@ function toggleAllSubjectsInModal() {
     });
 }
 
-/* =========================================================
-   ✅ bindStaffCheckboxes
-   ========================================================= */
 function bindStaffCheckboxes() {
     document.querySelectorAll('.sub-checkbox').forEach(subCb => {
         if (subCb.dataset.bound) return;
@@ -2764,9 +2373,6 @@ function bindStaffCheckboxes() {
     });
 }
 
-/* =========================================================
-   ✅ collectSelectedSubjects
-   ========================================================= */
 function collectSelectedSubjects() {
     const result = [];
     document.querySelectorAll('.sub-checkbox:checked').forEach(cb => result.push(cb.value));
@@ -2796,16 +2402,6 @@ function renderStaff(list) {
             }).join('');
         }
 
-        let classesHtml = '';
-        if (u.allowed_classes && u.allowed_classes.length > 0) {
-            classesHtml = u.allowed_classes.map(item => {
-                const parts = item.split('|');
-                if (parts.length !== 2) return '';
-                const clsNum = (parts[1] || '').replace('Class', '');
-                return `<span style="background:rgba(6,182,212,0.12); color:#22d3ee; padding:2px 6px; border-radius:4px; font-size:10px; margin:2px; display:inline-block; font-family:monospace; font-weight:800;">Class ${clsNum}</span>`;
-            }).join('');
-        }
-
         let roleStr = u.role === 'doctor'
             ? '<i class="fas fa-user-tie" style="color:#10B981"></i> دكتور'
             : '<i class="fas fa-user-graduate" style="color:#3B82F6"></i> معيد';
@@ -2821,10 +2417,7 @@ function renderStaff(list) {
         <tr class="${!isActive ? 'row-inactive' : ''}">
             <td><b>${u.name}</b></td>
             <td style="font-family:monospace;">${u.username}</td>
-            <td>
-                ${allowedNames}
-                ${classesHtml ? `<div style="margin-top:4px;">${classesHtml}</div>` : ''}
-            </td>
+            <td>${allowedNames}</td>
             <td>${roleStr}</td>
             <td>${statusBadge}</td>
             <td>
@@ -2880,7 +2473,7 @@ async function editStaffModal(username) {
                 <i class="fas fa-book" style="color:#FFB300;"></i>
                 المواد المصرح بها:
             </p>
-            ${getGroupedSubjectsHTML(member.allowed_subjects || [], member.allowed_classes || [], subjectsToShow)}
+            ${getSubjectsListHTML(member.allowed_subjects || [], subjectsToShow)}
         `,
         didOpen: () => bindStaffCheckboxes(),
         preConfirm: () => {
@@ -2904,8 +2497,7 @@ async function editStaffModal(username) {
             body: JSON.stringify({
                 action: 'edit_staff',
                 target_username: username,
-                staff: form,
-                preserve_classes: true
+                staff: form
             })
         });
         const data = await res.json();
@@ -2946,7 +2538,7 @@ async function addStaff() {
                 <i class="fas fa-book" style="color:#FFB300;"></i>
                 المواد المصرح بها:
             </p>
-            ${getGroupedSubjectsHTML([], [], subjectsForAdd)}
+            ${getSubjectsListHTML([], subjectsForAdd)}
         `,
         didOpen: () => bindStaffCheckboxes(),
         preConfirm: () => {
@@ -2959,8 +2551,7 @@ async function addStaff() {
             if(!name || !username || !password) return Swal.showValidationMessage('املأ البيانات!');
             return {
                 name, username, password, role,
-                allowed_subjects: selSubs,
-                allowed_classes: []
+                allowed_subjects: selSubs
             };
         }
     });

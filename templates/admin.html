@@ -1345,7 +1345,6 @@
             font-size: 16px;
         }
         .subsection-title.subsection-lectures i { color: var(--nx-gold); }
-        .subsection-title.subsection-classes i { color: #22d3ee; }
         .subsection-title .count-badge {
             margin-right: auto;
             font-size: 11.5px;
@@ -1701,7 +1700,7 @@
         }
 
         /* ==========================================================
-           🔥 MODAL (Session Attendance) — BALANCED DESIGN 2026
+           🔥 MODAL (Session Attendance)
            ========================================================== */
         .modal-screen {
             position: fixed;
@@ -2502,7 +2501,6 @@
             }
             .sess-actions .btn i { font-size: 12px !important; }
 
-            /* 🔥 STUDENT CARD — صف واحد مضغوط */
             .glass-student-card {
                 padding: 10px 10px;
                 gap: 8px;
@@ -2840,32 +2838,6 @@
                         </table>
                     </div>
 
-                    <div id="classes-section" style="display:none;">
-                        <div class="subsection-title subsection-classes">
-                            <i class="fas fa-layer-group"></i>
-                            <span>الفصول (Classes)</span>
-                            <span class="count-badge" id="classes-count-badge">0</span>
-                            <button id="btn-add-class" type="button" class="btn btn-green" onclick="addClass()"
-                                    style="padding:6px 14px; font-size:12px; margin-right:auto; margin-left:8px;">
-                                <i class="fas fa-plus"></i> إضافة فصل جديد
-                            </button>
-                        </div>
-
-                        <div class="table-container">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>الفصل</th>
-                                        <th>المعيدون</th>
-                                        <th>إجراء</th>
-                                        <th></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="classes-table-body"></tbody>
-                            </table>
-                        </div>
-                    </div>
-
                 </div>
             </div>
 
@@ -2925,7 +2897,7 @@
                             <tr>
                                 <th>الاسم</th>
                                 <th>اسم الدخول</th>
-                                <th>المواد والفصول</th>
+                                <th>المواد المصرح بها</th>
                                 <th>الصفة</th>
                                 <th>الحالة</th>
                                 <th>إجراء</th>

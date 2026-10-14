@@ -9,10 +9,10 @@ let qrScannerStarting = false;
 let qrAutoSubmitLocked = false;
 
 /* =========================================================
-   💾 Cache بسيط لتقليل الطلبات
+   💾 Cache بسيط
    ========================================================= */
 const nxCache = {
-    history: { data: null, ts: 0, ttl: 30000 }, // 30 ثانية
+    history: { data: null, ts: 0, ttl: 30000 },
 
     get(key) {
         const c = this[key];
@@ -59,7 +59,7 @@ function setDeviceOwner(id, name) {
    ========================================================= */
 function getDeviceToken() {
     let t = localStorage.getItem('nx_device_token');
-    if(!t) {
+    if (!t) {
         t = 'DEV_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now().toString(36);
         localStorage.setItem('nx_device_token', t);
     }
@@ -67,7 +67,7 @@ function getDeviceToken() {
 }
 
 /* =========================================================
-   🛡️ فحص كود ربط الشاشة (SCR)
+   🛡️ فحص كود ربط الشاشة
    ========================================================= */
 function isPairingCode(code) {
     if (typeof code !== 'string') return false;
@@ -84,156 +84,20 @@ function showPairingCodeWarning() {
 }
 
 /* =========================================================
-   ✅ التحكم بزر الدخول
-   ========================================================= */
-function showLoginBtn() {
-    const btn = document.getElementById('login-submit-btn');
-    if (btn) {
-        btn.style.removeProperty('display');
-        btn.style.display = 'block';
-    }
-}
-
-function hideLoginBtn() {
-    const btn = document.getElementById('login-submit-btn');
-    if (btn) {
-        btn.style.display = 'none';
-    }
-}
-
-/* =========================================================
-   ✅ الخطوة 1 → الخطوة 2
-   ========================================================= */
-function goToClassStep() {
-    const name = document.getElementById('login-name').value.trim();
-    const idInput = document.getElementById('login-id');
-    idInput.value = idInput.value.replace(/[^0-9]/g, '');
-    const id = idInput.value.trim();
-    const yearEl = document.getElementById('login-year');
-    const year = yearEl ? yearEl.value : '';
-
-    if (!name || name.length < 3) {
-        return Swal.fire({...swalDark, icon:'warning', text:'يرجى إدخال اسم الطالب بشكل صحيح!'});
-    }
-    if (id.length !== 7 || isNaN(id)) {
-        return Swal.fire({...swalDark, icon:'warning', text:'رقم الـ ID يجب أن يتكون من 7 أرقام!'});
-    }
-    if (!year) {
-        return Swal.fire({...swalDark, icon:'warning', text:'يرجى اختيار الفرقة الدراسية!'});
-    }
-
-    const step1 = document.getElementById('auth-step-1');
-    const step2 = document.getElementById('auth-step-2');
-    if (step1) step1.style.display = 'none';
-    if (step2) step2.style.display = 'block';
-
-    setupStep2(year);
-}
-
-/* =========================================================
-   ✅ الرجوع من الخطوة 2 → الخطوة 1
-   ========================================================= */
-function backToStep1() {
-    const step1 = document.getElementById('auth-step-1');
-    const step2 = document.getElementById('auth-step-2');
-    if (step2) step2.style.display = 'none';
-    if (step1) step1.style.display = 'block';
-
-    const deptEl = document.getElementById('login-dept');
-    if (deptEl) deptEl.value = '';
-
-    const classGroup = document.getElementById('class-group');
-    if (classGroup) {
-        classGroup.style.display = 'none';
-        classGroup.innerHTML = '';
-    }
-
-    hideLoginBtn();
-}
-
-/* =========================================================
-   ✅ تجهيز الخطوة 2 حسب الفرقة
-   ========================================================= */
-function setupStep2(year) {
-    const isYear34 = (year === 'الفرقة الثالثة' || year === 'الفرقة الرابعة');
-    const deptGroup = document.getElementById('dept-group');
-    const classGroup = document.getElementById('class-group');
-
-    // 🔒 إخفاء زر الدخول دايماً في البداية
-    hideLoginBtn();
-
-    if (isYear34) {
-        // ===== سنة 3/4 =====
-        if (deptGroup) deptGroup.style.display = 'block';
-        const deptEl = document.getElementById('login-dept');
-        if (deptEl) deptEl.value = '';
-
-        // نظهر الـ Class فوراً لكن معطّل
-        if (classGroup) {
-            classGroup.style.display = 'block';
-            classGroup.innerHTML = `
-                <select id="login-class" class="custom-select" disabled style="opacity:0.55;">
-                    <option value="" disabled selected>اختر القسم أولاً لعرض الفصول</option>
-                </select>
-            `;
-        }
-    } else {
-        // ===== سنة 1/2 =====
-        if (deptGroup) deptGroup.style.display = 'none';
-        loadClassesFor(year, 'عام (IT)');
-    }
-}
-
-/* =========================================================
-   ✅ تحميل الفصول من السيرفر
-   ========================================================= */
-async function loadClassesFor(year, dept) {
-    const classGroup = document.getElementById('class-group');
-    if (!classGroup) return;
-
-    // 🔒 إخفاء زر الدخول دائماً قبل التحميل
-    hideLoginBtn();
-
-    classGroup.style.display = 'block';
-    classGroup.innerHTML = `
-        <select class="custom-select" disabled style="opacity:0.55;">
-            <option value="" disabled selected>جاري تحميل الفصول...</option>
-        </select>
-    `;
-
-    try {
-        const url = `/api/available-classes?year=${encodeURIComponent(year)}&dept=${encodeURIComponent(dept)}`;
-        const res = await fetch(url);
-        const data = await res.json();
-
-        if (data.status === 'success' && Array.isArray(data.classes) && data.classes.length > 0) {
-            classGroup.innerHTML = `
-                <select id="login-class" class="custom-select">
-                    <option value="" disabled selected>اختر الفصل (Class)</option>
-                    ${data.classes.map(c => `<option value="${c}">Class ${c}</option>`).join('')}
-                </select>
-            `;
-        } else {
-            classGroup.innerHTML = `
-                <select id="login-class" class="custom-select" disabled style="opacity:0.55;">
-                    <option value="" disabled selected>لا توجد فصول متاحة بعد — تواصل مع الدكتور</option>
-                </select>
-            `;
-        }
-    } catch (e) {
-        console.error("loadClassesFor error:", e);
-        classGroup.innerHTML = `
-            <select id="login-class" class="custom-select" disabled style="opacity:0.55;">
-                <option value="" disabled selected>فشل تحميل الفصول</option>
-            </select>
-        `;
-    }
-}
-
-/* =========================================================
-   ✅ AUTO-LOGIN
+   ✅ AUTO-LOGIN + Year/Dept Handler
    ========================================================= */
 window.addEventListener('load', () => {
+    const yearSelect = document.getElementById('login-year');
+    const deptSelect = document.getElementById('login-dept');
+
+    if (yearSelect && deptSelect) {
+        yearSelect.addEventListener('change', (e) => {
+            const isYear34 = (e.target.value === 'الفرقة الثالثة' || e.target.value === 'الفرقة الرابعة');
+            deptSelect.style.display = isYear34 ? 'block' : 'none';
+            if (!isYear34) deptSelect.value = '';
+        });
+    }
+
     const saved = localStorage.getItem('nx_student_auth');
     if (saved) {
         try {
@@ -246,36 +110,7 @@ window.addEventListener('load', () => {
 });
 
 /* =========================================================
-   ✅ Event Delegation — للـ dept والـ class
-   ========================================================= */
-document.addEventListener('change', (e) => {
-    const t = e.target;
-    if (!t || !t.id) return;
-
-    // ===== تغيير القسم =====
-    if (t.id === 'login-dept') {
-        hideLoginBtn();
-
-        const yearEl = document.getElementById('login-year');
-        const year = yearEl ? yearEl.value : '';
-        const dept = t.value;
-        if (year && dept) {
-            loadClassesFor(year, dept);
-        }
-    }
-
-    // ===== تغيير الفصل =====
-    if (t.id === 'login-class') {
-        if (t.value && t.value !== '') {
-            showLoginBtn();
-        } else {
-            hideLoginBtn();
-        }
-    }
-});
-
-/* =========================================================
-   ✅ تسجيل الدخول — Final Submit
+   ✅ تسجيل الدخول — صفحة واحدة
    ========================================================= */
 async function loginStudent() {
     const name = document.getElementById('login-name').value.trim();
@@ -285,33 +120,24 @@ async function loginStudent() {
     const id = idInput.value.trim();
 
     const year = document.getElementById('login-year').value;
-    let dept = 'عام (IT)';
 
-    if (year === 'الفرقة الثالثة' || year === 'الفرقة الرابعة') {
-        const deptEl = document.getElementById('login-dept');
-        dept = deptEl ? deptEl.value : '';
-    }
-
-    const classEl = document.getElementById('login-class');
-    const classNumber = classEl ? classEl.value : '';
+    const deptSelect = document.getElementById('login-dept');
+    const isYear34 = (year === 'الفرقة الثالثة' || year === 'الفرقة الرابعة');
+    const dept = isYear34 ? (deptSelect ? deptSelect.value : '') : 'عام (IT)';
 
     if (!name || name.length < 3) {
-        return Swal.fire({...swalDark, icon:'warning', text:'يرجى إدخال اسم الطالب بشكل صحيح!'});
+        return Swal.fire({...swalDark, icon: 'warning', text: 'يرجى إدخال اسم الطالب بشكل صحيح!'});
     }
     if (id.length !== 7 || isNaN(id)) {
-        return Swal.fire({...swalDark, icon:'warning', text:'رقم الـ ID يجب أن يتكون من 7 أرقام!'});
+        return Swal.fire({...swalDark, icon: 'warning', text: 'رقم الـ ID يجب أن يتكون من 7 أرقام!'});
     }
     if (!year) {
-        return Swal.fire({...swalDark, icon:'warning', text:'يرجى اختيار الفرقة الدراسية!'});
+        return Swal.fire({...swalDark, icon: 'warning', text: 'يرجى اختيار الفرقة الدراسية!'});
     }
-    if ((year === 'الفرقة الثالثة' || year === 'الفرقة الرابعة') && !dept) {
-        return Swal.fire({...swalDark, icon:'warning', text:'يرجى اختيار القسم!'});
-    }
-    if (!classEl || !classNumber) {
-        return Swal.fire({...swalDark, icon:'warning', text:'يرجى اختيار الفصل (Class)!'});
+    if (isYear34 && !dept) {
+        return Swal.fire({...swalDark, icon: 'warning', text: 'يرجى اختيار القسم!'});
     }
 
-    // 🔒 فحص قفل الجهاز
     const owner = getDeviceOwner();
     if (owner.id && owner.id !== id) {
         const confirmReset = await Swal.fire({
@@ -335,13 +161,13 @@ async function loginStudent() {
             try {
                 localStorage.removeItem(DEVICE_OWNER_ID_KEY);
                 localStorage.removeItem(DEVICE_OWNER_NAME_KEY);
-            } catch(e) {}
+            } catch (e) {}
         } else {
             return;
         }
     }
 
-    Swal.fire({ title: 'جاري التحقق...', background:'#1a1f2c', color:'#fff', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+    Swal.fire({ title: 'جاري التحقق...', background: '#1a1f2c', color: '#fff', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
 
     try {
         const res = await fetch('/api/student-login', {
@@ -351,8 +177,7 @@ async function loginStudent() {
                 student_name: name,
                 student_id: id,
                 year: year,
-                department: dept,
-                class_number: classNumber
+                department: dept
             })
         });
         const data = await res.json();
@@ -363,11 +188,11 @@ async function loginStudent() {
             localStorage.setItem('nx_student_auth', JSON.stringify(currentStudent));
             showStudentUI();
         } else {
-            Swal.fire({...swalDark, icon:'error', text: data.message || 'فشل التسجيل'});
+            Swal.fire({...swalDark, icon: 'error', text: data.message || 'فشل التسجيل'});
         }
     } catch (e) {
         Swal.close();
-        Swal.fire({...swalDark, icon:'error', text: 'تعذر الاتصال بالسيرفر'});
+        Swal.fire({...swalDark, icon: 'error', text: 'تعذر الاتصال بالسيرفر'});
     }
 }
 
@@ -387,13 +212,7 @@ function showStudentUI() {
     if (dpEl) dpEl.innerText = currentStudent.department || '';
 
     const classChip = document.getElementById('display-class-chip');
-    const classEl = document.getElementById('display-class');
-    if (currentStudent.class_number && classChip && classEl) {
-        classEl.innerText = `Class ${currentStudent.class_number}`;
-        classChip.style.display = 'inline-flex';
-    } else if (classChip) {
-        classChip.style.display = 'none';
-    }
+    if (classChip) classChip.style.display = 'none';
 
     const nameParts = (currentStudent.name || '').trim().split(/\s+/);
     let initials = '•';
@@ -437,14 +256,14 @@ async function loadDashboard() {
         startAutoRefresh();
     } catch (e) {
         document.getElementById('loading-screen').style.display = 'none';
-        Swal.fire({...swalDark, icon:'error', text: 'تعذر تحميل البيانات'});
+        Swal.fire({...swalDark, icon: 'error', text: 'تعذر تحميل البيانات'});
     }
 }
 
 function renderSubjectCards() {
     const container = document.getElementById('subjects-container');
 
-    if(allSubjects.length === 0) {
+    if (allSubjects.length === 0) {
         container.innerHTML = `
             <div class="empty-state">
                 <i class="fas fa-book fa-3x" style="color:var(--border); margin-bottom:15px;"></i>
@@ -532,14 +351,9 @@ async function refreshSessionStatus() {
                 setTimeout(() => badge.classList.remove('bump'), 600);
             }
         });
-    } catch (err) {
-        // silent
-    }
+    } catch (err) {}
 }
 
-/* =========================================================
-   ✅ Force refresh لما الطالب يرجع للتاب أو يفتح النافذة
-   ========================================================= */
 document.addEventListener('visibilitychange', () => {
     if (!document.hidden && currentStudent && typeof refreshSessionStatus === 'function') {
         refreshSessionStatus();
@@ -553,20 +367,17 @@ window.addEventListener('focus', () => {
 });
 
 /* =========================================================
-   ✅ عرض جلسات المادة — نسخة محسّنة (بدون تعليق)
+   ✅ عرض جلسات المادة
    ========================================================= */
 async function selectSubjectForAttendance(subId, subName) {
-    // ✅ 1. اعرض الجلسات من البيانات المحلية فوراً (بدون انتظار)
     const localSessions = allActiveSessions.filter(s => s.subject_id === subId);
-
-    // ✅ 2. اعرض المودال فوراً - تجربة سلسة
     showSessionsModal(localSessions, subId, subName);
-
-    // ✅ 3. في الخلفية (بدون blocking) - حدّث البيانات
     refreshSessionsInBackground(subId, subName);
 }
 
-/* ✅ دالة عرض المودال - منفصلة عشان نستخدمها مرتين */
+/* =========================================================
+   🎨 المودال الاحترافي الفاخر V2
+   ========================================================= */
 function showSessionsModal(sessions, subId, subName) {
     if (sessions.length === 0) {
         return Swal.fire({
@@ -577,35 +388,562 @@ function showSessionsModal(sessions, subId, subName) {
         });
     }
 
-    const classBadge = currentStudent && currentStudent.class_number
-        ? `<div style="margin-bottom:10px; padding:8px 12px; background:rgba(6,182,212,0.08); border:1px solid rgba(6,182,212,0.25); border-radius:10px; font-size:12px; color:#22d3ee; font-weight:800; text-align:right;">
-             <i class="fas fa-layer-group"></i> فصلك: Class ${currentStudent.class_number}
-           </div>`
-        : '';
+    // ترتيب: المحاضرات الأول ثم السكاشن
+    const sorted = [...sessions].sort((a, b) => {
+        if (a.type !== b.type) return a.type === 'Lecture' ? -1 : 1;
+        return (b.session_id || '').localeCompare(a.session_id || '');
+    });
 
-    const buttonsHtml = classBadge + sessions.map(s => `
-        <div style="background:#1F2937; padding:12px; border-radius:10px; margin-bottom:8px; cursor:pointer; text-align:right; border:1px solid var(--border);" onclick="openVerifyModal('${s.session_id}', '${s.title}', '${subName}', '${s.type}')">
-            <b style="color:var(--gold); font-size:15px;">${s.title}</b>
-            <span style="font-size:11px; background:rgba(255,179,0,0.15); color:var(--gold); padding:2px 8px; border-radius:6px; margin-right:5px;">${s.type === 'Lecture' ? 'محاضرة' : 'سكشن'}</span>
-            <p style="font-size:11px; color:var(--text-muted); margin-top:4px;">المحاضر: ${s.created_by}</p>
-        </div>
-    `).join('');
+    /* 🎨 بطاقات الجلسات الفاخرة */
+    const cardsHtml = sorted.map((s, idx) => {
+        const isLecture = s.type === 'Lecture';
+        const typeIcon = isLecture ? 'fa-chalkboard-teacher' : 'fa-users';
+        const typeLabel = isLecture ? 'محاضرة' : 'سكشن';
+        const typeColor = isLecture ? '#FFD54F' : '#60A5FA';
+        const typeColorDark = isLecture ? '#FFB300' : '#3B82F6';
+        const typeGlow = isLecture ? 'rgba(255,179,0,0.35)' : 'rgba(59,130,246,0.35)';
+
+        // معلومات المنشئ
+        const creatorRole = s.creator_role || 'doctor';
+        const isTA = (creatorRole === 'ta');
+        const creatorPrefix = isTA ? 'م.' : 'د.';
+        const creatorIcon = isTA ? 'fa-user-graduate' : 'fa-user-tie';
+        const creatorColor = isTA ? '#60A5FA' : '#34D399';
+        const creatorName = (s.created_by || '').trim() || 'غير معروف';
+
+        const safeTitle = (s.title || '').replace(/'/g, "\\'");
+        const safeSub = (subName || '').replace(/'/g, "\\'");
+
+        return `
+            <div class="lux-sess-card ${isLecture ? 'lux-lecture' : 'lux-section'}"
+                 style="--tc:${typeColor}; --tcd:${typeColorDark}; --tglow:${typeGlow}; --delay:${idx * 60}ms;"
+                 onclick="openVerifyModal('${s.session_id}', '${safeTitle}', '${safeSub}', '${s.type}')">
+
+                <div class="lux-card-glow"></div>
+
+                <div class="lux-card-left">
+                    <div class="lux-icon-wrap">
+                        <i class="fas ${typeIcon}"></i>
+                        <span class="lux-icon-ring"></span>
+                    </div>
+                </div>
+
+                <div class="lux-card-body">
+                    <div class="lux-type-badge">
+                        <i class="fas ${typeIcon}"></i>
+                        <span>${typeLabel}</span>
+                    </div>
+
+                    <div class="lux-title">${s.title}</div>
+
+                    <div class="lux-creator" style="--cc:${creatorColor};">
+                        <span class="lux-creator-avatar">
+                            <i class="fas ${creatorIcon}"></i>
+                        </span>
+                        <span class="lux-creator-name">${creatorPrefix} ${creatorName}</span>
+                    </div>
+                </div>
+
+                <div class="lux-card-arrow">
+                    <i class="fas fa-arrow-left"></i>
+                </div>
+            </div>
+        `;
+    }).join('');
 
     Swal.fire({
         ...swalDark,
-        title: `الجلسات المتاحة (${subName})`,
-        html: buttonsHtml,
+        width: 520,
         showConfirmButton: false,
         showCancelButton: true,
-        cancelButtonText: 'إغلاق'
+        cancelButtonText: '<i class="fas fa-times"></i> إغلاق',
+        cancelButtonColor: '#374151',
+        customClass: { popup: 'lux-modal-popup' },
+        html: `
+            <style>
+                /* ═══════════════════════════════════════════════════
+                   LUXURY SESSION MODAL · 2026
+                   ═══════════════════════════════════════════════════ */
+
+                .lux-modal-popup {
+                    padding: 26px 22px 20px !important;
+                    border-radius: 28px !important;
+                    background:
+                        radial-gradient(700px circle at 100% -10%, rgba(255,179,0,0.12), transparent 55%),
+                        radial-gradient(600px circle at -10% 110%, rgba(124,58,237,0.10), transparent 55%),
+                        radial-gradient(500px circle at 50% 50%, rgba(6,182,212,0.04), transparent 60%),
+                        linear-gradient(165deg, #141a2b 0%, #0a0e18 100%) !important;
+                    border: 1px solid rgba(255,179,0,0.18) !important;
+                    box-shadow:
+                        0 40px 100px rgba(0,0,0,0.85),
+                        0 0 0 1px rgba(255,255,255,0.04),
+                        inset 0 1px 0 rgba(255,255,255,0.06) !important;
+                    overflow: hidden;
+                    position: relative;
+                }
+
+                .lux-modal-popup::before {
+                    content: "";
+                    position: absolute;
+                    top: 0; left: 0; right: 0;
+                    height: 3px;
+                    background: linear-gradient(90deg,
+                        transparent,
+                        #FFB300 20%,
+                        #FFD54F 50%,
+                        #FFB300 80%,
+                        transparent);
+                    background-size: 200% 100%;
+                    animation: luxTopShimmer 4s linear infinite;
+                    box-shadow: 0 0 30px rgba(255,179,0,0.6);
+                    z-index: 5;
+                }
+                @keyframes luxTopShimmer {
+                    0%   { background-position: -200% 0; }
+                    100% { background-position:  200% 0; }
+                }
+
+                /* ═══ الهيدر الفاخر ═══ */
+                .lux-head {
+                    position: relative;
+                    padding: 4px 4px 20px;
+                    margin-bottom: 18px;
+                    text-align: center;
+                }
+                .lux-head::after {
+                    content: "";
+                    position: absolute;
+                    bottom: 0;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    width: 70%;
+                    height: 1px;
+                    background: linear-gradient(90deg,
+                        transparent,
+                        rgba(255,179,0,0.4) 50%,
+                        transparent);
+                }
+
+                .lux-head-icon {
+                    position: relative;
+                    width: 62px;
+                    height: 62px;
+                    margin: 0 auto 14px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 20px;
+                    background: linear-gradient(135deg,
+                        rgba(255,179,0,0.25),
+                        rgba(255,213,79,0.15),
+                        rgba(124,58,237,0.15));
+                    border: 1.5px solid rgba(255,179,0,0.5);
+                    box-shadow:
+                        0 0 40px rgba(255,179,0,0.35),
+                        inset 0 0 24px rgba(255,179,0,0.15),
+                        0 15px 30px rgba(0,0,0,0.4);
+                    animation: luxHeadFloat 3.5s ease-in-out infinite;
+                }
+                @keyframes luxHeadFloat {
+                    0%,100% { transform: translateY(0) rotate(0deg); }
+                    50%     { transform: translateY(-4px) rotate(-3deg); }
+                }
+                .lux-head-icon::before {
+                    content: "";
+                    position: absolute;
+                    inset: -6px;
+                    border-radius: 24px;
+                    border: 1px solid rgba(255,179,0,0.25);
+                    animation: luxHeadRing 2.5s ease-in-out infinite;
+                }
+                @keyframes luxHeadRing {
+                    0%,100% { transform: scale(1); opacity: 0.6; }
+                    50%     { transform: scale(1.12); opacity: 0; }
+                }
+                .lux-head-icon i {
+                    color: #FFD54F;
+                    font-size: 26px;
+                    filter: drop-shadow(0 0 14px rgba(255,179,0,0.9));
+                    animation: luxHeadIcon 3s ease-in-out infinite;
+                }
+                @keyframes luxHeadIcon {
+                    0%,100% { transform: scale(1); }
+                    50%     { transform: scale(1.12); }
+                }
+
+                .lux-head-sub {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    font-family: 'Cairo', sans-serif;
+                    font-size: 11.5px;
+                    font-weight: 800;
+                    color: #FFD54F;
+                    letter-spacing: 0.5px;
+                    padding: 4px 14px;
+                    border-radius: 20px;
+                    background: linear-gradient(135deg, rgba(255,179,0,0.15), rgba(255,179,0,0.05));
+                    border: 1px solid rgba(255,179,0,0.35);
+                    margin-bottom: 10px;
+                    box-shadow: 0 0 16px rgba(255,179,0,0.15);
+                }
+                .lux-head-sub i {
+                    font-size: 10px;
+                    animation: luxPointDown 1.5s ease-in-out infinite;
+                }
+                @keyframes luxPointDown {
+                    0%,100% { transform: translateY(0); }
+                    50%     { transform: translateY(3px); }
+                }
+
+                .lux-head-title {
+                    font-family: 'Cairo', sans-serif;
+                    font-size: 24px;
+                    font-weight: 900;
+                    background: linear-gradient(120deg,
+                        #ffffff 0%,
+                        #ffd76a 40%,
+                        #ffffff 70%,
+                        #ffd76a 100%);
+                    background-size: 200% 100%;
+                    -webkit-background-clip: text;
+                    background-clip: text;
+                    color: transparent;
+                    line-height: 1.3;
+                    letter-spacing: 0.3px;
+                    animation: luxTitleShine 5s ease-in-out infinite;
+                    filter: drop-shadow(0 4px 16px rgba(255,179,0,0.3));
+                }
+                @keyframes luxTitleShine {
+                    0%,100% { background-position: 0% 50%; }
+                    50%     { background-position: 100% 50%; }
+                }
+
+                /* ═══ قائمة البطاقات ═══ */
+                .lux-list {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 12px;
+                    max-height: 55vh;
+                    overflow-y: auto;
+                    padding: 4px 4px 4px 0;
+                    text-align: right;
+                }
+                .lux-list::-webkit-scrollbar { width: 5px; }
+                .lux-list::-webkit-scrollbar-track {
+                    background: rgba(0,0,0,0.3);
+                    border-radius: 5px;
+                }
+                .lux-list::-webkit-scrollbar-thumb {
+                    background: linear-gradient(180deg, #FFD54F, #FFB300, #FF8F00);
+                    border-radius: 5px;
+                    box-shadow: 0 0 12px rgba(255,179,0,0.5);
+                }
+
+                /* ═══════════════════════════════════════════════════
+                   🎴 البطاقة الفاخرة
+                   ═══════════════════════════════════════════════════ */
+                .lux-sess-card {
+                    position: relative;
+                    display: flex;
+                    align-items: center;
+                    gap: 14px;
+                    padding: 16px 18px;
+                    border-radius: 18px;
+                    cursor: pointer;
+                    overflow: hidden;
+                    background:
+                        linear-gradient(155deg,
+                            rgba(30,42,64,0.85) 0%,
+                            rgba(15,20,33,0.98) 100%);
+                    border: 1.5px solid rgba(255,255,255,0.07);
+                    box-shadow:
+                        0 6px 24px rgba(0,0,0,0.45),
+                        inset 0 1px 0 rgba(255,255,255,0.05);
+                    transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+                    animation: luxCardEnter 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+                    animation-delay: var(--delay, 0ms);
+                }
+                @keyframes luxCardEnter {
+                    from { opacity: 0; transform: translateY(14px) scale(0.96); }
+                    to   { opacity: 1; transform: translateY(0) scale(1); }
+                }
+
+                /* شريط جانبي ملون + توهج */
+                .lux-sess-card::before {
+                    content: "";
+                    position: absolute;
+                    top: 0; right: 0;
+                    width: 4px;
+                    height: 100%;
+                    background: linear-gradient(180deg, var(--tc), transparent 90%);
+                    box-shadow: 0 0 20px var(--tglow);
+                    z-index: 3;
+                }
+
+                /* توهج داخلي عند الـ hover */
+                .lux-card-glow {
+                    position: absolute;
+                    inset: 0;
+                    background: radial-gradient(400px circle at 100% 50%,
+                        var(--tglow),
+                        transparent 45%);
+                    opacity: 0;
+                    transition: opacity 0.45s ease;
+                    pointer-events: none;
+                    z-index: 1;
+                }
+
+                .lux-sess-card:hover {
+                    transform: translateY(-4px) scale(1.015);
+                    border-color: var(--tcd);
+                    box-shadow:
+                        0 18px 40px rgba(0,0,0,0.6),
+                        0 0 0 1px var(--tglow),
+                        0 0 30px var(--tglow),
+                        inset 0 1px 0 rgba(255,255,255,0.1);
+                    background:
+                        linear-gradient(155deg,
+                            rgba(42,55,82,0.9) 0%,
+                            rgba(20,26,42,0.98) 100%);
+                }
+                .lux-sess-card:hover .lux-card-glow { opacity: 1; }
+
+                .lux-sess-card:active {
+                    transform: translateY(-2px) scale(0.99);
+                    transition-duration: 0.1s;
+                }
+
+                /* ═══ الأيقونة الكبيرة ═══ */
+                .lux-card-left {
+                    position: relative;
+                    z-index: 2;
+                    flex-shrink: 0;
+                }
+                .lux-icon-wrap {
+                    position: relative;
+                    width: 54px;
+                    height: 54px;
+                    border-radius: 16px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background: linear-gradient(135deg,
+                        rgba(255,255,255,0.06),
+                        rgba(0,0,0,0.4));
+                    border: 1.5px solid var(--tglow);
+                    box-shadow:
+                        0 0 20px var(--tglow),
+                        inset 0 0 16px rgba(0,0,0,0.3);
+                    transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+                }
+                .lux-icon-wrap i {
+                    font-size: 22px;
+                    color: var(--tc);
+                    filter: drop-shadow(0 0 10px var(--tglow));
+                    transition: all 0.4s ease;
+                }
+                .lux-icon-ring {
+                    position: absolute;
+                    inset: -4px;
+                    border-radius: 20px;
+                    border: 1px solid var(--tglow);
+                    opacity: 0;
+                    transition: all 0.4s ease;
+                }
+                .lux-sess-card:hover .lux-icon-wrap {
+                    transform: scale(1.08) rotate(-6deg);
+                    box-shadow:
+                        0 0 32px var(--tglow),
+                        inset 0 0 20px rgba(0,0,0,0.4);
+                }
+                .lux-sess-card:hover .lux-icon-wrap i {
+                    transform: scale(1.15);
+                }
+                .lux-sess-card:hover .lux-icon-ring {
+                    opacity: 1;
+                    animation: luxIconRing 1.8s ease-in-out infinite;
+                }
+                @keyframes luxIconRing {
+                    0%,100% { transform: scale(1); opacity: 0.7; }
+                    50%     { transform: scale(1.18); opacity: 0; }
+                }
+
+                /* ═══ جسم البطاقة ═══ */
+                .lux-card-body {
+                    flex: 1;
+                    min-width: 0;
+                    position: relative;
+                    z-index: 2;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+                    text-align: right;
+                }
+
+                /* شارة النوع */
+                .lux-type-badge {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 5px;
+                    align-self: flex-end;
+                    font-family: 'Cairo', sans-serif;
+                    font-size: 10.5px;
+                    font-weight: 900;
+                    color: var(--tc);
+                    padding: 3px 11px;
+                    border-radius: 20px;
+                    background: linear-gradient(135deg,
+                        rgba(255,255,255,0.08),
+                        rgba(0,0,0,0.3));
+                    border: 1px solid var(--tglow);
+                    letter-spacing: 0.5px;
+                    white-space: nowrap;
+                    box-shadow: 0 0 10px var(--tglow);
+                }
+                .lux-type-badge i { font-size: 10px; }
+
+                /* العنوان */
+                .lux-title {
+                    font-family: 'Plus Jakarta Sans', 'Cairo', sans-serif;
+                    font-size: 17px;
+                    font-weight: 900;
+                    color: #ffffff;
+                    direction: ltr;
+                    text-align: right;
+                    letter-spacing: 0.5px;
+                    line-height: 1.3;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    text-shadow:
+                        0 2px 8px rgba(0,0,0,0.6),
+                        0 0 20px rgba(255,255,255,0.05);
+                    transition: all 0.35s ease;
+                }
+                .lux-sess-card:hover .lux-title {
+                    color: var(--tc);
+                    text-shadow:
+                        0 2px 12px rgba(0,0,0,0.7),
+                        0 0 24px var(--tglow);
+                }
+
+                /* المنشئ */
+                .lux-creator {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 7px;
+                    align-self: flex-end;
+                    padding: 4px 11px 4px 5px;
+                    border-radius: 20px;
+                    background: linear-gradient(135deg,
+                        rgba(255,255,255,0.05),
+                        rgba(0,0,0,0.25));
+                    border: 1px solid rgba(255,255,255,0.08);
+                    transition: all 0.3s ease;
+                }
+                .lux-creator-avatar {
+                    width: 22px;
+                    height: 22px;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background: linear-gradient(135deg,
+                        var(--cc),
+                        rgba(0,0,0,0.4));
+                    color: #0a0e17;
+                    font-size: 10px;
+                    box-shadow: 0 0 10px var(--cc);
+                    flex-shrink: 0;
+                }
+                .lux-creator-name {
+                    font-family: 'Cairo', sans-serif;
+                    font-size: 11.5px;
+                    font-weight: 800;
+                    color: #d4d9e6;
+                    letter-spacing: 0.3px;
+                    white-space: nowrap;
+                }
+                .lux-sess-card:hover .lux-creator {
+                    border-color: var(--cc);
+                    box-shadow: 0 0 14px var(--cc);
+                }
+                .lux-sess-card:hover .lux-creator-name {
+                    color: var(--cc);
+                }
+
+                /* ═══ السهم ═══ */
+                .lux-card-arrow {
+                    position: relative;
+                    z-index: 2;
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background: rgba(255,255,255,0.04);
+                    border: 1px solid rgba(255,255,255,0.08);
+                    color: rgba(255,255,255,0.25);
+                    font-size: 12px;
+                    flex-shrink: 0;
+                    transition: all 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+                }
+                .lux-sess-card:hover .lux-card-arrow {
+                    background: var(--tcd);
+                    border-color: var(--tcd);
+                    color: #0a0e17;
+                    transform: translateX(-6px) scale(1.1);
+                    box-shadow: 0 0 24px var(--tglow);
+                }
+
+                /* ═══ موبايل ═══ */
+                @media (max-width: 520px) {
+                    .lux-modal-popup { padding: 20px 14px 16px !important; border-radius: 24px !important; }
+                    .lux-head { padding-bottom: 16px; margin-bottom: 14px; }
+                    .lux-head-icon { width: 54px; height: 54px; border-radius: 16px; margin-bottom: 12px; }
+                    .lux-head-icon i { font-size: 22px; }
+                    .lux-head-sub { font-size: 10.5px; padding: 3px 12px; }
+                    .lux-head-title { font-size: 19px; }
+                    .lux-list { gap: 10px; }
+                    .lux-sess-card { padding: 13px 14px; gap: 11px; border-radius: 16px; }
+                    .lux-icon-wrap { width: 46px; height: 46px; border-radius: 14px; }
+                    .lux-icon-wrap i { font-size: 18px; }
+                    .lux-title { font-size: 14.5px; }
+                    .lux-type-badge { font-size: 10px; padding: 3px 10px; }
+                    .lux-creator-name { font-size: 10.5px; }
+                    .lux-creator-avatar { width: 20px; height: 20px; font-size: 9px; }
+                    .lux-card-arrow { width: 28px; height: 28px; font-size: 11px; }
+                }
+            </style>
+
+            <!-- ═══ الهيدر الفاخر ═══ -->
+            <div class="lux-head">
+                <div class="lux-head-icon">
+                    <i class="fas fa-book-open"></i>
+                </div>
+
+                <div class="lux-head-sub">
+                    <span>اختر الجلسة لتسجيل الحضور</span>
+                    <i class="fas fa-hand-point-down"></i>
+                </div>
+
+                <div class="lux-head-title">${subName}</div>
+            </div>
+
+            <!-- ═══ قائمة البطاقات ═══ -->
+            <div class="lux-list">
+                ${cardsHtml}
+            </div>
+        `
     });
 }
 
-/* ✅ تحديث في الخلفية - بدون blocking */
 async function refreshSessionsInBackground(subId, subName) {
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 ثواني max
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
 
         const res = await fetch(
             `/api/student-init?year=${encodeURIComponent(currentStudent.year)}` +
@@ -620,36 +958,30 @@ async function refreshSessionsInBackground(subId, subName) {
             allSubjects = data.subjects || allSubjects;
             allActiveSessions = data.sessions || [];
             renderSubjectCards();
-            // ملاحظة: لا نعيد فتح المودال - عشان ما نزعجش المستخدم
         }
     } catch (e) {
-        // فشل/timeout - نستخدم البيانات المحلية اللي معروضة بالفعل
         console.debug('Background refresh skipped:', e.message);
     }
 }
 
 /* =========================================================
-   ✅ فتح نافذة تأكيد الحضور — نسخة محسّنة
+   ✅ فتح نافذة تأكيد الحضور
    ========================================================= */
 function openVerifyModal(sessId, title, subName, type) {
     Swal.close();
     qrAutoSubmitLocked = false;
     selectedSession = sessId;
 
-    // ✅ 1. اعرض المودال فوراً (بدون أي انتظار)
     document.getElementById('modal-sess-title').innerText =
         `${title} (${type === 'Lecture' ? 'محاضرة' : 'سكشن'})`;
     document.getElementById('modal-sess-sub').innerText = subName;
     document.getElementById('totp-input').value = '';
     document.getElementById('verify-modal').style.display = 'flex';
 
-    // ✅ 2. في الخلفية - افحص لو الطالب مسجل قبل كده (non-blocking)
     checkIfAlreadyRegistered(sessId);
 }
 
-/* ✅ فحص إذا كان الطالب مسجل بالفعل - بدون blocking */
 async function checkIfAlreadyRegistered(sessId) {
-    // ✅ جرّب الكاش الأول
     let history = nxCache.get('history');
 
     if (!history) {
@@ -669,13 +1001,11 @@ async function checkIfAlreadyRegistered(sessId) {
             history = data.history || [];
             nxCache.set('history', history);
         } catch (e) {
-            // فشل الفحص - الطالب يقدر يجرب عادي، والسيرفر هيرفض لو مسجل
             console.debug('History check skipped:', e.message);
             return;
         }
     }
 
-    // ✅ تحقق: لو الطالب لسه فاتح نفس الجلسة ومسجل بالفعل
     if (selectedSession === sessId) {
         const already = history.find(h => h.session_id === sessId);
         if (already) {
@@ -699,9 +1029,6 @@ async function checkIfAlreadyRegistered(sessId) {
     }
 }
 
-/* =========================================================
-   ✅ إغلاق نافذة التأكيد
-   ========================================================= */
 function closeVerifyModal() {
     stopQrReader();
 
@@ -782,7 +1109,6 @@ async function toggleQrReader() {
 
             const raw = (decodedText || '').trim();
 
-            /* ✅ فحص كود ربط الشاشة فور المسح */
             if (raw.toUpperCase().startsWith('SCR')) {
                 qrAutoSubmitLocked = true;
                 stopQrReader();
@@ -878,7 +1204,6 @@ async function toggleQrReader() {
 async function submitAttendanceFinal(fromQr = false) {
     const rawCode = document.getElementById('totp-input').value.trim();
 
-    /* ✅ فحص كود ربط الشاشة أولاً */
     if (isPairingCode(rawCode)) {
         document.getElementById('totp-input').value = '';
         qrAutoSubmitLocked = false;
@@ -921,14 +1246,14 @@ async function submitAttendanceFinal(fromQr = false) {
             })
         });
         const data = await res.json();
-        if(res.ok) {
-            setDeviceOwner(currentStudent.student_id, currentStudent.name);
 
-            // ✅ امسح الكاش عشان المرة الجاية يجيب history محدّث
+        if (res.ok) {
+            setDeviceOwner(currentStudent.student_id, currentStudent.name);
             nxCache.clear('history');
 
             closeVerifyModal();
             Swal.fire({...swalDark, icon:'success', title:'تم بنجاح!', text: data.message});
+
             if (typeof confetti === 'function') {
                 const colors = ['#FFB300', '#FFD54F', '#10B981', '#7C3AED', '#06B6D4'];
                 confetti({ particleCount: 80, angle: 60, spread: 70, origin: { x: 0 }, colors });
@@ -956,7 +1281,6 @@ async function openHistoryModal() {
     list.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-muted);"><i class="fas fa-spinner fa-spin fa-2x"></i></div>`;
 
     try {
-        // ✅ جرّب الكاش الأول
         let history = nxCache.get('history');
 
         if (!history) {
@@ -970,10 +1294,11 @@ async function openHistoryModal() {
             nxCache.set('history', history);
         }
 
-        if(!history || history.length === 0) {
+        if (!history || history.length === 0) {
             list.innerHTML = `<div class="empty-state"><i class="fas fa-box-open fa-3x" style="color:var(--border); margin-bottom:15px;"></i><h3 style="color:#fff;">لا يوجد حضور مسجل بعد</h3></div>`;
             return;
         }
+
         list.innerHTML = history.map(h => `
             <div class="comp-card">
                 <div class="comp-header">

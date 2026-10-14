@@ -999,7 +999,37 @@ def admin_action():
         if not _can_access_session(curr, sess_id):
             return jsonify({"status": "error", "message": "غير مصرح!"}), 403
 
-        sessions_col.update_one({"session_id": sess_id}, {"$set": {"is_open": bool(data.get('is_open'))}})
+        is_open = bool(data.get('is_open'))
+
+        if is_open:
+            # 🆕 عند إعادة الفتح: نصفر العدّاد ونمسح علامات الأوتو-كلوز القديمة
+            sessions_col.update_one(
+                {"session_id": sess_id},
+                {
+                    "$set": {
+                        "is_open": True,
+                        "created_at_dt": datetime.utcnow(),
+                        "reopened_at": _cairo_now(),
+                    },
+                    "$unset": {
+                        "auto_closed": "",
+                        "closed_at": ""
+                    }
+                }
+            )
+        else:
+            # عند الإغلاق اليدوي: نسجّل السبب
+            sessions_col.update_one(
+                {"session_id": sess_id},
+                {
+                    "$set": {
+                        "is_open": False,
+                        "closed_at": _cairo_now(),
+                        "closed_by": curr.get('username', 'manual')
+                    }
+                }
+            )
+
         return jsonify({"status": "success"})
 
     # ---------- DELETE SESSION ----------

@@ -1,11 +1,17 @@
 /* ==========================================================
    QUIZ MANAGEMENT · Sheets View + QR Pairing + Retake + Excel
+   + Auto-Refresh Details Modal
    ========================================================== */
 
 let allQuizzes = [];
 let currentQuizSubject = null;
 let parsedWord = null;
 let editingQuizId = null;
+
+/* ---------- Auto-refresh state ---------- */
+let _qzPollInterval = null;
+let _qzPollHash = '';
+let _qzPollQuizId = null;
 
 /* ---------- Helpers ---------- */
 async function getSubjects() {
@@ -175,9 +181,12 @@ function renderQuizListUI(subj) {
 }
 
 /* ==========================================================
-   🎨 QUIZ DETAILS MODAL
+   🎨 QUIZ DETAILS MODAL (with auto-refresh)
    ========================================================== */
 async function openQuizDetails(quizId) {
+    // Stop any previous polling (in case a modal was already open)
+    stopQuizDetailsPoll();
+
     try {
         const r = await fetch(`/api/admin-quiz-details?id=${encodeURIComponent(quizId)}`);
         const d = await r.json();
@@ -200,71 +209,15 @@ async function openQuizDetails(quizId) {
             avg = (totalScores / completed.length).toFixed(1);
         }
 
-        /* ---- Students List (with retake button on every row) ---- */
-        let studentsHtml = '';
-        if (attempts.length === 0) {
-            studentsHtml = `<div class="qz-empty"><span class="qz-empty-icon">📭</span>لا يوجد طلاب دخلوا الامتحان بعد</div>`;
-        } else {
-            studentsHtml = attempts.map(a => {
-                const st = a.status;
-                const avatarText = (a.student_name || '?').trim().charAt(0).toUpperCase();
-                const safeName = esc(a.student_name || '').replace(/'/g, "\\'");
-                let scoreHtml = '';
-                if (st === 'completed') {
-                    const score = parseFloat(a.score) || 0;
-                    const total = parseFloat(a.total_points) || 1;
-                    const pct = (score / total) * 100;
-                    const cls = pct >= 70 ? 'good' : (pct >= 50 ? 'mid' : 'bad');
-                    scoreHtml = `<div class="qz-s-score">
-                        <div class="qz-s-score-val ${cls}">${score}</div>
-                        <div class="qz-s-score-sub">من ${total}</div>
-                    </div>`;
-                } else if (st === 'cancelled') {
-                    scoreHtml = `<div class="qz-s-score">
-                        <div class="qz-s-score-val cheat">غش</div>
-                        <div class="qz-s-score-sub">🚫</div>
-                    </div>`;
-                } else {
-                    scoreHtml = `<div class="qz-s-score">
-                        <div class="qz-s-score-val pending">—</div>
-                        <div class="qz-s-score-sub">جاري</div>
-                    </div>`;
-                }
-                return `<div class="qz-student-row ${st}">
-                    <div class="qz-s-avatar">${esc(avatarText)}</div>
-                    <div class="qz-s-info">
-                        <div class="qz-s-name">${esc(a.student_name || 'غير معروف')}</div>
-                        <div class="qz-s-id">${a.student_id}</div>
-                    </div>
-                    ${scoreHtml}
-                    <button class="qz-retake-btn" onclick="event.stopPropagation(); retakeStudent('${quiz.id}','${a.student_id}','${safeName}')" title="إعادة الامتحان للطالب">
-                        <i class="fas fa-redo"></i>
-                    </button>
-                </div>`;
-            }).join('');
-        }
+        // Initial hash so polling doesn't re-render immediately
+        _qzPollHash = _qzAttemptsHash(attempts, blocks);
+        _qzPollQuizId = quizId;
 
-        /* ---- Blocked List (retake = unblock + reset) ---- */
-        let blockedHtml = '';
-        if (blocks.length === 0) {
-            blockedHtml = `<div class="qz-empty"><span class="qz-empty-icon">✅</span>لا يوجد محظورين — كل الطلاب بخير</div>`;
-        } else {
-            blockedHtml = blocks.map(b => {
-                const avatarText = (b.student_name || '?').trim().charAt(0).toUpperCase();
-                const safeName = esc(b.student_name || '').replace(/'/g, "\\'");
-                return `<div class="qz-blocked-row">
-                    <div class="qz-s-avatar">${esc(avatarText)}</div>
-                    <div class="qz-s-info">
-                        <div class="qz-s-name">${esc(b.student_name || 'غير معروف')}</div>
-                        <div class="qz-s-id">${b.student_id}</div>
-                        <div class="qz-blocked-reason">🚫 ${esc(b.reason || '')}</div>
-                    </div>
-                    <button class="qz-retake-btn" onclick="event.stopPropagation(); retakeStudent('${quiz.id}','${b.student_id}','${safeName}')">
-                        🔄 إعادة
-                    </button>
-                </div>`;
-            }).join('');
-        }
+        /* ---- Students List ---- */
+        const studentsHtml = qzBuildStudentsHtml(attempts, quizId);
+
+        /* ---- Blocked List ---- */
+        const blockedHtml = qzBuildBlockedHtml(blocks, quizId);
 
         /* ---- Questions Tab: Sheets list ---- */
         let questionsHtml = '';
@@ -339,6 +292,13 @@ async function openQuizDetails(quizId) {
                 .qz-stat-val { font-size:22px;font-weight:900;color:#60A5FA;line-height:1; }
                 .qz-stat-box.avg .qz-stat-val { color:#FFD54F; }
                 .qz-stat-lbl { font-size:10.5px;color:#8b93a7;font-weight:800;margin-top:2px; }
+                .qz-live-dot {
+                    width:7px;height:7px;border-radius:50%;background:#10B981;
+                    box-shadow:0 0 10px #10B981;
+                    animation:qzLiveBlink 1.6s ease-in-out infinite;
+                    display:inline-block;margin-right:5px;
+                }
+                @keyframes qzLiveBlink { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
                 .qz-content { flex:1;overflow-y:auto;padding:0 4px 0 2px; }
                 .qz-content::-webkit-scrollbar { width:5px; }
                 .qz-content::-webkit-scrollbar-track { background:rgba(0,0,0,0.2);border-radius:4px; }
@@ -506,6 +466,7 @@ async function openQuizDetails(quizId) {
                     </div>
                     <div class="qz-title">${esc(quiz.title)}</div>
                     <div class="qz-meta">
+                        <span class="qz-live-dot" title="يتحدث تلقائياً"></span>
                         📚 ${esc(quiz.subject_name || '')} · ⏱️ ${quiz.duration} دقيقة · ${expectedQ} سؤال
                         ${isRandom ? ` · <span style="color:#A78BFA;">🎲 عشوائي</span>` : ''}
                         ${isLinked ? ` · <span style="color:#10B981;">🖥️ الشاشة مربوطة</span>` : ''}
@@ -516,14 +477,14 @@ async function openQuizDetails(quizId) {
                     <div class="qz-stat-box">
                         <div class="qz-stat-icon">👥</div>
                         <div>
-                            <div class="qz-stat-val">${attempts.length}</div>
+                            <div class="qz-stat-val" data-qz-attempts="${quiz.id}">${attempts.length}</div>
                             <div class="qz-stat-lbl">طالب دخل</div>
                         </div>
                     </div>
                     <div class="qz-stat-box avg">
                         <div class="qz-stat-icon">📊</div>
                         <div>
-                            <div class="qz-stat-val">${avg}</div>
+                            <div class="qz-stat-val" data-qz-avg="${quiz.id}">${avg}</div>
                             <div class="qz-stat-lbl">متوسط الدرجات</div>
                         </div>
                     </div>
@@ -550,11 +511,20 @@ async function openQuizDetails(quizId) {
             </div>
         `;
 
-        Swal.fire({
+        await Swal.fire({
             html, width: 700, background: '#1a2136', color: '#fff',
             showConfirmButton: false,
             showCancelButton: true, cancelButtonText: 'إغلاق',
-            cancelButtonColor: '#374151', padding: '18px 22px'
+            cancelButtonColor: '#374151', padding: '18px 22px',
+            didOpen: () => {
+                // ✅ Start auto-refresh polling
+                _qzPollInterval = setInterval(() => {
+                    _qzRefreshQuizDetails(quizId);
+                }, 2000);
+            },
+            willClose: () => {
+                stopQuizDetailsPoll();
+            }
         });
     } catch(e) {
         console.error(e);
@@ -562,6 +532,162 @@ async function openQuizDetails(quizId) {
     }
 }
 
+/* ==========================================================
+   🔄 AUTO-REFRESH HELPERS
+   ========================================================== */
+
+function stopQuizDetailsPoll() {
+    if (_qzPollInterval) {
+        clearInterval(_qzPollInterval);
+        _qzPollInterval = null;
+    }
+    _qzPollQuizId = null;
+    _qzPollHash = '';
+}
+
+function _qzAttemptsHash(attempts, blocks) {
+    const atk = (attempts || []).map(a =>
+        `${a.attempt_id || ''}|${a.status || ''}|${a.score ?? ''}|${a.total_points ?? ''}`
+    ).join('~');
+    const blk = (blocks || []).map(b => `${b.student_id || ''}|${b.reason || ''}`).join(',');
+    return atk + '||' + blk;
+}
+
+function qzBuildStudentsHtml(attempts, quizId) {
+    if (!attempts || attempts.length === 0) {
+        return `<div class="qz-empty"><span class="qz-empty-icon">📭</span>لا يوجد طلاب دخلوا الامتحان بعد</div>`;
+    }
+    return attempts.map(a => {
+        const st = a.status;
+        const avatarText = (a.student_name || '?').trim().charAt(0).toUpperCase();
+        const safeName = esc(a.student_name || '').replace(/'/g, "\\'");
+        let scoreHtml = '';
+        if (st === 'completed') {
+            const score = parseFloat(a.score) || 0;
+            const total = parseFloat(a.total_points) || 1;
+            const pct = (score / total) * 100;
+            const cls = pct >= 70 ? 'good' : (pct >= 50 ? 'mid' : 'bad');
+            scoreHtml = `<div class="qz-s-score">
+                <div class="qz-s-score-val ${cls}">${score}</div>
+                <div class="qz-s-score-sub">من ${total}</div>
+            </div>`;
+        } else if (st === 'cancelled') {
+            scoreHtml = `<div class="qz-s-score">
+                <div class="qz-s-score-val cheat">غش</div>
+                <div class="qz-s-score-sub">🚫</div>
+            </div>`;
+        } else {
+            scoreHtml = `<div class="qz-s-score">
+                <div class="qz-s-score-val pending">—</div>
+                <div class="qz-s-score-sub">جاري</div>
+            </div>`;
+        }
+        return `<div class="qz-student-row ${st}">
+            <div class="qz-s-avatar">${esc(avatarText)}</div>
+            <div class="qz-s-info">
+                <div class="qz-s-name">${esc(a.student_name || 'غير معروف')}</div>
+                <div class="qz-s-id">${a.student_id}</div>
+            </div>
+            ${scoreHtml}
+            <button class="qz-retake-btn" onclick="event.stopPropagation(); retakeStudent('${quizId}','${a.student_id}','${safeName}')" title="إعادة الامتحان للطالب">
+                <i class="fas fa-redo"></i>
+            </button>
+        </div>`;
+    }).join('');
+}
+
+function qzBuildBlockedHtml(blocks, quizId) {
+    if (!blocks || blocks.length === 0) {
+        return `<div class="qz-empty"><span class="qz-empty-icon">✅</span>لا يوجد محظورين — كل الطلاب بخير</div>`;
+    }
+    return blocks.map(b => {
+        const avatarText = (b.student_name || '?').trim().charAt(0).toUpperCase();
+        const safeName = esc(b.student_name || '').replace(/'/g, "\\'");
+        return `<div class="qz-blocked-row">
+            <div class="qz-s-avatar">${esc(avatarText)}</div>
+            <div class="qz-s-info">
+                <div class="qz-s-name">${esc(b.student_name || 'غير معروف')}</div>
+                <div class="qz-s-id">${b.student_id}</div>
+                <div class="qz-blocked-reason">🚫 ${esc(b.reason || '')}</div>
+            </div>
+            <button class="qz-retake-btn" onclick="event.stopPropagation(); retakeStudent('${quizId}','${b.student_id}','${safeName}')">
+                🔄 إعادة
+            </button>
+        </div>`;
+    }).join('');
+}
+
+async function _qzRefreshQuizDetails(quizId) {
+    // Safety: don't run if the modal isn't for this quiz anymore
+    if (_qzPollQuizId !== quizId) return;
+
+    try {
+        const r = await fetch(`/api/admin-quiz-details?id=${encodeURIComponent(quizId)}`);
+        const d = await r.json();
+        if (d.status !== 'success') return;
+
+        const attempts = d.attempts || [];
+        const blocks = d.blocks || [];
+
+        const newHash = _qzAttemptsHash(attempts, blocks);
+        if (newHash === _qzPollHash) return; // no changes → skip DOM update
+
+        _qzPollHash = newHash;
+
+        // Update students view
+        const studentsEl = document.getElementById(`qz-view-students-${quizId}`);
+        const blockedEl = document.getElementById(`qz-view-blocked-${quizId}`);
+
+        // Preserve scroll position of the content container
+        const contentEl = document.querySelector(`#qz-view-students-${quizId}`)?.closest('.qz-content');
+        const oldScrollTop = contentEl ? contentEl.scrollTop : 0;
+
+        if (studentsEl) studentsEl.innerHTML = qzBuildStudentsHtml(attempts, quizId);
+        if (blockedEl) blockedEl.innerHTML = qzBuildBlockedHtml(blocks, quizId);
+
+        // Restore scroll
+        if (contentEl) contentEl.scrollTop = oldScrollTop;
+
+        // Update stats
+        const attemptsEl = document.querySelector(`[data-qz-attempts="${quizId}"]`);
+        if (attemptsEl) attemptsEl.textContent = attempts.length;
+
+        const avgEl = document.querySelector(`[data-qz-avg="${quizId}"]`);
+        if (avgEl) {
+            const completed = attempts.filter(a => a.status === 'completed');
+            let avg = 0;
+            if (completed.length > 0) {
+                const totalScores = completed.reduce((s, a) => s + (parseFloat(a.score) || 0), 0);
+                avg = (totalScores / completed.length).toFixed(1);
+            }
+            avgEl.textContent = avg;
+        }
+
+        // Update blocked count badge on nav button
+        const blockedBtn = document.querySelector(`.qz-bottom-nav[data-quiz="${quizId}"] .qz-nav-btn:nth-child(2)`);
+        if (blockedBtn) {
+            const existingBadge = blockedBtn.querySelector('.qz-nav-badge');
+            if (blocks.length > 0) {
+                if (existingBadge) {
+                    existingBadge.textContent = blocks.length;
+                } else {
+                    const span = document.createElement('span');
+                    span.className = 'qz-nav-badge';
+                    span.textContent = blocks.length;
+                    blockedBtn.appendChild(span);
+                }
+            } else if (existingBadge) {
+                existingBadge.remove();
+            }
+        }
+    } catch (e) {
+        // Silent fail — next poll will retry
+    }
+}
+
+/* ==========================================================
+   🧭 NAVIGATION SWITCH (bottom tabs)
+   ========================================================== */
 window.qzNavSwitch = function(quizId, viewName, btn) {
     document.querySelectorAll(`[id^="qz-view-"][id$="-${quizId}"]`).forEach(v => v.classList.remove('active'));
     const view = document.getElementById(`qz-view-${viewName}-${quizId}`);
@@ -693,6 +819,7 @@ async function unblockStudent(quizId, studentId) {
    ========================================================== */
 window.qzOpenSection = async function(quizId, sectionIndex) {
     Swal.close();
+    stopQuizDetailsPoll();
     await new Promise(r => setTimeout(r, 120));
 
     const r = await fetch(`/api/admin-quiz-details?id=${encodeURIComponent(quizId)}`);
@@ -906,6 +1033,7 @@ window.qzOpenSection = async function(quizId, sectionIndex) {
    ========================================================== */
 window.qzEditSectionMeta = async function(quizId, sectionIndex) {
     Swal.close();
+    stopQuizDetailsPoll();
     await new Promise(r => setTimeout(r, 120));
 
     const r = await fetch(`/api/admin-quiz-details?id=${encodeURIComponent(quizId)}`);
@@ -1003,6 +1131,7 @@ window.qzEditSectionMeta = async function(quizId, sectionIndex) {
    ========================================================== */
 window.qzDeleteSectionConfirm = async function(quizId, sectionIndex, sectionName) {
     Swal.close();
+    stopQuizDetailsPoll();
     await new Promise(r => setTimeout(r, 120));
 
     const c = await Swal.fire({
@@ -1050,6 +1179,7 @@ window.qzDeleteSectionConfirm = async function(quizId, sectionIndex, sectionName
    ========================================================== */
 window.qzAddQuestionToSection = async function(quizId, sectionIndex) {
     Swal.close();
+    stopQuizDetailsPoll();
     await new Promise(r => setTimeout(r, 120));
 
     const r = await fetch(`/api/admin-quiz-details?id=${encodeURIComponent(quizId)}`);
@@ -1191,12 +1321,14 @@ window.qzAddQuestionToSection = async function(quizId, sectionIndex) {
    ✏️ EDIT / DELETE QUESTION inside section
    ========================================================== */
 window.qzEditQuestionInSection = async function(quizId, sectionIndex, qIdx) {
+    stopQuizDetailsPoll();
     const qid = `s${sectionIndex}_q${qIdx}`;
     await editQuizQuestion(quizId, qid, () => qzOpenSection(quizId, sectionIndex));
 };
 
 window.qzDeleteQuestionInSection = async function(quizId, sectionIndex, qIdx) {
     Swal.close();
+    stopQuizDetailsPoll();
     await new Promise(r => setTimeout(r, 120));
 
     const r = await fetch(`/api/admin-quiz-details?id=${encodeURIComponent(quizId)}`);
@@ -1319,6 +1451,8 @@ async function saveQuizSections(quizId, quiz, sections, onSuccess) {
    🖥️ QUIZ SCREEN PAIRING
    ========================================================== */
 async function linkQuizScreen(quizId, isLinked) {
+    stopQuizDetailsPoll();
+
     if (isLinked) {
         const choice = await Swal.fire({
             title: '🖥️ الشاشة',
@@ -1649,6 +1783,7 @@ async function pairQuizWithToken(quizId, token, statusEl) {
    ========================================================== */
 async function editQuizMeta(quizId) {
     Swal.close();
+    stopQuizDetailsPoll();
     await new Promise(r => setTimeout(r, 120));
 
     const r = await fetch(`/api/admin-quiz-details?id=${encodeURIComponent(quizId)}`);
@@ -1730,6 +1865,7 @@ function downloadQuizExcel(quizId) {
    ✏️ EDIT SINGLE QUESTION (internal, with callback)
    ========================================================== */
 async function editQuizQuestion(quizId, qid, onSuccess) {
+    stopQuizDetailsPoll();
     const r = await fetch(`/api/admin-quiz-details?id=${encodeURIComponent(quizId)}`);
     const d = await r.json();
     if (d.status !== 'success') return;
@@ -1839,6 +1975,7 @@ async function editQuizQuestion(quizId, qid, onSuccess) {
    ========================================================== */
 async function deleteQuiz(id) {
     Swal.close();
+    stopQuizDetailsPoll();
     const c = await Swal.fire({
         icon: 'warning', title: 'حذف الكويز؟',
         text: 'هيتحذف نهائياً مع كل المحاولات والحظر',
@@ -1860,6 +1997,7 @@ async function deleteQuiz(id) {
 }
 
 async function toggleQuizOpen(id, open) {
+    stopQuizDetailsPoll();
     const r = await fetch('/api/admin-toggle-quiz', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({id, is_open: open})
@@ -1878,6 +2016,7 @@ async function toggleQuizOpen(id, open) {
 async function openQuizUploadModal(quizId) {
     editingQuizId = quizId;
     parsedWord = null;
+    stopQuizDetailsPoll();
 
     let existingQuiz = null;
     if (quizId) {
@@ -2096,6 +2235,7 @@ function renderSectionsConfig(files) {
    ========================================================== */
 async function addQuizQuestionsWord(quizId) {
     Swal.close();
+    stopQuizDetailsPoll();
     await new Promise(r => setTimeout(r, 120));
 
     const r = await fetch(`/api/admin-quiz-details?id=${encodeURIComponent(quizId)}`);

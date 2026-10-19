@@ -146,7 +146,7 @@ SCREEN_STEP_INTERVAL = 20
 SCREEN_GRACE_PERIOD  = 2.0
 
 TA_SESSION_AUTO_CLOSE_MINUTES = 15
-HEARTBEAT_GRACE_SEC = 8
+HEARTBEAT_GRACE_SEC = 30  # ⬅️ raised from 8 → 30 (transient disconnects tolerated)
 
 _SAFE_ERROR_MSG = "حدث خطأ، حاول لاحقاً"
 
@@ -722,9 +722,6 @@ def screen_live_code():
     legacy_code = _clean_str(request.args.get('screen_code'), 12)
     is_quiz = request.args.get('is_quiz') == '1'
 
-    # ============================================================
-    # 🎯 QUIZ MODE
-    # ============================================================
     if is_quiz:
         if not secret:
             return jsonify({"status": "error", "message": "missing"}), 400
@@ -770,9 +767,6 @@ def screen_live_code():
             "qr_interval": QR_STEP_INTERVAL
         })
 
-    # ============================================================
-    # 🎓 LECTURE MODE (القديم)
-    # ============================================================
     sess = None
     if secret and len(secret) >= 16:
         sess = sessions_col.find_one({"screen_secret": secret}, {"_id": 0})
@@ -1263,10 +1257,6 @@ def _compute_expected_count(quiz):
 
 
 def _student_can_access_quiz(student: dict, quiz: dict) -> bool:
-    """
-    يتحقق أن الكويز بتاع نفس سنة وقسم الطالب.
-    لو الطالب أو المادة مش موجودين → False.
-    """
     if not student or not quiz:
         return False
     subject = subjects_col.find_one({"id": quiz.get('subject_id')})
@@ -1281,6 +1271,46 @@ def _student_can_access_quiz(student: dict, quiz: dict) -> bool:
     if subj_dept not in (s_dept, "عام (IT)"):
         return False
     return True
+
+
+# ============================================================
+#  🎯 AUTO-GRADE HELPER (used by time expiry + violation fallback)
+# ============================================================
+def _auto_grade_attempt(attempt, quiz):
+    """
+    Grades an in-progress attempt using whatever answers are saved.
+    Used when:
+      - Server detects expires_at has passed
+      - A "violation" arrives after expiry
+      - Submit arrives late
+    Sets status='completed' with real score (NOT zero, NOT cheat).
+    """
+    attempt_questions = attempt.get('generated_questions') or quiz.get('questions', [])
+    answers = attempt.get('answers') or {}
+    score = 0.0
+    total = 0.0
+    details = []
+    for q in attempt_questions:
+        total += float(q.get('points', 1))
+        ans = answers.get(q['id'])
+        ok = (ans == q['correct'])
+        if ok:
+            score += float(q.get('points', 1))
+        details.append({"qid": q['id'], "text": q['text'], "user": ans,
+                        "correct": q['correct'], "ok": ok, "points": q.get('points', 1)})
+    quiz_attempts_col.update_one(
+        {"attempt_id": attempt['attempt_id'], "status": "in_progress"},
+        {"$set": {
+            "status": "completed",
+            "score": round(score, 2),
+            "total_points": round(total, 2),
+            "details": details,
+            "auto_submitted": True,
+            "auto_reason": "time_expired",
+            "submitted_at": _cairo_now(),
+            "submitted_at_dt": datetime.utcnow()
+        }})
+    return score, total
 
 
 # ============================================================
@@ -1367,7 +1397,7 @@ def api_admin_toggle_quiz_broadcast():
 
 
 # ============================================================
-#  🚀 QUIZ QUICK START (with strict student-subject check)
+#  🚀 QUIZ QUICK START (with strict checks + auto-unblock)
 # ============================================================
 @app.route('/api/quiz-quick-start', methods=['POST'])
 def api_quiz_quick_start():
@@ -1385,7 +1415,6 @@ def api_quiz_quick_start():
     if not quiz:
         return jsonify({"status": "error", "message": "الكويز غير موجود"}), 404
 
-    # ✅ Strict check: student must belong to quiz's subject year/department
     student = students_col.find_one({"student_id": student_id})
     if not student:
         return jsonify({"status": "error", "message": "الطالب غير مسجل"}), 404
@@ -1401,8 +1430,25 @@ def api_quiz_quick_start():
     if not verify_quiz_code(code, quiz_id, scan_type):
         return jsonify({"status": "error", "message": "الكود غير صحيح أو انتهت صلاحيته"}), 400
 
-    if quiz_blocks_col.find_one({"quiz_id": quiz_id, "student_id": student_id, "unblocked_at": None}):
-        return jsonify({"status": "blocked", "message": "محظور"}), 403
+    # ⚡ Auto-unblock for transient disconnect
+    block = quiz_blocks_col.find_one({"quiz_id": quiz_id, "student_id": student_id, "unblocked_at": None})
+    if block:
+        reason = (block.get('reason') or '').strip()
+        blocked_dt = block.get('blocked_at_dt')
+        if reason in ('انقطاع', 'Session ended from server', 'انقطاع شبكة') and blocked_dt:
+            try:
+                elapsed = (datetime.utcnow() - blocked_dt).total_seconds()
+                if elapsed < 60:  # reconnect within 60s → auto-unblock
+                    quiz_blocks_col.delete_many({"quiz_id": quiz_id, "student_id": student_id})
+                    quiz_attempts_col.delete_many({
+                        "quiz_id": quiz_id, "student_id": student_id,
+                        "status": "cancelled"
+                    })
+                    block = None
+            except Exception:
+                pass
+        if block:
+            return jsonify({"status": "blocked", "message": "محظور"}), 403
 
     existing = quiz_attempts_col.find_one({"quiz_id": quiz_id, "student_id": student_id})
     if existing:
@@ -1410,25 +1456,32 @@ def api_quiz_quick_start():
             return jsonify({"status": "already_done",
                             "score": existing.get('score'),
                             "total": existing.get('total_points')})
-        last_hb = existing.get('last_heartbeat_dt') or existing.get('started_at')
-        if last_hb and (datetime.utcnow() - last_hb).total_seconds() > HEARTBEAT_GRACE_SEC:
-            quiz_attempts_col.update_one({"attempt_id": existing['attempt_id']},
-                {"$set": {"status": "cancelled", "cancelled_reason": "انقطاع",
-                          "cancelled_at": _cairo_now()}})
-            quiz_blocks_col.update_one({"quiz_id": quiz_id, "student_id": student_id},
-                {"$setOnInsert": {"quiz_id": quiz_id, "student_id": student_id,
-                                  "student_name": student_name, "reason": "انقطاع",
-                                  "blocked_at": _cairo_now(), "unblocked_at": None}}, upsert=True)
-            return jsonify({"status": "blocked", "message": "تم الحظر"}), 403
-        if existing.get('generated_questions'):
-            generated_qs = existing['generated_questions']
-            total_pts = existing.get('total_points', 0)
+        if existing.get('status') == 'in_progress':
+            last_hb = existing.get('last_heartbeat_dt') or existing.get('started_at')
+            if last_hb and (datetime.utcnow() - last_hb).total_seconds() > HEARTBEAT_GRACE_SEC:
+                quiz_attempts_col.update_one({"attempt_id": existing['attempt_id']},
+                    {"$set": {"status": "cancelled", "cancelled_reason": "انقطاع",
+                              "cancelled_at": _cairo_now()}})
+                quiz_blocks_col.update_one({"quiz_id": quiz_id, "student_id": student_id},
+                    {"$setOnInsert": {"quiz_id": quiz_id, "student_id": student_id,
+                                      "student_name": student_name, "reason": "انقطاع",
+                                      "blocked_at": _cairo_now(),
+                                      "blocked_at_dt": datetime.utcnow(),
+                                      "unblocked_at": None}}, upsert=True)
+                return jsonify({"status": "blocked", "message": "تم الحظر"}), 403
+            if existing.get('generated_questions'):
+                generated_qs = existing['generated_questions']
+                total_pts = existing.get('total_points', 0)
+            else:
+                generated_qs = _generate_attempt_questions(quiz)
+                total_pts = round(sum(q.get('points', 1) for q in generated_qs), 2)
+                quiz_attempts_col.update_one({"attempt_id": existing['attempt_id']},
+                    {"$set": {"generated_questions": generated_qs, "total_points": total_pts}})
+            attempt = existing
         else:
-            generated_qs = _generate_attempt_questions(quiz)
-            total_pts = round(sum(q.get('points', 1) for q in generated_qs), 2)
-            quiz_attempts_col.update_one({"attempt_id": existing['attempt_id']},
-                {"$set": {"generated_questions": generated_qs, "total_points": total_pts}})
-        attempt = existing
+            # Cancelled but not yet reblocked — reset
+            quiz_attempts_col.delete_one({"attempt_id": existing['attempt_id']})
+            return api_quiz_quick_start()
     else:
         generated_qs = _generate_attempt_questions(quiz)
         total_pts = round(sum(q.get('points', 1) for q in generated_qs), 2)
@@ -1461,9 +1514,6 @@ def api_quiz_quick_start():
     })
 
 
-# ============================================================
-#  🆕 QUIZ SCREEN PAIR-TOKEN (ربط الشاشة بالكويز)
-# ============================================================
 @app.route('/api/quiz-screen-pair-token', methods=['POST'])
 @limiter.limit("30 per minute")
 def api_quiz_screen_pair_token():
@@ -1497,9 +1547,6 @@ def api_quiz_screen_pair_token():
     return jsonify({"status": "success", "message": "تم ربط الشاشة بالامتحان!"})
 
 
-# ============================================================
-#  🎯 QUIZ BY SUBJECT (with student year/dept check)
-# ============================================================
 @app.route('/api/quiz-by-subject')
 def api_quiz_by_subject():
     sid = _clean_str(request.args.get('student_id'), 20)
@@ -1507,7 +1554,6 @@ def api_quiz_by_subject():
     if len(sid) != 7 or not sid.isdigit():
         return jsonify({"status": "error", "message": "ID غير صحيح"}), 400
 
-    # ✅ Strict: verify student belongs to the subject
     student = students_col.find_one({"student_id": sid})
     if not student:
         return jsonify({"status": "success", "quizzes": []})
@@ -2043,9 +2089,6 @@ def api_quiz_live_stats():
         "total_attempts": completed + in_progress})
 
 
-# ============================================================
-#  🎯 STUDENT QUIZZES (STRICT FILTER — NO FALLBACK)
-# ============================================================
 @app.route('/api/student-quizzes')
 def api_student_quizzes():
     sid = _clean_str(request.args.get('student_id'), 20)
@@ -2062,8 +2105,6 @@ def api_student_quizzes():
     if not student_year:
         return jsonify({"status": "success", "quizzes": []})
 
-    # ✅ ONLY subjects that match student's year + department
-    # No fallbacks — empty list if no matches
     try:
         subs = list(subjects_col.find({
             "year": student_year,
@@ -2076,7 +2117,6 @@ def api_student_quizzes():
     if not sub_ids:
         return jsonify({"status": "success", "quizzes": []})
 
-    # ✅ ONLY quizzes belonging to those subjects
     items = list(quizzes_col.find(
         {"subject_id": {"$in": sub_ids}, "is_open": True},
         {"questions.correct": 0, "_id": 0, "sections_config": 0}
@@ -2113,29 +2153,48 @@ def api_quiz_precheck():
     if not quiz or not quiz.get('is_open'):
         return jsonify({"status": "error", "message": "غير متاح"}), 400
 
-    # ✅ Extra defense: ensure student's year/dept matches the quiz
     student = students_col.find_one({"student_id": sid})
     if not student or not _student_can_access_quiz(student, quiz):
         return jsonify({"status": "error", "message": "غير متاح لمستواك"}), 403
 
+    # ⚡ Auto-unblock transient disconnects
     block = quiz_blocks_col.find_one({"quiz_id": qid, "student_id": sid, "unblocked_at": None})
     if block:
-        return jsonify({"status": "blocked", "message": "محظور"})
+        reason = (block.get('reason') or '').strip()
+        blocked_dt = block.get('blocked_at_dt')
+        if reason in ('انقطاع', 'Session ended from server', 'انقطاع شبكة') and blocked_dt:
+            try:
+                elapsed = (datetime.utcnow() - blocked_dt).total_seconds()
+                if elapsed < 60:
+                    quiz_blocks_col.delete_many({"quiz_id": qid, "student_id": sid})
+                    quiz_attempts_col.delete_many({
+                        "quiz_id": qid, "student_id": sid,
+                        "status": "cancelled"
+                    })
+                    block = None
+            except Exception:
+                pass
+        if block:
+            return jsonify({"status": "blocked", "message": "محظور"})
+
     att = quiz_attempts_col.find_one({"quiz_id": qid, "student_id": sid}, {"_id": 0})
     if att:
         if att.get('status') == 'completed':
             return jsonify({"status": "already_done", "score": att.get('score'), "total": att.get('total_points')})
-        last_hb = att.get('last_heartbeat_dt') or att.get('started_at')
-        if last_hb and (datetime.utcnow() - last_hb).total_seconds() > HEARTBEAT_GRACE_SEC:
-            quiz_attempts_col.update_one({"attempt_id": att['attempt_id']},
-                {"$set": {"status": "cancelled", "cancelled_reason": "خرج من الصفحة", "cancelled_at": _cairo_now()}})
-            quiz_blocks_col.update_one({"quiz_id": qid, "student_id": sid},
-                {"$setOnInsert": {"quiz_id": qid, "student_id": sid,
-                                  "student_name": att.get('student_name', ''),
-                                  "reason": "خرج من الصفحة", "blocked_at": _cairo_now(),
-                                  "unblocked_at": None}}, upsert=True)
-            return jsonify({"status": "blocked", "message": "خرجت — تم الحظر"})
-        return jsonify({"status": "can_resume"})
+        if att.get('status') == 'in_progress':
+            last_hb = att.get('last_heartbeat_dt') or att.get('started_at')
+            if last_hb and (datetime.utcnow() - last_hb).total_seconds() > HEARTBEAT_GRACE_SEC:
+                quiz_attempts_col.update_one({"attempt_id": att['attempt_id']},
+                    {"$set": {"status": "cancelled", "cancelled_reason": "خرج من الصفحة", "cancelled_at": _cairo_now()}})
+                quiz_blocks_col.update_one({"quiz_id": qid, "student_id": sid},
+                    {"$setOnInsert": {"quiz_id": qid, "student_id": sid,
+                                      "student_name": att.get('student_name', ''),
+                                      "reason": "انقطاع", "blocked_at": _cairo_now(),
+                                      "blocked_at_dt": datetime.utcnow(),
+                                      "unblocked_at": None}}, upsert=True)
+                return jsonify({"status": "blocked", "message": "خرجت — تم الحظر"})
+            return jsonify({"status": "can_resume"})
+
     return jsonify({"status": "can_start", "title": quiz.get('title'),
                     "duration": quiz.get('duration'),
                     "questions_count": _compute_expected_count(quiz)})
@@ -2153,7 +2212,6 @@ def api_start_quiz():
     if not quiz or not quiz.get('is_open'):
         return jsonify({"status": "error", "message": "غير متاح"}), 400
 
-    # ✅ Strict: student must belong to quiz's subject year/dept
     student = students_col.find_one({"student_id": sid})
     if not student or not _student_can_access_quiz(student, quiz):
         return jsonify({"status": "error", "message": "غير متاح لمستواك"}), 403
@@ -2172,7 +2230,9 @@ def api_start_quiz():
             quiz_blocks_col.update_one({"quiz_id": qid, "student_id": sid},
                 {"$setOnInsert": {"quiz_id": qid, "student_id": sid,
                                   "student_name": sname, "reason": "انقطاع",
-                                  "blocked_at": _cairo_now(), "unblocked_at": None}}, upsert=True)
+                                  "blocked_at": _cairo_now(),
+                                  "blocked_at_dt": datetime.utcnow(),
+                                  "unblocked_at": None}}, upsert=True)
             return jsonify({"status": "blocked", "message": "تم الحظر"})
         if existing.get('generated_questions'):
             generated_qs = existing['generated_questions']
@@ -2206,27 +2266,100 @@ def api_start_quiz():
         "expires_in": expires_in, "server_now": datetime.utcnow().isoformat() + "Z"})
 
 
+# ============================================================
+#  💓 HEARTBEAT — saves answers + health check
+# ============================================================
 @app.route('/api/quiz-heartbeat', methods=['POST'])
 def api_quiz_heartbeat():
     data = request.get_json(force=True, silent=True) or {}
     att_id = _clean_str(data.get('attempt_id'), 60)
     sid = _clean_str(data.get('student_id'), 20)
+    answers = data.get('answers')
+
+    update_doc = {"$set": {"last_heartbeat_dt": datetime.utcnow()}}
+    if isinstance(answers, dict):
+        update_doc["$set"]["answers"] = answers
+
     r = quiz_attempts_col.update_one(
         {"attempt_id": att_id, "student_id": sid, "status": "in_progress"},
-        {"$set": {"last_heartbeat_dt": datetime.utcnow()}})
-    return jsonify({"status": "ok" if r.matched_count else "expired"})
+        update_doc)
+
+    if r.matched_count:
+        return jsonify({"status": "ok"})
+
+    # Already finished?
+    done = quiz_attempts_col.find_one(
+        {"attempt_id": att_id, "student_id": sid},
+        {"_id": 0, "status": 1, "score": 1, "total_points": 1})
+    if done and done.get('status') == 'completed':
+        return jsonify({"status": "completed",
+                        "score": done.get('score'),
+                        "total": done.get('total_points')})
+    return jsonify({"status": "expired"})
 
 
+# ============================================================
+#  ⏱️ TIME SYNC — auto-grade on expiry, no more "0 score + block"
+# ============================================================
+@app.route('/api/quiz-time-sync')
+def api_quiz_time_sync():
+    att_id = _clean_str(request.args.get('attempt_id'), 60)
+    sid = _clean_str(request.args.get('student_id'), 20)
+
+    attempt = quiz_attempts_col.find_one({"attempt_id": att_id, "student_id": sid})
+    if not attempt:
+        return jsonify({"status": "not_active"})
+
+    if attempt.get('status') == 'completed':
+        return jsonify({"status": "expired", "time_left": 0,
+                        "score": attempt.get('score'),
+                        "total": attempt.get('total_points'),
+                        "auto_submitted": attempt.get('auto_submitted', False)})
+
+    if attempt.get('status') != 'in_progress':
+        return jsonify({"status": "not_active"})
+
+    now = datetime.utcnow()
+    time_left = (attempt['expires_at'] - now).total_seconds()
+
+    if time_left <= 0:
+        quiz = quizzes_col.find_one({"id": attempt['quiz_id']})
+        if quiz:
+            _auto_grade_attempt(attempt, quiz)
+            updated = quiz_attempts_col.find_one({"attempt_id": att_id})
+            return jsonify({"status": "expired", "time_left": 0,
+                            "score": updated.get('score'),
+                            "total": updated.get('total_points'),
+                            "auto_submitted": True})
+        return jsonify({"status": "expired", "time_left": 0})
+
+    return jsonify({"status": "active", "time_left": int(time_left),
+                    "server_now": now.isoformat() + "Z"})
+
+
+# ============================================================
+#  🚨 VIOLATION — respects expiry (no more false "cheat" after time up)
+# ============================================================
 @app.route('/api/quiz-violation', methods=['POST'])
 def api_quiz_violation():
     data = request.get_json(force=True, silent=True) or {}
     att_id = _clean_str(data.get('attempt_id'), 60)
     sid = _clean_str(data.get('student_id'), 20)
     reason = _clean_str(data.get('reason', 'unknown'), 200)
+
     attempt = quiz_attempts_col.find_one(
         {"attempt_id": att_id, "student_id": sid, "status": "in_progress"})
     if not attempt:
         return jsonify({"status": "ignored"})
+
+    # ✅ Time is up → auto-grade, DO NOT block
+    if datetime.utcnow() >= attempt['expires_at']:
+        quiz = quizzes_col.find_one({"id": attempt['quiz_id']})
+        if quiz:
+            _auto_grade_attempt(attempt, quiz)
+        return jsonify({"status": "expired"})
+
+    # Real violation → block
     quiz_attempts_col.update_one({"attempt_id": att_id},
         {"$set": {"status": "cancelled", "cancelled_reason": reason, "cancelled_at": _cairo_now()},
          "$inc": {"violations": 1}})
@@ -2234,35 +2367,14 @@ def api_quiz_violation():
         {"$setOnInsert": {"quiz_id": attempt['quiz_id'], "student_id": sid,
                           "student_name": attempt.get('student_name', ''),
                           "reason": reason, "blocked_at": _cairo_now(),
+                          "blocked_at_dt": datetime.utcnow(),
                           "unblocked_at": None}}, upsert=True)
     return jsonify({"status": "blocked"})
 
 
-@app.route('/api/quiz-time-sync')
-def api_quiz_time_sync():
-    att_id = _clean_str(request.args.get('attempt_id'), 60)
-    sid = _clean_str(request.args.get('student_id'), 20)
-    attempt = quiz_attempts_col.find_one(
-        {"attempt_id": att_id, "student_id": sid, "status": "in_progress"})
-    if not attempt:
-        return jsonify({"status": "not_active"})
-    now = datetime.utcnow()
-    time_left = max(0, (attempt['expires_at'] - now).total_seconds())
-    if time_left <= 0:
-        quiz = quizzes_col.find_one({"id": attempt['quiz_id']})
-        if quiz:
-            quiz_attempts_col.update_one({"attempt_id": att_id, "status": "in_progress"},
-                {"$set": {"status": "completed", "score": 0,
-                          "total_points": quiz.get('total_points', 0),
-                          "answers": attempt.get('answers', {}),
-                          "auto_submitted": True,
-                          "submitted_at": _cairo_now(),
-                          "submitted_at_dt": datetime.utcnow()}})
-        return jsonify({"status": "expired", "time_left": 0})
-    return jsonify({"status": "active", "time_left": int(time_left),
-                    "server_now": now.isoformat() + "Z"})
-
-
+# ============================================================
+#  ✅ SUBMIT — accepts late submission + returns existing result
+# ============================================================
 @app.route('/api/submit-quiz', methods=['POST'])
 def api_submit_quiz():
     data = request.get_json(force=True, silent=True) or {}
@@ -2271,19 +2383,43 @@ def api_submit_quiz():
     answers = data.get('answers') or {}
     if not isinstance(answers, dict):
         return jsonify({"status": "error", "message": "إجابات غير صالحة"}), 400
+
     attempt = quiz_attempts_col.find_one({"attempt_id": att_id, "student_id": sid})
     if not attempt:
         return jsonify({"status": "error", "message": "غير موجودة"}), 404
+
+    # ⚡ Already completed (from time-sync or prior submit) — return result
+    if attempt.get('status') == 'completed':
+        return jsonify({"status": "success",
+                        "score": attempt.get('score'),
+                        "total": attempt.get('total_points'),
+                        "details": attempt.get('details', []),
+                        "auto_submitted": attempt.get('auto_submitted', False)})
+
     if attempt.get('status') != 'in_progress':
         return jsonify({"status": "error", "message": "منتهية"}), 400
-    if datetime.utcnow() > attempt['expires_at']:
-        quiz_attempts_col.update_one({"attempt_id": att_id, "status": "in_progress"},
-            {"$set": {"status": "cancelled", "cancelled_reason": "انتهى الوقت",
-                      "cancelled_at": _cairo_now()}})
-        return jsonify({"status": "error", "message": "انتهى وقت الامتحان"}), 400
+
     quiz = quizzes_col.find_one({"id": attempt['quiz_id']})
     if not quiz:
         return jsonify({"status": "error", "message": "الكويز محذوف"}), 404
+
+    # Save latest answers first (so auto-grade uses them if needed)
+    quiz_attempts_col.update_one(
+        {"attempt_id": att_id, "status": "in_progress"},
+        {"$set": {"answers": answers}})
+
+    # If late, still accept — mark auto_submitted
+    if datetime.utcnow() > attempt['expires_at']:
+        attempt = quiz_attempts_col.find_one({"attempt_id": att_id})
+        _auto_grade_attempt(attempt, quiz)
+        updated = quiz_attempts_col.find_one({"attempt_id": att_id})
+        return jsonify({"status": "success",
+                        "score": updated.get('score'),
+                        "total": updated.get('total_points'),
+                        "details": updated.get('details', []),
+                        "auto_submitted": True})
+
+    # Normal grading
     attempt_questions = attempt.get('generated_questions') or quiz.get('questions', [])
     score = 0.0; total = 0.0; details = []
     for q in attempt_questions:
@@ -2294,6 +2430,7 @@ def api_submit_quiz():
             score += float(q.get('points', 1))
         details.append({"qid": q['id'], "text": q['text'], "user": ans,
                         "correct": q['correct'], "ok": ok, "points": q.get('points', 1)})
+
     r = quiz_attempts_col.find_one_and_update(
         {"attempt_id": att_id, "status": "in_progress"},
         {"$set": {"status": "completed", "score": round(score, 2),

@@ -1,5 +1,5 @@
 /* ==========================================================
-   QUIZ MANAGEMENT · Sheets (Sections) View + QR Pairing
+   QUIZ MANAGEMENT · Sheets View + QR Pairing + Retake + Excel
    ========================================================== */
 
 let allQuizzes = [];
@@ -200,7 +200,7 @@ async function openQuizDetails(quizId) {
             avg = (totalScores / completed.length).toFixed(1);
         }
 
-        /* ---- Students List ---- */
+        /* ---- Students List (with retake button on every row) ---- */
         let studentsHtml = '';
         if (attempts.length === 0) {
             studentsHtml = `<div class="qz-empty"><span class="qz-empty-icon">📭</span>لا يوجد طلاب دخلوا الامتحان بعد</div>`;
@@ -208,6 +208,7 @@ async function openQuizDetails(quizId) {
             studentsHtml = attempts.map(a => {
                 const st = a.status;
                 const avatarText = (a.student_name || '?').trim().charAt(0).toUpperCase();
+                const safeName = esc(a.student_name || '').replace(/'/g, "\\'");
                 let scoreHtml = '';
                 if (st === 'completed') {
                     const score = parseFloat(a.score) || 0;
@@ -236,17 +237,21 @@ async function openQuizDetails(quizId) {
                         <div class="qz-s-id">${a.student_id}</div>
                     </div>
                     ${scoreHtml}
+                    <button class="qz-retake-btn" onclick="event.stopPropagation(); retakeStudent('${quiz.id}','${a.student_id}','${safeName}')" title="إعادة الامتحان للطالب">
+                        <i class="fas fa-redo"></i>
+                    </button>
                 </div>`;
             }).join('');
         }
 
-        /* ---- Blocked List ---- */
+        /* ---- Blocked List (retake = unblock + reset) ---- */
         let blockedHtml = '';
         if (blocks.length === 0) {
             blockedHtml = `<div class="qz-empty"><span class="qz-empty-icon">✅</span>لا يوجد محظورين — كل الطلاب بخير</div>`;
         } else {
             blockedHtml = blocks.map(b => {
                 const avatarText = (b.student_name || '?').trim().charAt(0).toUpperCase();
+                const safeName = esc(b.student_name || '').replace(/'/g, "\\'");
                 return `<div class="qz-blocked-row">
                     <div class="qz-s-avatar">${esc(avatarText)}</div>
                     <div class="qz-s-info">
@@ -254,14 +259,14 @@ async function openQuizDetails(quizId) {
                         <div class="qz-s-id">${b.student_id}</div>
                         <div class="qz-blocked-reason">🚫 ${esc(b.reason || '')}</div>
                     </div>
-                    <button class="qz-unblock-btn" onclick="unblockStudent('${quiz.id}','${b.student_id}')">
-                        🔓 فك الحظر
+                    <button class="qz-retake-btn" onclick="event.stopPropagation(); retakeStudent('${quiz.id}','${b.student_id}','${safeName}')">
+                        🔄 إعادة
                     </button>
                 </div>`;
             }).join('');
         }
 
-        /* ---- Questions Tab: Show SHEETS (sections) as cards ---- */
+        /* ---- Questions Tab: Sheets list ---- */
         let questionsHtml = '';
         if (sectionsConfig.length === 0) {
             questionsHtml = `
@@ -342,7 +347,7 @@ async function openQuizDetails(quizId) {
                 .qz-view.active { display:block;animation:qzFadeIn 0.3s ease; }
                 @keyframes qzFadeIn { from{opacity:0;transform:translateY(5px);} to{opacity:1;transform:translateY(0);} }
                 .qz-student-row { background:rgba(0,0,0,0.28);border:1px solid rgba(255,255,255,0.06);
-                    border-radius:12px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;transition:all .2s; }
+                    border-radius:12px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;transition:all .2s; }
                 .qz-student-row:hover { background:rgba(0,0,0,0.45);border-color:rgba(255,179,0,0.2); }
                 .qz-student-row.completed { border-right:3px solid #10B981; }
                 .qz-student-row.cancelled { border-right:3px solid #EF4444; }
@@ -363,6 +368,37 @@ async function openQuizDetails(quizId) {
                 .qz-s-score-val.cheat { color:#EF4444;font-size:16px; }
                 .qz-s-score-val.pending { color:#6b7280;font-size:14px; }
                 .qz-s-score-sub { font-size:9.5px;color:#8b93a7;font-weight:700;margin-top:2px; }
+
+                /* 🔄 Retake button */
+                .qz-retake-btn {
+                    padding:7px 12px;
+                    border-radius:9px;
+                    border:1px solid rgba(255,179,0,0.5);
+                    background:linear-gradient(135deg,rgba(255,179,0,0.18),rgba(255,179,0,0.06));
+                    color:#FFD54F;
+                    font-size:11px;
+                    font-weight:900;
+                    cursor:pointer;
+                    font-family:'Cairo',sans-serif;
+                    flex-shrink:0;
+                    transition:all .22s ease;
+                    white-space:nowrap;
+                    display:inline-flex;
+                    align-items:center;
+                    justify-content:center;
+                    gap:4px;
+                    min-width:32px;
+                }
+                .qz-retake-btn i { font-size:11px; }
+                .qz-retake-btn:hover {
+                    background:linear-gradient(135deg,#FFB300,#FFD54F);
+                    color:#0a0e17;
+                    transform:translateY(-2px) scale(1.05);
+                    box-shadow:0 6px 18px rgba(255,179,0,0.45);
+                    border-color:#FFB300;
+                }
+                .qz-retake-btn:active { transform:translateY(0) scale(0.98); }
+
                 .qz-empty { text-align:center;padding:50px 20px;color:#8b93a7;font-size:13px; }
                 .qz-empty-icon { font-size:48px;opacity:0.3;margin-bottom:12px;display:block; }
                 .qz-blocked-row { background:linear-gradient(135deg,rgba(239,68,68,0.1),rgba(239,68,68,0.03));
@@ -370,12 +406,8 @@ async function openQuizDetails(quizId) {
                     display:flex;align-items:center;gap:12px; }
                 .qz-blocked-row .qz-s-avatar { background:linear-gradient(135deg,#EF4444,#DC2626); }
                 .qz-blocked-reason { font-size:10.5px;color:#f87171;margin-top:3px; }
-                .qz-unblock-btn { padding:6px 14px;border-radius:8px;border:1px solid rgba(16,185,129,0.4);
-                    background:rgba(16,185,129,0.15);color:#6EE7B7;font-size:11px;font-weight:900;
-                    cursor:pointer;font-family:'Cairo',sans-serif;flex-shrink:0;transition:all .2s; }
-                .qz-unblock-btn:hover { background:rgba(16,185,129,0.3);transform:translateY(-1px); }
 
-                /* Questions Tab (Sections Grid) */
+                /* Questions tab */
                 .qz-questions-toolbar {
                     display:flex;gap:8px;margin-bottom:14px;
                     padding:10px;background:rgba(6,182,212,0.05);
@@ -544,7 +576,7 @@ window.qzNavSwitch = function(quizId, viewName, btn) {
 };
 
 /* ==========================================================
-   🧭 NAVIGATION HELPERS (between modal views)
+   🧭 NAVIGATION HELPERS
    ========================================================== */
 async function reopenQuizQuestionsTab(quizId) {
     Swal.close();
@@ -562,7 +594,102 @@ async function reopenQuizDetails(quizId) {
 }
 
 /* ==========================================================
-   📁 SECTION (Sheet) VIEW — questions inside a section
+   🔄 RETAKE STUDENT — reset attempt + unblock (if any)
+   ========================================================== */
+async function retakeStudent(quizId, studentId, studentName) {
+    Swal.close();
+    await new Promise(r => setTimeout(r, 100));
+
+    const c = await Swal.fire({
+        icon: 'question',
+        title: '🔄 إعادة الامتحان؟',
+        html: `
+            <div style="text-align:center;font-family:'Cairo',sans-serif;line-height:1.8;">
+                <p style="color:#fff;margin-bottom:10px;">
+                    هيتم حذف محاولة الطالب السابقة نهائياً
+                </p>
+                <p style="color:#FFD54F;font-weight:900;font-size:16px;margin-bottom:14px;
+                    padding:8px 14px;background:rgba(255,179,0,0.1);
+                    border:1px solid rgba(255,179,0,0.3);border-radius:10px;
+                    display:inline-block;">
+                    ${esc(studentName || studentId)}
+                </p>
+                <div style="padding:10px 14px;background:rgba(6,182,212,0.08);
+                    border:1px solid rgba(6,182,212,0.3);border-radius:10px;
+                    font-size:12px;color:#22d3ee;text-align:right;margin-top:8px;">
+                    <i class="fas fa-info-circle"></i>
+                    الطالب هيرجع يقدر يدخل الامتحان من الأول
+                    <br>لو كان محظور → هيتفك الحظر
+                    <br>لو كان جوه الامتحان → هيتقفل امتحانه الحالي
+                </div>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: '<i class="fas fa-redo"></i> نعم، إعادة',
+        cancelButtonText: 'إلغاء',
+        confirmButtonColor: '#FFB300',
+        cancelButtonColor: '#374151',
+        background: '#1a2136', color: '#fff',
+        reverseButtons: true
+    });
+
+    if (!c.isConfirmed) return;
+
+    Swal.fire({
+        title: 'جاري الإعادة...',
+        background: '#1a2136', color: '#fff',
+        didOpen: () => Swal.showLoading(),
+        allowOutsideClick: false
+    });
+
+    try {
+        const r = await fetch('/api/admin-quiz-retake', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                quiz_id: quizId,
+                student_id: studentId
+            })
+        });
+        const d = await r.json();
+
+        if (d.status === 'success') {
+            Swal.fire({
+                icon: 'success',
+                title: 'تمت الإعادة',
+                html: `<p style="color:#6EE7B7;font-weight:800;">${esc(studentName || studentId)}</p>
+                       <p style="color:#8b93a7;font-size:12px;margin-top:6px;">
+                           الطالب يقدر يدخل الامتحان من جديد
+                       </p>`,
+                timer: 1400,
+                showConfirmButton: false,
+                background: '#1a2136', color: '#fff'
+            });
+            setTimeout(() => openQuizDetails(quizId), 1500);
+            loadQuizzes();
+        } else {
+            Swal.fire({
+                icon: 'error',
+                text: d.message || 'فشلت الإعادة',
+                background: '#1a2136', color: '#fff'
+            });
+        }
+    } catch(e) {
+        Swal.fire({
+            icon: 'error',
+            text: 'تعذر الاتصال بالسيرفر',
+            background: '#1a2136', color: '#fff'
+        });
+    }
+}
+
+/* 🔁 Backward compatibility */
+async function unblockStudent(quizId, studentId) {
+    return retakeStudent(quizId, studentId, studentId);
+}
+
+/* ==========================================================
+   📁 SECTION VIEW — questions inside a sheet
    ========================================================== */
 window.qzOpenSection = async function(quizId, sectionIndex) {
     Swal.close();
@@ -769,7 +896,6 @@ window.qzOpenSection = async function(quizId, sectionIndex) {
         cancelButtonColor: '#374151',
         padding: '18px 22px',
         willClose: () => {
-            // When user closes without clicking "back", reload list silently
             setTimeout(() => loadQuizzes(), 200);
         }
     });
@@ -854,7 +980,6 @@ window.qzEditSectionMeta = async function(quizId, sectionIndex) {
 
     if (!result.isConfirmed) return;
 
-    // Update in place
     const newSections = sections.map((s, i) => {
         if (i === sectionIndex) {
             return {
@@ -874,7 +999,7 @@ window.qzEditSectionMeta = async function(quizId, sectionIndex) {
 };
 
 /* ==========================================================
-   🗑️ DELETE SECTION (whole sheet)
+   🗑️ DELETE SECTION
    ========================================================== */
 window.qzDeleteSectionConfirm = async function(quizId, sectionIndex, sectionName) {
     Swal.close();
@@ -1044,7 +1169,6 @@ window.qzAddQuestionToSection = async function(quizId, sectionIndex) {
 
     if (!result.isConfirmed) return;
 
-    // Add to section
     const updatedSection = {
         ...section,
         all_questions: [...(section.all_questions || []), {
@@ -1064,16 +1188,13 @@ window.qzAddQuestionToSection = async function(quizId, sectionIndex) {
 };
 
 /* ==========================================================
-   ✏️ EDIT QUESTION inside section
+   ✏️ EDIT / DELETE QUESTION inside section
    ========================================================== */
 window.qzEditQuestionInSection = async function(quizId, sectionIndex, qIdx) {
     const qid = `s${sectionIndex}_q${qIdx}`;
     await editQuizQuestion(quizId, qid, () => qzOpenSection(quizId, sectionIndex));
 };
 
-/* ==========================================================
-   🗑️ DELETE QUESTION inside section
-   ========================================================== */
 window.qzDeleteQuestionInSection = async function(quizId, sectionIndex, qIdx) {
     Swal.close();
     await new Promise(r => setTimeout(r, 120));
@@ -1111,7 +1232,6 @@ window.qzDeleteQuestionInSection = async function(quizId, sectionIndex, qIdx) {
 
     let newSections;
     if (newQuestions.length === 0) {
-        // Remove empty section
         newSections = sections.filter((_, i) => i !== sectionIndex);
         if (newSections.length === 0) {
             return Swal.fire({
@@ -1139,10 +1259,9 @@ window.qzDeleteQuestionInSection = async function(quizId, sectionIndex, qIdx) {
 };
 
 /* ==========================================================
-   💾 SAVE SECTIONS (with optional callback)
+   💾 SAVE SECTIONS
    ========================================================== */
 async function saveQuizSections(quizId, quiz, sections, onSuccess) {
-    // Build sectionsConfig, clamping num_to_pick to valid range
     const sectionsConfig = sections.map(s => {
         const totalQ = (s.all_questions || []).length;
         let pick = s.num_to_pick || totalQ;
@@ -1197,7 +1316,7 @@ async function saveQuizSections(quizId, quiz, sections, onSuccess) {
 }
 
 /* ==========================================================
-   🖥️ QUIZ SCREEN PAIRING (with QR + Manual)
+   🖥️ QUIZ SCREEN PAIRING
    ========================================================== */
 async function linkQuizScreen(quizId, isLinked) {
     if (isLinked) {
@@ -1718,30 +1837,6 @@ async function editQuizQuestion(quizId, qid, onSuccess) {
 /* ==========================================================
    ACTIONS
    ========================================================== */
-async function unblockStudent(quizId, studentId) {
-    Swal.close();
-    const c = await Swal.fire({
-        icon: 'question', title: 'فك الحظر؟',
-        html: 'الطالب هيقدر يبدأ من جديد ومحاولته القديمة هتتحذف',
-        showCancelButton: true,
-        confirmButtonText: 'فك الحظر', cancelButtonText: 'إلغاء',
-        confirmButtonColor: '#10B981', cancelButtonColor: '#374151',
-        background: '#1a2136', color: '#fff'
-    });
-    if (!c.isConfirmed) return;
-    const r = await fetch('/api/admin-quiz-unblock', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({quiz_id: quizId, student_id: studentId})
-    });
-    const d = await r.json();
-    if (d.status === 'success') {
-        Swal.fire({icon:'success', title:'تم فك الحظر', timer:1200, showConfirmButton:false,
-            background: '#1a2136', color: '#fff'});
-        setTimeout(() => openQuizDetails(quizId), 1300);
-        loadQuizzes();
-    } else Swal.fire({icon:'error', text: d.message, background: '#1a2136', color: '#fff'});
-}
-
 async function deleteQuiz(id) {
     Swal.close();
     const c = await Swal.fire({
@@ -2189,7 +2284,6 @@ async function addQuizQuestionsWord(quizId) {
 
     if (!result.isConfirmed) return;
 
-    // Merge with existing sections
     const existingSections = quiz.sections_config || [];
     const newSections = result.value.newSections;
 
@@ -2205,7 +2299,6 @@ async function addQuizQuestionsWord(quizId) {
         const existing = combined.find(s => s.name === newSec.targetSection);
         if (existing) {
             existing.all_questions.push(...newSec.questions);
-            // Bump num_to_pick to a reasonable value if needed
             if (existing.num_to_pick < newSec.num_to_pick) {
                 existing.num_to_pick = Math.min(
                     existing.num_to_pick + newSec.num_to_pick,

@@ -86,11 +86,13 @@ p { color:#8b93a7;line-height:1.8;margin-bottom:18px;font-size:14.5px;font-weigh
 
 <div id="server-warning">⚠️ Please wait — Verifying with server...</div>
 
+<!-- ===== LOADING ===== -->
 <div id="loading-screen" class="screen active">
   <div class="card"><div class="icon"><i class="fas fa-circle-notch fa-spin"></i></div>
     <h1>Loading</h1><p>Verifying your data...</p></div>
 </div>
 
+<!-- ===== BLOCKED ===== -->
 <div id="blocked-screen" class="screen">
   <div class="card"><div class="icon red"><i class="fas fa-ban"></i></div>
     <h1>Access Blocked</h1>
@@ -102,12 +104,14 @@ p { color:#8b93a7;line-height:1.8;margin-bottom:18px;font-size:14.5px;font-weigh
     <button class="btn" onclick="location.href='/'">Back to Home</button></div>
 </div>
 
+<!-- ===== ALREADY DONE ===== -->
 <div id="done-screen" class="screen">
   <div class="card"><div class="icon green"><i class="fas fa-check-circle"></i></div>
     <h1>Already Submitted</h1><p id="done-msg"></p>
     <button class="btn" onclick="location.href='/'">Back to Home</button></div>
 </div>
 
+<!-- ===== READY ===== -->
 <div id="ready-screen" class="screen">
   <div class="card">
     <div class="icon"><i class="fas fa-shield-halved"></i></div>
@@ -115,12 +119,16 @@ p { color:#8b93a7;line-height:1.8;margin-bottom:18px;font-size:14.5px;font-weigh
     <p id="ready-sub">...</p>
     <div class="warn">
       <div class="warn-icon">🔒</div>
-      <div class="warn-text"><strong style="color:#fff;">Do not exit fullscreen mode.</strong><br>Any attempt to leave = instant cheat + block</div>
+      <div class="warn-text">
+        <strong style="color:#fff;">Do not exit fullscreen mode.</strong><br>
+        Any attempt to leave will be treated as cheating and the exam will be cancelled.
+      </div>
     </div>
     <button id="start-btn" class="btn"><i class="fas fa-play" style="margin-right:8px;"></i> Start Exam</button>
   </div>
 </div>
 
+<!-- ===== EXAM ===== -->
 <div id="exam-screen" class="screen">
   <div class="exam-header">
     <div class="exam-title" id="exam-title">...</div>
@@ -134,6 +142,7 @@ p { color:#8b93a7;line-height:1.8;margin-bottom:18px;font-size:14.5px;font-weigh
   </div>
 </div>
 
+<!-- ===== RESULT ===== -->
 <div id="result-screen" class="screen">
   <div class="card">
     <div class="icon green"><i class="fas fa-trophy"></i></div>
@@ -163,6 +172,8 @@ let answers = {};
 let isSubmitted = false;
 let isInExam = false;
 let lastViolation = null;
+let fullscreenEnforced = false;      // ⬅️ flag: fullscreen is required
+let ignoreFullscreenChange = false;  // ⬅️ suppress programmatic exit events
 
 const $ = id => document.getElementById(id);
 const showScreen = name => {
@@ -171,7 +182,43 @@ const showScreen = name => {
 };
 
 /* ============================================================
-   VERIFIED FLOW (via code) - runs first
+   🔒 FULLSCREEN HELPERS
+   ============================================================ */
+function isFullscreen() {
+  return !!(document.fullscreenElement ||
+            document.webkitFullscreenElement ||
+            document.mozFullScreenElement ||
+            document.msFullscreenElement);
+}
+
+async function requestFullscreen() {
+  const el = document.documentElement;
+  try {
+    if (el.requestFullscreen) await el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    else if (el.mozRequestFullScreen) el.mozRequestFullScreen();
+    else if (el.msRequestFullscreen) el.msRequestFullscreen();
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function exitFullscreenIfAny() {
+  if (!isFullscreen()) return;
+  ignoreFullscreenChange = true;   // suppress our own programmatic exit
+  try {
+    if (document.exitFullscreen) await document.exitFullscreen();
+    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    else if (document.mozCancelFullScreen) document.mozCancelFullScreen();
+    else if (document.msExitFullscreen) document.msExitFullscreen();
+  } catch (e) {}
+  // release the flag shortly after
+  setTimeout(() => { ignoreFullscreenChange = false; }, 500);
+}
+
+/* ============================================================
+   VERIFIED FLOW (via code) — runs first
    ============================================================ */
 if (IS_VERIFIED) {
     (function startVerified() {
@@ -204,13 +251,19 @@ if (IS_VERIFIED) {
         serverTimeLeft = data.expires_in;
         localSyncAt = Date.now();
 
-        renderExam();
-        showScreen('exam-screen');
-        isInExam = true;
-        startTimer();
-        startHeartbeat();
-        startTimeSync();
-        attachAntiCheat();
+        // Request fullscreen first (must be before UI)
+        (async () => {
+            await requestFullscreen();
+            fullscreenEnforced = true;
+
+            renderExam();
+            showScreen('exam-screen');
+            isInExam = true;
+            startTimer();
+            startHeartbeat();
+            startTimeSync();
+            attachAntiCheat();
+        })();
     })();
 } else {
     /* ============================================================
@@ -245,16 +298,22 @@ if (_startBtn) {
     _startBtn.addEventListener('click', async () => {
         _startBtn.disabled = true;
         _startBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Starting...';
-        try {
-            const el = document.documentElement;
-            if (el.requestFullscreen) await el.requestFullscreen();
-            else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
-        } catch(e) {
-            Swal.fire({icon:'warning', title:'Fullscreen required'});
+
+        // ⚡ MUST enter fullscreen — enforced
+        const fsOk = await requestFullscreen();
+        if (!fsOk) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Fullscreen required',
+                text: 'Please allow fullscreen to start the exam.',
+                allowOutsideClick: false
+            });
             _startBtn.disabled = false;
             _startBtn.innerHTML = '<i class="fas fa-play"></i> Start Exam';
             return;
         }
+        fullscreenEnforced = true;
+
         try {
             const r = await fetch('/api/start-quiz', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -302,7 +361,22 @@ function renderExam() {
     updateProgress();
 }
 
-function onAnswer(qid, val) { answers[qid] = val; updateProgress(); }
+function onAnswer(qid, val) {
+    answers[qid] = val;
+    updateProgress();
+    // ✅ Immediate save — every answer is sent to server right away
+    if (attemptId && !isSubmitted) {
+        fetch('/api/quiz-heartbeat', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({
+                attempt_id: attemptId,
+                student_id: student.student_id,
+                answers: answers
+            })
+        }).catch(()=>{});
+    }
+}
 
 function updateProgress() {
     const total = quiz.questions.length, answered = Object.keys(answers).length;
@@ -329,18 +403,51 @@ function tickTimer() {
     if (left <= 60) timerEl.classList.add('critical');
     else if (left <= 120) timerEl.classList.add('warn');
     else timerEl.classList.remove('warn', 'critical');
-    if (left <= 0 && !isSubmitted) { clearInterval(timerInterval); autoSubmitTimeUp(); }
+    if (left <= 0 && !isSubmitted) {
+        // ⚡ INSTANT — no Swal, no waiting
+        clearInterval(timerInterval);
+        autoSubmitTimeUp();
+    }
 }
 
 function startHeartbeat() {
     if (heartbeatInterval) clearInterval(heartbeatInterval);
     const beat = () => {
         if (!attemptId || isSubmitted) return;
-        fetch('/api/quiz-heartbeat', {method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({attempt_id: attemptId, student_id: student.student_id})}).catch(()=>{});
+        fetch('/api/quiz-heartbeat', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({
+                attempt_id: attemptId,
+                student_id: student.student_id,
+                answers: answers  // ✅ Answers always saved with heartbeat
+            })
+        })
+        .then(r => r.json())
+        .then(d => {
+            if (d.status === 'completed' || d.status === 'expired') {
+                // Server already finished it — stop cleanly
+                if (!isSubmitted) {
+                    isSubmitted = true;
+                    isInExam = false;
+                    clearInterval(timerInterval);
+                    clearInterval(heartbeatInterval);
+                    clearInterval(syncInterval);
+                    if (d.score !== undefined && d.score !== null) {
+                        $('result-score').textContent = d.score;
+                        $('result-total').textContent = d.total || 0;
+                        const pct = (d.total > 0 ? (d.score / d.total * 100) : 0);
+                        $('result-msg').textContent = pct >= 50 ? 'Congratulations! 👏' : 'Better luck next time 💪';
+                        showScreen('result-screen');
+                        exitFullscreenIfAny();
+                    }
+                }
+            }
+        })
+        .catch(()=>{});
     };
     beat();
-    heartbeatInterval = setInterval(beat, 3000);
+    heartbeatInterval = setInterval(beat, 2000);  // ✅ Every 2s
 }
 
 function startTimeSync() {
@@ -351,69 +458,129 @@ function startTimeSync() {
             const r = await fetch(`/api/quiz-time-sync?attempt_id=${encodeURIComponent(attemptId)}&student_id=${encodeURIComponent(student.student_id)}`);
             const d = await r.json();
             if (d.status === 'expired') {
-                if (!isSubmitted) { clearInterval(timerInterval); $('exam-timer').textContent = '00:00'; autoSubmitTimeUp(); }
+                if (!isSubmitted) {
+                    clearInterval(timerInterval);
+                    $('exam-timer').textContent = '00:00';
+                    if (d.score !== undefined && d.score !== null) {
+                        isSubmitted = true;
+                        isInExam = false;
+                        clearInterval(heartbeatInterval);
+                        clearInterval(syncInterval);
+                        $('result-score').textContent = d.score;
+                        $('result-total').textContent = d.total || 0;
+                        const pct = (d.total > 0 ? (d.score / d.total * 100) : 0);
+                        $('result-msg').textContent = pct >= 50 ? 'Congratulations! 👏' : 'Better luck next time 💪';
+                        showScreen('result-screen');
+                        exitFullscreenIfAny();
+                    } else {
+                        autoSubmitTimeUp();
+                    }
+                }
             } else if (d.status === 'active') {
                 serverTimeLeft = d.time_left;
                 localSyncAt = Date.now();
             } else if (d.status === 'not_active') {
-                if (!isSubmitted) triggerViolation('Session ended from server');
+                if (!isSubmitted) {
+                    isSubmitted = true;
+                    isInExam = false;
+                    clearInterval(timerInterval);
+                    clearInterval(heartbeatInterval);
+                    clearInterval(syncInterval);
+                }
             }
         } catch(e) {}
-    }, 5000);
+    }, 3000);  // ✅ Every 3s
 }
 
+/* ============================================================
+   ANTI-CHEAT — includes FULLSCREEN enforcement
+   ============================================================ */
 function attachAntiCheat() {
     document.addEventListener('visibilitychange', onVisibilityChange);
     window.addEventListener('blur', onBlur);
     document.addEventListener('fullscreenchange', onFsChange);
     document.addEventListener('webkitfullscreenchange', onFsChange);
+    document.addEventListener('mozfullscreenchange', onFsChange);
+    document.addEventListener('MSFullscreenChange', onFsChange);
     window.addEventListener('beforeunload', onBeforeUnload);
     window.addEventListener('pagehide', onPageHide);
+
+    // Extend fullscreen change event catching
+    document.addEventListener('keydown', (e) => {
+        // Block F11 / Escape in some browsers (best effort)
+        if (e.key === 'Escape' && isInExam && !isSubmitted && getServerTimeLeft() > 0) {
+            // Browsers may still exit; the fullscreenchange handler will catch it
+        }
+    });
 }
 
 function onVisibilityChange() {
     if (!isInExam || isSubmitted) return;
+    if (getServerTimeLeft() <= 0) return;
     if (document.hidden) triggerViolation('Left the tab / app');
 }
 
 function onBlur() {
     if (!isInExam || isSubmitted) return;
     setTimeout(() => {
-        if (!document.hasFocus() && isInExam && !isSubmitted) triggerViolation('Lost window focus');
+        if (!document.hasFocus() && isInExam && !isSubmitted && getServerTimeLeft() > 0) {
+            triggerViolation('Lost window focus');
+        }
     }, 200);
 }
 
+/* ============================================================
+   🔒 FULLSCREEN ENFORCEMENT
+   - If the student exits fullscreen during the exam → CHEAT
+   - Auto-ignored when: submitted, time up, or programmatic exit
+   ============================================================ */
 function onFsChange() {
     if (!isInExam || isSubmitted) return;
-    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+    if (!fullscreenEnforced) return;
+    if (ignoreFullscreenChange) return;
+    if (getServerTimeLeft() <= 0) return;
+
+    // If we are no longer in fullscreen → violation
+    if (!isFullscreen()) {
         triggerViolation('Exited fullscreen');
     }
 }
 
 function onBeforeUnload(e) {
     if (isInExam && !isSubmitted) {
-        e.preventDefault();
-        e.returnValue = '';
-        try {
-            navigator.sendBeacon('/api/quiz-violation',
-                new Blob([JSON.stringify({attempt_id: attemptId, student_id: student.student_id,
-                    reason: 'Closed browser / left site'})], {type: 'application/json'}));
-        } catch(_) {}
+        if (getServerTimeLeft() > 0) {
+            e.preventDefault();
+            e.returnValue = '';
+            try {
+                navigator.sendBeacon('/api/quiz-violation',
+                    new Blob([JSON.stringify({
+                        attempt_id: attemptId,
+                        student_id: student.student_id,
+                        reason: 'Closed browser / left site'
+                    })], {type: 'application/json'}));
+            } catch(_) {}
+        }
     }
 }
 
 function onPageHide() {
     if (isInExam && !isSubmitted) {
-        try {
-            navigator.sendBeacon('/api/quiz-violation',
-                new Blob([JSON.stringify({attempt_id: attemptId, student_id: student.student_id,
-                    reason: 'Closed browser / left site'})], {type: 'application/json'}));
-        } catch(_) {}
+        if (getServerTimeLeft() > 0) {
+            try {
+                navigator.sendBeacon('/api/quiz-violation',
+                    new Blob([JSON.stringify({
+                        attempt_id: attemptId,
+                        student_id: student.student_id,
+                        reason: 'Closed browser / left site'
+                    })], {type: 'application/json'}));
+            } catch(_) {}
+        }
     }
 }
 
 async function triggerViolation(reason) {
     if (isSubmitted || !isInExam) return;
+    if (getServerTimeLeft() <= 0) return;
     if (lastViolation === reason) return;
     lastViolation = reason;
     isSubmitted = true;
@@ -429,7 +596,7 @@ async function triggerViolation(reason) {
         });
     } catch(e) {}
 
-    try { if (document.fullscreenElement) await document.exitFullscreen(); } catch(e) {}
+    await exitFullscreenIfAny();
 
     $('blocked-msg').textContent = `Exam cancelled — ${reason}`;
     showScreen('blocked-screen');
@@ -444,6 +611,9 @@ async function triggerViolation(reason) {
     }).then(() => location.href = '/');
 }
 
+/* ============================================================
+   SUBMIT
+   ============================================================ */
 async function submitExam() {
     const total = quiz.questions.length, answered = Object.keys(answers).length;
     if (answered < total) {
@@ -461,13 +631,14 @@ async function submitExam() {
 function autoSubmitTimeUp() {
     if (isSubmitted) return;
     isSubmitted = true;
-    Swal.fire({
-        icon:'info', title:'Time is up', text:'Auto-submitting...',
-        timer:1500, showConfirmButton:false
-    }).then(() => doSubmit(true));
+    isInExam = false;
+    clearInterval(timerInterval);
+    clearInterval(heartbeatInterval);
+    clearInterval(syncInterval);
+    doSubmit(true);
 }
 
-async function doSubmit(auto = false) {
+async function doSubmit(auto = false, retries = 3) {
     if (!attemptId) return;
     isSubmitted = true;
     isInExam = false;
@@ -477,27 +648,56 @@ async function doSubmit(auto = false) {
 
     $('submit-btn').disabled = true;
     $('submit-btn').innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Submitting...';
-    try { if (document.fullscreenElement) await document.exitFullscreen(); } catch(e) {}
+
+    await exitFullscreenIfAny();
 
     try {
         const r = await fetch('/api/submit-quiz', {
-            method:'POST', headers:{'Content-Type':'application/json'},
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
             body: JSON.stringify({attempt_id: attemptId, student_id: student.student_id, answers})
         });
         const d = await r.json();
         if (d.status === 'success') {
             $('result-score').textContent = d.score;
             $('result-total').textContent = d.total;
-            const pct = (d.score / d.total * 100) || 0;
+            const pct = (d.total > 0 ? (d.score / d.total * 100) : 0);
             $('result-msg').textContent = pct >= 50 ? 'Congratulations! 👏' : 'Better luck next time 💪';
             showScreen('result-screen');
-        } else {
-            Swal.fire({icon:'error', title:'Error', text:d.message});
-            $('submit-btn').disabled = false;
-            $('submit-btn').innerHTML = '<i class="fas fa-paper-plane"></i> Submit';
+            return;
         }
+        // Retry
+        if (retries > 0) {
+            await new Promise(r => setTimeout(r, 1500));
+            isSubmitted = false;
+            return doSubmit(auto, retries - 1);
+        }
+        Swal.fire({
+            icon:'error', title:'Error',
+            text: d.message || 'Submission failed',
+            allowOutsideClick: false
+        });
+        $('submit-btn').disabled = false;
+        $('submit-btn').innerHTML = '<i class="fas fa-paper-plane"></i> Submit';
     } catch(e) {
-        Swal.fire({icon:'error', title:'Connection failed'});
+        if (retries > 0) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Connection issue',
+                text: `Retrying (${retries} left)...`,
+                timer: 1200,
+                showConfirmButton: false
+            });
+            await new Promise(r => setTimeout(r, 1500));
+            isSubmitted = false;
+            return doSubmit(auto, retries - 1);
+        }
+        Swal.fire({
+            icon:'error',
+            title:'Connection failed',
+            text: 'Please keep this page open and contact your instructor',
+            allowOutsideClick: false
+        });
         $('submit-btn').disabled = false;
         $('submit-btn').innerHTML = '<i class="fas fa-paper-plane"></i> Submit';
     }

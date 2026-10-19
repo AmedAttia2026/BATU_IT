@@ -1438,7 +1438,7 @@ def api_quiz_quick_start():
         if reason in ('انقطاع', 'Session ended from server', 'انقطاع شبكة') and blocked_dt:
             try:
                 elapsed = (datetime.utcnow() - blocked_dt).total_seconds()
-                if elapsed < 60:  # reconnect within 60s → auto-unblock
+                if elapsed < 60:
                     quiz_blocks_col.delete_many({"quiz_id": quiz_id, "student_id": student_id})
                     quiz_attempts_col.delete_many({
                         "quiz_id": quiz_id, "student_id": student_id,
@@ -1730,6 +1730,41 @@ def api_admin_quiz_unblock():
     quiz_blocks_col.delete_many({"quiz_id": qid, "student_id": sid})
     quiz_attempts_col.delete_many({"quiz_id": qid, "student_id": sid})
     return jsonify({"status": "success"})
+
+
+# ============================================================
+#  🔄 QUIZ RETAKE — full reset for a single student
+# ============================================================
+@app.route('/api/admin-quiz-retake', methods=['POST'])
+def api_admin_quiz_retake():
+    """
+    إعادة الامتحان لطالب:
+    - يحذف محاولته السابقة
+    - يفك الحظر لو موجود
+    - الطالب يرجع يقدر يدخل من جديد
+    """
+    if not _is_admin():
+        return jsonify({"status": "unauthorized"}), 401
+
+    data = request.get_json(force=True, silent=True) or {}
+    qid = _clean_str(data.get('quiz_id'), 60)
+    sid = _clean_str(data.get('student_id'), 20)
+
+    if not qid or not sid:
+        return jsonify({"status": "error", "message": "بيانات ناقصة"}), 400
+
+    quiz = quizzes_col.find_one({"id": qid})
+    if not quiz or not _quiz_can_manage(session['admin'], quiz):
+        return jsonify({"status": "error", "message": "غير مصرح"}), 403
+
+    # ✅ Delete attempt + block (student can start fresh)
+    quiz_attempts_col.delete_many({"quiz_id": qid, "student_id": sid})
+    quiz_blocks_col.delete_many({"quiz_id": qid, "student_id": sid})
+
+    return jsonify({
+        "status": "success",
+        "message": "تم إعادة الامتحان — الطالب يقدر يدخل من جديد"
+    })
 
 
 @app.route('/api/admin-parse-word', methods=['POST'])

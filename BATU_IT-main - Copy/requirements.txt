@@ -1,0 +1,8 @@
+Flask
+pymongo
+dnspython
+pytz
+flask-limiter
+werkzeug
+python-docx
+openpyxl

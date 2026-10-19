@@ -14,6 +14,14 @@ let lastQrCodeRendered = null;
 let manualCodeVisible = false;
 
 /* =========================================================
+   🔄 AUTO-REFRESH STATE
+   ========================================================= */
+let _sessionsPollInterval = null;
+let _sessionsPollHash = '';
+let _attendancePollInterval = null;
+let _attendancePollHash = '';
+
+/* =========================================================
    🖥️ شاشات التحكم
    ========================================================= */
 function showLoading() {
@@ -188,6 +196,8 @@ async function refreshDataSilently() {
 }
 
 function adminLogout() {
+    stopSessionsPolling();
+    stopAttendancePolling();
     clearAdminCredentials();
     clearAdminCache();
     window.location.href = '/logout-gateway-vip-x9v2-pL7q-2026';
@@ -232,6 +242,10 @@ function applyAdminData(data) {
 }
 
 function switchTab(sec, el) {
+    // ✅ Stop session polling when leaving the sessions tab
+    if (sec !== 'sessions') {
+        stopSessionsPolling();
+    }
     document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.nav-links li').forEach(l => l.classList.remove('active'));
     document.getElementById(`sec-${sec}`).classList.add('active');
@@ -281,6 +295,120 @@ function renderAdminSubjectsGrid() {
     }).join('');
 }
 
+/* =========================================================
+   🔄 AUTO-REFRESH: Sessions list polling
+   ========================================================= */
+function startSessionsPolling() {
+    stopSessionsPolling();
+    _sessionsPollInterval = setInterval(_pollSessions, 3000);
+}
+
+function stopSessionsPolling() {
+    if (_sessionsPollInterval) {
+        clearInterval(_sessionsPollInterval);
+        _sessionsPollInterval = null;
+    }
+    _sessionsPollHash = '';
+    const badge = document.getElementById('sessions-count-badge');
+    if (badge) badge.classList.remove('live-updating');
+}
+
+async function _pollSessions() {
+    if (document.hidden) return;
+    if (currentSessionsFilter === null) return;
+
+    try {
+        const res = await fetch('/api/admin-data', { credentials: 'same-origin' });
+        const data = await res.json();
+        if (data.status !== 'success') return;
+
+        const allSessions = data.sessions || [];
+        const relevant = allSessions.filter(s => s.subject_id === currentSessionsFilter);
+
+        const hash = relevant.map(s =>
+            `${s.session_id}|${s.is_open ? 1 : 0}|${s.title || ''}|${s.auto_closed ? 1 : 0}`
+        ).sort().join('|');
+
+        if (hash === _sessionsPollHash) return;
+        _sessionsPollHash = hash;
+
+        // Update data
+        allData.sessions = allSessions;
+        if (data.staff) allData.staff = data.staff;
+        try { saveAdminCache(data); } catch(e) {}
+
+        // Re-render only the table
+        if (currentSessionsFilter !== null) {
+            renderFilteredSessionsTable(currentSessionsFilter);
+        }
+    } catch(e) {}
+}
+
+/* =========================================================
+   🔄 AUTO-REFRESH: Attendance modal polling
+   ========================================================= */
+function startAttendancePolling(sessionId) {
+    stopAttendancePolling();
+    _attendancePollInterval = setInterval(() => _pollAttendance(sessionId), 2500);
+}
+
+function stopAttendancePolling() {
+    if (_attendancePollInterval) {
+        clearInterval(_attendancePollInterval);
+        _attendancePollInterval = null;
+    }
+    _attendancePollHash = '';
+}
+
+async function _pollAttendance(sessionId) {
+    if (document.hidden) return;
+    if (currentInspectedSessionId !== sessionId) return;
+
+    const modal = document.getElementById('session-attendance-modal');
+    if (!modal || modal.style.display !== 'flex') return;
+
+    try {
+        const res = await fetch(`/api/session-attendance?session_id=${sessionId}`, { credentials: 'same-origin' });
+        const data = await res.json();
+        if (data.status !== 'success') return;
+
+        const newRecords = data.records || [];
+        const hash = newRecords.map(r =>
+            `${r.student_id}|${r.timestamp}|${r.is_manual ? 1 : 0}`
+        ).sort().join('|');
+
+        if (hash === _attendancePollHash) return;
+        _attendancePollHash = hash;
+
+        // Preserve search + scroll
+        const searchEl = document.getElementById('session-student-search');
+        const searchQuery = searchEl ? searchEl.value : '';
+        const containerEl = document.getElementById('sess-glass-cards-container');
+        const oldScroll = containerEl ? containerEl.scrollTop : 0;
+
+        currentSessionRecords = newRecords;
+
+        const cntEl = document.getElementById('sess-modal-count');
+        if (cntEl) cntEl.innerText = newRecords.length;
+
+        // Update title in case it changed
+        if (data.session) {
+            const sess = data.session;
+            const typeInfo = getSessionTypeDisplay(sess);
+            const titleEl = document.getElementById('sess-modal-title');
+            if (titleEl) titleEl.innerText = `📜 ${sess.subject_name} - ${sess.title} (${typeInfo.label})`;
+        }
+
+        if (searchQuery) {
+            filterSessionStudents();
+        } else {
+            renderGlassStudentCards(newRecords, sessionId);
+        }
+
+        if (containerEl) containerEl.scrollTop = oldScroll;
+    } catch(e) {}
+}
+
 function openSubjectSessions(subId, subName) {
     currentSessionsFilter = subId;
     const vSubjects = document.getElementById('sessions-subjects-view');
@@ -290,11 +418,24 @@ function openSubjectSessions(subId, subName) {
     document.getElementById('sessions-subject-title').innerText = subName;
     renderSubjectDetails(subId);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    // ✅ Seed hash from current data so first poll is a no-op
+    const relevant = allData.sessions.filter(s => s.subject_id === subId);
+    _sessionsPollHash = relevant.map(s =>
+        `${s.session_id}|${s.is_open ? 1 : 0}|${s.title || ''}|${s.auto_closed ? 1 : 0}`
+    ).sort().join('|');
+
+    // ✅ Add live indicator class
+    const badge = document.getElementById('sessions-count-badge');
+    if (badge) badge.classList.add('live-updating');
+
+    startSessionsPolling();
 }
 
 function backToSubjects() {
     currentSessionsFilter = null;
     closeLiveScreen();
+    stopSessionsPolling();
     renderAdminSubjectsGrid();
 }
 
@@ -1407,7 +1548,7 @@ function toggleAdminPasswordVisibility() {
 }
 
 /* =========================================================
-   نافذة عرض طلاب الجلسة
+   نافذة عرض طلاب الجلسة (with auto-refresh)
    ========================================================= */
 async function openSessionAttendanceModal(sessionId) {
     currentInspectedSessionId = sessionId;
@@ -1429,6 +1570,14 @@ async function openSessionAttendanceModal(sessionId) {
         document.getElementById('sess-btn-add-manual').onclick = () => addManualStudentAttendanceModal(sessionId);
         document.getElementById('sess-btn-export-excel').onclick = () => location.href = `/api/export-attendance-csv?session_id=${sessionId}`;
         renderGlassStudentCards(currentSessionRecords, sessionId);
+
+        // ✅ Seed hash for polling
+        _attendancePollHash = (data.records || []).map(r =>
+            `${r.student_id}|${r.timestamp}|${r.is_manual ? 1 : 0}`
+        ).sort().join('|');
+
+        // ✅ Start auto-refresh
+        startAttendancePolling(sessionId);
     } else {
         Swal.fire({...swalDark, icon: 'error', text: data.message || 'فشل التحميل'});
     }
@@ -1502,6 +1651,8 @@ function renderGlassStudentCards(records, sessionId) {
 }
 
 function closeSessionAttendanceModal() {
+    // ✅ Stop polling
+    stopAttendancePolling();
     document.getElementById('session-attendance-modal').style.display = 'none';
     currentInspectedSessionId = null;
     refreshDataSilently();

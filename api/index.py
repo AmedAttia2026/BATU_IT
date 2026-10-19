@@ -1262,6 +1262,27 @@ def _compute_expected_count(quiz):
     return len(quiz.get('questions', []))
 
 
+def _student_can_access_quiz(student: dict, quiz: dict) -> bool:
+    """
+    يتحقق أن الكويز بتاع نفس سنة وقسم الطالب.
+    لو الطالب أو المادة مش موجودين → False.
+    """
+    if not student or not quiz:
+        return False
+    subject = subjects_col.find_one({"id": quiz.get('subject_id')})
+    if not subject:
+        return False
+    s_year = student.get('year') or ''
+    s_dept = student.get('department') or 'عام (IT)'
+    subj_year = subject.get('year') or ''
+    subj_dept = subject.get('department') or 'عام (IT)'
+    if subj_year != s_year:
+        return False
+    if subj_dept not in (s_dept, "عام (IT)"):
+        return False
+    return True
+
+
 # ============================================================
 #  🎫 QUIZ LIVE CODES
 # ============================================================
@@ -1345,6 +1366,9 @@ def api_admin_toggle_quiz_broadcast():
     return jsonify({"status": "success", "active": active})
 
 
+# ============================================================
+#  🚀 QUIZ QUICK START (with strict student-subject check)
+# ============================================================
 @app.route('/api/quiz-quick-start', methods=['POST'])
 def api_quiz_quick_start():
     data = request.get_json(force=True, silent=True) or {}
@@ -1360,6 +1384,15 @@ def api_quiz_quick_start():
     quiz = quizzes_col.find_one({"id": quiz_id})
     if not quiz:
         return jsonify({"status": "error", "message": "الكويز غير موجود"}), 404
+
+    # ✅ Strict check: student must belong to quiz's subject year/department
+    student = students_col.find_one({"student_id": student_id})
+    if not student:
+        return jsonify({"status": "error", "message": "الطالب غير مسجل"}), 404
+
+    if not _student_can_access_quiz(student, quiz):
+        return jsonify({"status": "error", "message": "هذا الامتحان غير متاح لمستواك الدراسي"}), 403
+
     if not quiz.get('is_open'):
         return jsonify({"status": "error", "message": "الكويز مغلق"}), 400
     if not quiz.get('broadcast_active'):
@@ -1434,7 +1467,6 @@ def api_quiz_quick_start():
 @app.route('/api/quiz-screen-pair-token', methods=['POST'])
 @limiter.limit("30 per minute")
 def api_quiz_screen_pair_token():
-    """ربط شاشة العرض بالكويز (زي الجلسات)"""
     if not _is_admin():
         return jsonify({"status": "unauthorized"}), 401
 
@@ -1465,6 +1497,9 @@ def api_quiz_screen_pair_token():
     return jsonify({"status": "success", "message": "تم ربط الشاشة بالامتحان!"})
 
 
+# ============================================================
+#  🎯 QUIZ BY SUBJECT (with student year/dept check)
+# ============================================================
 @app.route('/api/quiz-by-subject')
 def api_quiz_by_subject():
     sid = _clean_str(request.args.get('student_id'), 20)
@@ -1472,7 +1507,27 @@ def api_quiz_by_subject():
     if len(sid) != 7 or not sid.isdigit():
         return jsonify({"status": "error", "message": "ID غير صحيح"}), 400
 
-    items = list(quizzes_col.find({"subject_id": subject_id, "is_open": True},
+    # ✅ Strict: verify student belongs to the subject
+    student = students_col.find_one({"student_id": sid})
+    if not student:
+        return jsonify({"status": "success", "quizzes": []})
+
+    subject = subjects_col.find_one({"id": subject_id})
+    if not subject:
+        return jsonify({"status": "error", "message": "المادة غير موجودة"}), 404
+
+    s_year = student.get('year') or ''
+    s_dept = student.get('department') or 'عام (IT)'
+    subj_year = subject.get('year') or ''
+    subj_dept = subject.get('department') or 'عام (IT)'
+
+    if subj_year != s_year:
+        return jsonify({"status": "success", "quizzes": []})
+    if subj_dept not in (s_dept, "عام (IT)"):
+        return jsonify({"status": "success", "quizzes": []})
+
+    items = list(quizzes_col.find(
+        {"subject_id": subject_id, "is_open": True},
         {"questions.correct": 0, "_id": 0, "sections_config": 0}
     ).sort("created_at_dt", -1))
 
@@ -1988,11 +2043,15 @@ def api_quiz_live_stats():
         "total_attempts": completed + in_progress})
 
 
+# ============================================================
+#  🎯 STUDENT QUIZZES (STRICT FILTER — NO FALLBACK)
+# ============================================================
 @app.route('/api/student-quizzes')
 def api_student_quizzes():
     sid = _clean_str(request.args.get('student_id'), 20)
     if len(sid) != 7 or not sid.isdigit():
         return jsonify({"status": "error", "message": "ID غير صحيح"}), 400
+
     student = students_col.find_one({"student_id": sid})
     if not student:
         return jsonify({"status": "success", "quizzes": []})
@@ -2000,46 +2059,43 @@ def api_student_quizzes():
     student_year = student.get('year') or ''
     student_dept = student.get('department') or 'عام (IT)'
 
-    sub_ids = []
-    if student_year:
-        try:
-            subs = list(subjects_col.find({
-                "year": student_year,
-                "department": {"$in": [student_dept, "عام (IT)"]}}, {"id": 1}))
-            sub_ids = [s['id'] for s in subs]
-        except Exception:
-            pass
+    if not student_year:
+        return jsonify({"status": "success", "quizzes": []})
 
-    items = []
-    if sub_ids:
-        items = list(quizzes_col.find({"subject_id": {"$in": sub_ids}, "is_open": True},
-            {"questions.correct": 0, "_id": 0, "sections_config": 0}).sort("created_at_dt", -1))
+    # ✅ ONLY subjects that match student's year + department
+    # No fallbacks — empty list if no matches
+    try:
+        subs = list(subjects_col.find({
+            "year": student_year,
+            "department": {"$in": [student_dept, "عام (IT)"]}
+        }, {"id": 1}))
+        sub_ids = [s['id'] for s in subs]
+    except Exception:
+        sub_ids = []
 
-    if not items and student_year:
-        try:
-            subs_by_year = list(subjects_col.find({"year": student_year}, {"id": 1}))
-            sub_ids_by_year = [s['id'] for s in subs_by_year]
-            if sub_ids_by_year:
-                items = list(quizzes_col.find({"subject_id": {"$in": sub_ids_by_year}, "is_open": True},
-                    {"questions.correct": 0, "_id": 0, "sections_config": 0}).sort("created_at_dt", -1))
-        except Exception:
-            pass
+    if not sub_ids:
+        return jsonify({"status": "success", "quizzes": []})
 
-    if not items:
-        try:
-            items = list(quizzes_col.find({"is_open": True},
-                {"questions.correct": 0, "_id": 0, "sections_config": 0}).sort("created_at_dt", -1).limit(50))
-        except Exception:
-            pass
+    # ✅ ONLY quizzes belonging to those subjects
+    items = list(quizzes_col.find(
+        {"subject_id": {"$in": sub_ids}, "is_open": True},
+        {"questions.correct": 0, "_id": 0, "sections_config": 0}
+    ).sort("created_at_dt", -1))
 
     for it in items:
-        att = quiz_attempts_col.find_one({"quiz_id": it['id'], "student_id": sid}, {"_id": 0})
-        block = quiz_blocks_col.find_one({"quiz_id": it['id'], "student_id": sid, "unblocked_at": None})
-        it['my_status'] = 'blocked' if block else (att.get('status', 'not_started') if att else 'not_started')
+        att = quiz_attempts_col.find_one(
+            {"quiz_id": it['id'], "student_id": sid}, {"_id": 0})
+        block = quiz_blocks_col.find_one(
+            {"quiz_id": it['id'], "student_id": sid, "unblocked_at": None})
+
+        it['my_status'] = 'blocked' if block else (
+            att.get('status', 'not_started') if att else 'not_started'
+        )
         it['questions_count'] = it.get('expected_questions') or _compute_expected_count(it)
         it['total_points'] = it.get('total_points', 0)
         it['broadcast_active'] = it.get('broadcast_active', False)
         it.pop('questions', None)
+
         if att and att.get('status') == 'completed':
             it['my_score'] = att.get('score')
             it['my_total'] = att.get('total_points')
@@ -2056,6 +2112,12 @@ def api_quiz_precheck():
     quiz = quizzes_col.find_one({"id": qid})
     if not quiz or not quiz.get('is_open'):
         return jsonify({"status": "error", "message": "غير متاح"}), 400
+
+    # ✅ Extra defense: ensure student's year/dept matches the quiz
+    student = students_col.find_one({"student_id": sid})
+    if not student or not _student_can_access_quiz(student, quiz):
+        return jsonify({"status": "error", "message": "غير متاح لمستواك"}), 403
+
     block = quiz_blocks_col.find_one({"quiz_id": qid, "student_id": sid, "unblocked_at": None})
     if block:
         return jsonify({"status": "blocked", "message": "محظور"})
@@ -2090,6 +2152,12 @@ def api_start_quiz():
     quiz = quizzes_col.find_one({"id": qid})
     if not quiz or not quiz.get('is_open'):
         return jsonify({"status": "error", "message": "غير متاح"}), 400
+
+    # ✅ Strict: student must belong to quiz's subject year/dept
+    student = students_col.find_one({"student_id": sid})
+    if not student or not _student_can_access_quiz(student, quiz):
+        return jsonify({"status": "error", "message": "غير متاح لمستواك"}), 403
+
     if quiz_blocks_col.find_one({"quiz_id": qid, "student_id": sid, "unblocked_at": None}):
         return jsonify({"status": "blocked", "message": "محظور"})
 

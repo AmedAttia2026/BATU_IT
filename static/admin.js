@@ -33,9 +33,10 @@ function showMainApp() {
 }
 
 /* =========================================================
-   🔑 AUTO-LOGIN
+   🔑 AUTO-LOGIN + Cache
    ========================================================= */
 const ADMIN_STORAGE_KEY = 'nx_admin_auth';
+const ADMIN_CACHE_KEY = 'nx_admin_cache';
 
 function saveAdminCredentials(username, password) {
     try {
@@ -59,6 +60,23 @@ function clearAdminCredentials() {
     try { localStorage.removeItem(ADMIN_STORAGE_KEY); } catch (e) {}
 }
 
+function saveAdminCache(data) {
+    try { sessionStorage.setItem(ADMIN_CACHE_KEY, JSON.stringify(data)); } catch (e) {}
+}
+
+function getAdminCache() {
+    try {
+        const raw = sessionStorage.getItem(ADMIN_CACHE_KEY);
+        if (!raw) return null;
+        const d = JSON.parse(raw);
+        return (d && d.currentAdmin) ? d : null;
+    } catch (e) { return null; }
+}
+
+function clearAdminCache() {
+    try { sessionStorage.removeItem(ADMIN_CACHE_KEY); } catch (e) {}
+}
+
 window.onload = async () => {
     const passInput = document.getElementById('pass');
     if (passInput) {
@@ -72,17 +90,28 @@ window.onload = async () => {
 };
 
 async function tryAutoLogin() {
+    // Step 1: Show cached data instantly (if exists)
+    const cached = getAdminCache();
+    if (cached) {
+        allData = cached;
+        showMainApp();
+        applyAdminData(cached);
+    }
+
+    // Step 2: Fetch fresh data in background
     try {
         const res = await fetch('/api/admin-data', { credentials: 'same-origin' });
         const data = await res.json();
         if (data.status === 'success') {
             allData = data;
+            saveAdminCache(data);
             showMainApp();
             applyAdminData(data);
             return true;
         }
     } catch (e) {}
 
+    // Step 3: Fallback to login with saved creds
     const saved = getSavedAdminCredentials();
     if (!saved) return false;
 
@@ -141,6 +170,7 @@ async function loadAdminData() {
         const data = await res.json();
         if (data.status === 'unauthorized') { clearAdminCredentials(); return location.reload(); }
         allData = data;
+        saveAdminCache(data);
         applyAdminData(data);
     } catch (e) {}
 }
@@ -151,6 +181,7 @@ async function refreshDataSilently() {
         const data = await res.json();
         if (data.status === 'success') {
             allData = data;
+            saveAdminCache(data);
             applyAdminData(data);
         }
     } catch (e) {}
@@ -158,6 +189,7 @@ async function refreshDataSilently() {
 
 function adminLogout() {
     clearAdminCredentials();
+    clearAdminCache();
     window.location.href = '/logout-gateway-vip-x9v2-pL7q-2026';
 }
 
@@ -487,9 +519,6 @@ async function openScreenCodeModal(sessionId, title, subName) {
     });
 }
 
-/* =========================================================
-   📷 QR Scanner للأدمن
-   ========================================================= */
 async function startDisplayQrScan(sessionId) {
     const statusEl = document.getElementById('scan-status');
     const readerEl = document.getElementById('admin-qr-reader');
@@ -640,9 +669,6 @@ async function stopAdminQrScan() {
     }
 }
 
-/* =========================================================
-   ⌨️ Fallback — الكود اليدوي
-   ========================================================= */
 async function showManualCodeFallback(sessionId) {
     await stopAdminQrScan();
     Swal.close();
@@ -777,7 +803,7 @@ async function editSessionTitle(sessionId, currentTitle) {
 }
 
 /* =========================================================
-   ✅ فتح سكشن جديد — الواجهة الاحترافية الذكية
+   ✅ فتح سكشن جديد
    ========================================================= */
 async function openNewSectionModal() {
     const subjectId = currentSessionsFilter;
@@ -790,7 +816,6 @@ async function openNewSectionModal() {
         return Swal.fire({...swalDark, icon: 'error', text: 'المادة غير موجودة!'});
     }
 
-    /* ═══ حساب أرقام افتراضية ذكية من السكاشن السابقة ═══ */
     const allSections = allData.sessions.filter(s =>
         s.subject_id === subjectId && s.type === 'Section'
     );
@@ -809,12 +834,8 @@ async function openNewSectionModal() {
     const defaultLab = maxLab + 1;
     const defaultType = 'W';
 
-    /* ═══ بناء واجهة المودال ═══ */
     const modalHtml = `
         <style>
-            /* ═══════════════════════════════════════════════
-               SECTION BUILDER · LUXURY UI
-               ═══════════════════════════════════════════════ */
             .sb-subject {
                 display: flex; align-items: center; gap: 10px;
                 padding: 12px 16px;
@@ -1423,9 +1444,6 @@ function filterSessionStudents() {
     renderGlassStudentCards(filtered, currentInspectedSessionId);
 }
 
-/* =========================================================
-   🔥 كارت الطالب
-   ========================================================= */
 function renderGlassStudentCards(records, sessionId) {
     const container = document.getElementById('sess-glass-cards-container');
     if(!records || records.length === 0) {
@@ -1489,9 +1507,6 @@ function closeSessionAttendanceModal() {
     refreshDataSilently();
 }
 
-/* =========================================================
-   عمليات الحضور اليدوية
-   ========================================================= */
 async function addManualStudentAttendanceModal(sessionId) {
     const { value: form } = await Swal.fire({
         ...swalDark, title: 'إضافة حضور طالب يدوياً',
@@ -1544,9 +1559,6 @@ async function editAttendanceRecordModal(sessionId, oldId, oldName) {
     }
 }
 
-/* =========================================================
-   ✅ حذف سجل الحضور
-   ========================================================= */
 async function deleteSessionAttendanceRecord(sessionId, studentId) {
     const record = currentSessionRecords.find(r => r.student_id === studentId);
     const studentName = record ? record.student_name : '';
@@ -1680,9 +1692,6 @@ function renderSubjectsTable() {
     `}).join('');
 }
 
-/* =========================================================
-   ✅ إضافة / تعديل / حذف مادة
-   ========================================================= */
 async function addSubject() {
     let defaultYear = 'الفرقة الأولى';
     if (activeSubjectYear !== 'all') defaultYear = activeSubjectYear;
@@ -1875,9 +1884,6 @@ async function deleteSubject(id) {
     refreshDataSilently();
 }
 
-/* =========================================================
-   ✅ توليد عناوين المحاضرات
-   ========================================================= */
 function generateLectureTitle(subjectId) {
     const prefix = 'LEC';
     const regex = new RegExp(`^${prefix}\\s+(\\d+)$`, 'i');
@@ -1894,9 +1900,6 @@ function generateLectureTitle(subjectId) {
     return `${prefix} ${maxNum + 1}`;
 }
 
-/* =========================================================
-   ✅ فتح محاضرة جديدة
-   ========================================================= */
 async function createSessionModal() {
     let subjectsToShow = allData.subjects;
     const isInsideSubject = currentSessionsFilter !== null;
@@ -2012,9 +2015,6 @@ async function createSessionModalDoctor(subjectsToShow, isInsideSubject) {
     if (form) await sendCreateSession(form);
 }
 
-/* =========================================================
-   ✅ إرسال إنشاء الجلسة
-   ========================================================= */
 async function sendCreateSession(form) {
     const tempSession = {
         session_id: 'TEMP_' + Date.now(),
@@ -2066,9 +2066,6 @@ async function sendCreateSession(form) {
     }
 }
 
-/* =========================================================
-   ✅ البث المباشر
-   ========================================================= */
 function startLiveBroadcast(sessId, title, subName) {
     activeLiveSession = sessId;
     lastQrCodeRendered = null;
@@ -2164,9 +2161,6 @@ async function fetchLiveCode() {
     }
 }
 
-/* =========================================================
-   ✅ TOGGLE SESSION
-   ========================================================= */
 async function toggleSession(id, isOpen) {
     const sess = allData.sessions.find(s => s.session_id === id);
     if (!sess) return;
@@ -2185,7 +2179,6 @@ async function toggleSession(id, isOpen) {
             renderFilteredSessionsTable(currentSessionsFilter);
             Swal.fire({...swalDark, icon: 'error', text: data.message || 'خطأ'});
         } else {
-            /* 🆕 تحديث فوري بعد الفتح/الإغلاق لجلب بيانات جديدة */
             refreshDataSilently();
         }
     } catch (e) {
@@ -2195,9 +2188,6 @@ async function toggleSession(id, isOpen) {
     }
 }
 
-/* =========================================================
-   ✅ DELETE SESSION
-   ========================================================= */
 async function deleteSession(id) {
     const result = await Swal.fire({
         ...swalDark, icon: 'warning', title: 'حذف الجلسة',
@@ -2239,9 +2229,6 @@ async function deleteSession(id) {
     }
 }
 
-/* =========================================================
-   ✅ إدارة الطاقم
-   ========================================================= */
 function canEditStaff(targetUser) {
     if (!targetUser) return false;
     if (targetUser.username === currentAdminUsername) return false;
@@ -2257,9 +2244,6 @@ function canEditStaff(targetUser) {
     return false;
 }
 
-/* =========================================================
-   ✅ عرض المواد
-   ========================================================= */
 function getSubjectsListHTML(allowedSubjects = [], subjectsList = null) {
     const subs = subjectsList || allData.subjects;
 
@@ -2382,9 +2366,6 @@ function collectSelectedSubjects() {
     return result;
 }
 
-/* =========================================================
-   ✅ renderStaff
-   ========================================================= */
 function renderStaff(list) {
     const tbody = document.getElementById('staff-table-body');
     if (!tbody) return;
@@ -2435,9 +2416,6 @@ function renderStaff(list) {
     `}).join('');
 }
 
-/* =========================================================
-   ✅ editStaffModal
-   ========================================================= */
 async function editStaffModal(username) {
     const member = allData.staff.find(s => s.username === username);
     if (!member) return;
@@ -2513,9 +2491,6 @@ async function editStaffModal(username) {
     }
 }
 
-/* =========================================================
-   ✅ addStaff
-   ========================================================= */
 async function addStaff() {
     let roleSelectHtml = '';
     if(currentAdminRole === 'super_admin') {
@@ -2574,9 +2549,6 @@ async function addStaff() {
     }
 }
 
-/* =========================================================
-   ✅ toggleStaffStatus
-   ========================================================= */
 async function toggleStaffStatus(username, newActiveStatus) {
     const member = allData.staff.find(s => s.username === username);
     if (!member) return;
@@ -2614,9 +2586,6 @@ async function toggleStaffStatus(username, newActiveStatus) {
     }
 }
 
-/* =========================================================
-   ✅ deleteStaff
-   ========================================================= */
 async function deleteStaff(u) {
     const member = allData.staff.find(s => s.username === u);
     if (member && !canEditStaff(member)) return Swal.fire({...swalDark, icon:'error', text:'غير مصرح!'});
@@ -2658,9 +2627,6 @@ async function deleteStaff(u) {
     }
 }
 
-/* =========================================================
-   ✅ changeMyPassword
-   ========================================================= */
 async function changeMyPassword() {
     const { value: pw } = await Swal.fire({
         ...swalDark, title: 'تغيير كلمة المرور',
@@ -2682,9 +2648,6 @@ async function changeMyPassword() {
     }
 }
 
-/* =========================================================
-   ✅ wipeDatabase
-   ========================================================= */
 async function wipeDatabase() {
     const { value: pass } = await Swal.fire({
         ...swalDark, title: '⚠️ تصفير السجلات',

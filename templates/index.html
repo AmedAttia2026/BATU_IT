@@ -224,7 +224,6 @@
             pointer-events: none;
         }
 
-        /* ✅ الدايرة الكبيرة */
         .nx-logo-wrap {
             position: relative;
             width: 150px;
@@ -327,7 +326,6 @@
             font-weight: 500 !important;
         }
 
-        /* ✅ حقل رقمي */
         .numeric-input {
             direction: rtl !important;
             text-align: right !important;
@@ -1553,6 +1551,13 @@
             </p>
 
             <div id="subjects-container" class="grid-layout"></div>
+
+            <!-- ===================== QUIZZES SECTION ===================== -->
+            <div id="quiz-section-wrapper" style="margin-top: 44px; display: none;">
+                <h2><i class="fas fa-file-pen"></i> Quiz</h2>
+                <div id="quizzes-container" class="grid-layout"></div>
+            </div>
+            <!-- ===================== /QUIZZES SECTION ===================== -->
         </div>
 
         <footer>
@@ -1600,6 +1605,7 @@
     </div>
 
     <script src="/static/student.js"></script>
+    <script src="/static/student-quizzes.js"></script>
 
     <!-- ============================================================
          NEXUS INTERACTIONS

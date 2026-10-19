@@ -2690,6 +2690,10 @@
                     <i class="fas fa-users-cog icon-main"></i>
                     إدارة الطاقم
                 </li>
+                <li id="tab-quizzes-btn" onclick="switchTab('quizzes', this)">
+                    <i class="fas fa-file-pen icon-main"></i>
+                    الكويزات والامتحانات
+                </li>
                 <hr style="border:0; border-top:1px solid rgba(255,255,255,0.08); margin:16px 14px;">
                 <li class="super-only wipe-btn-li" onclick="wipeDatabase()">
                     <i class="fas fa-dumpster-fire icon-main"></i>
@@ -2907,6 +2911,20 @@
                     </table>
                 </div>
             </div>
+
+            <div id="sec-quizzes" class="content-section">
+                <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
+                    <button type="button" class="btn btn-green" onclick="openNewQuizModal()"
+                            style="padding:12px 18px;font-size:13px;">
+                        <i class="fas fa-plus"></i> كويز جديد
+                    </button>
+                    <button type="button" class="btn btn-outline" onclick="loadQuizzes()"
+                            style="padding:12px 18px;font-size:13px;">
+                        <i class="fas fa-sync"></i> تحديث
+                    </button>
+                </div>
+                <div id="quizzes-container" class="admin-subjects-grid"></div>
+            </div>
         </main>
     </div>
 
@@ -2945,6 +2963,7 @@
     </div>
 
     <script src="/static/admin.js"></script>
+    <script src="/static/admin-quizzes.js"></script>
 
     <script>
         (function () {

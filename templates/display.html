@@ -280,6 +280,36 @@
             image-rendering: crisp-edges;
         }
 
+        /* SCR token text below QR for manual entry */
+        .pair-token-text {
+            margin-top: clamp(10px, 1.5vmin, 14px);
+            font-family: 'Plus Jakarta Sans', monospace;
+            font-size: clamp(11px, 1.5vmin, 13px);
+            color: #FFB300;
+            letter-spacing: 1.5px;
+            padding: 8px 16px;
+            background: rgba(255,179,0,0.08);
+            border: 1px dashed rgba(255,179,0,0.4);
+            border-radius: 10px;
+            user-select: all;
+            cursor: pointer;
+            font-weight: 900;
+            direction: ltr;
+            transition: all .2s ease;
+            max-width: 100%;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+        .pair-token-text:hover { background: rgba(255,179,0,0.15); }
+        .pair-token-text:active { transform: scale(0.98); }
+        .pair-token-hint {
+            margin-top: 4px;
+            font-size: 10px;
+            color: #8b93a7;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+        }
+
         .nx-qr-corner {
             position: absolute;
             width: 22px;
@@ -337,9 +367,9 @@
         #pair-input {
             width: 100%;
             padding: 16px;
-            font-size: clamp(20px, 3.2vmin, 30px);
+            font-size: clamp(16px, 2.6vmin, 22px);
             font-family: 'Plus Jakarta Sans', monospace;
-            letter-spacing: 12px;
+            letter-spacing: 3px;
             text-align: center;
             background: rgba(0,0,0,0.55);
             border: 2px solid rgba(255,179,0,0.4);
@@ -351,7 +381,7 @@
             transition: all .3s ease;
             font-weight: 900;
         }
-        #pair-input::placeholder { color: rgba(255,179,0,0.22); letter-spacing: 12px; }
+        #pair-input::placeholder { color: rgba(255,179,0,0.22); letter-spacing: 1px; font-size: 14px; }
         #pair-input:focus {
             border-color: #FFB300;
             box-shadow: 0 0 50px rgba(255,179,0,0.4);
@@ -515,9 +545,6 @@
             pointer-events: none;
         }
 
-        /* ═══════════════════════════════════════════════════
-           🆕 FULLSCREEN MODE — QR كبير + شريط أحمر على اليسار
-           ═══════════════════════════════════════════════════ */
         #qr-wrapper.is-fullscreen {
             position: fixed;
             inset: 0;
@@ -571,9 +598,6 @@
         }
         body.qr-fs #fs-btn { display: none !important; }
 
-        /* ═══════════════════════════════════════════════════
-           🔴 الشريط الأحمر الرأسي (يسار الشاشة) — بسيط ومختصر
-           ═══════════════════════════════════════════════════ */
         body.qr-fs .qr-timer-block {
             position: fixed;
             left: 14px;
@@ -646,9 +670,6 @@
             filter: none;
         }
 
-        /* ═══════════════════════════════════════════════════
-           🔥 ROYAL GRADIENT BAR (تحت QR) — الوضع العادي
-           ═══════════════════════════════════════════════════ */
         .qr-timer-block {
             display: flex;
             flex-direction: column;
@@ -923,6 +944,7 @@
         <i class="fas fa-expand"></i>
     </button>
 
+    <!-- ===== Pair Screen ===== -->
     <div id="pair-screen">
         <div class="nx-logo-wrap">
             <div class="nx-logo-ring"></div>
@@ -950,6 +972,10 @@
                 <div class="nx-qr-corner nx-qr-br"></div>
             </div>
 
+            <!-- SCR Token text for manual entry -->
+            <div class="pair-token-text" id="pair-token-text" onclick="copyToken()">SCR_...</div>
+            <div class="pair-token-hint">👆 اضغط للنسخ — استخدمه في لوحة الأدمن</div>
+
             <div class="nx-or-divider">
                 <span></span>
                 <b>أو</b>
@@ -961,15 +987,15 @@
             </button>
 
             <div id="manual-entry-box" style="display:none; width:100%; margin-top:12px;">
-                <input type="text" id="pair-input" maxlength="8" inputmode="numeric"
-                       placeholder="00000000" autocomplete="off"
-                       oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+                <input type="text" id="pair-input" maxlength="24"
+                       placeholder="SCR_xxxxxxxxxxxxxxxx" autocomplete="off">
                 <button id="pair-btn">ربط الشاشة</button>
                 <div id="pair-error"></div>
             </div>
         </div>
     </div>
 
+    <!-- ===== Display Screen ===== -->
     <div id="display-screen">
         <div id="status-badge"><i class="fas fa-circle"></i> متصل بجلسة مباشرة</div>
 
@@ -1010,7 +1036,7 @@
             <button class="disp-btn" id="toggle-code-btn">
                 <i class="fas fa-keyboard"></i> <span>إظهار الكود</span>
             </button>
-            <button class="disp-btn danger" onclick="unpairScreen()">
+            <button class="disp-btn danger" onclick="unpairScreen()" id="unpair-btn">
                 <i class="fas fa-exchange-alt"></i> <span>تغيير الجلسة</span>
             </button>
         </div>
@@ -1018,10 +1044,10 @@
 
 <script>
     /* ============================================================
-       🖥️ Display Screen Logic — v9 (Royal Bar + Click-Fullscreen)
+       🖥️ Display Screen Logic — v12 (Pairing Only, No URL params)
        ============================================================ */
 
-    /* ---------- FULLSCREEN (زر عام) ---------- */
+    /* ---------- FULLSCREEN ---------- */
     (function () {
         const fsBtn = document.getElementById('fs-btn');
         const icon  = fsBtn.querySelector('i');
@@ -1153,12 +1179,34 @@
     let qrWatchdogInterval = null;
     let manualModeVisible = false;
 
-    /* ============================================================
-       🆕 TOGGLE QR FULLSCREEN — CSS class-based + Red vertical bar
-       ============================================================ */
     let qrIsFullscreen = false;
     let lastQrPct = 100;
 
+    /* ---------- COPY TOKEN HELPER ---------- */
+    window.copyToken = function() {
+        if (!currentToken) return;
+        try {
+            navigator.clipboard.writeText(currentToken).then(() => {
+                const el = document.getElementById('pair-token-text');
+                if (el) {
+                    const originalText = el.textContent;
+                    el.textContent = '✅ تم النسخ!';
+                    setTimeout(() => { el.textContent = originalText; }, 1500);
+                }
+            }).catch(() => {
+                // Fallback: select text
+                const el = document.getElementById('pair-token-text');
+                if (el) {
+                    const range = document.createRange();
+                    range.selectNode(el);
+                    window.getSelection().removeAllRanges();
+                    window.getSelection().addRange(range);
+                }
+            });
+        } catch(e) {}
+    };
+
+    /* ---------- QR FULLSCREEN ---------- */
     function updateQrFullscreenUI() {
         const wrapper   = document.getElementById('qr-wrapper');
         const hintIcon  = document.querySelector('#qr-hint i');
@@ -1188,7 +1236,6 @@
         updateQrFullscreenUI();
 
         if (qrIsFullscreen) {
-            /* fullscreen على الصفحة كلها عشان الشريط يفضل ظاهر */
             try {
                 const el = document.documentElement;
                 let p = null;
@@ -1215,7 +1262,6 @@
         }
     }
 
-    /* لو المستخدم خرج بـ ESC نزامن الحالة */
     ['fullscreenchange','webkitfullscreenchange','mozfullscreenchange','MSFullscreenChange']
         .forEach(ev => document.addEventListener(ev, () => {
             const nativeFs = !!(document.fullscreenElement ||
@@ -1240,6 +1286,7 @@
         pollInterval = setInterval(fetchScreenCode, 1000);
     }
 
+    /* ---------- PAIRING TOKEN ---------- */
     async function requestNewToken() {
         try {
             const res = await fetch('/api/screen-new-token', { method: 'POST', cache: 'no-store' });
@@ -1263,6 +1310,13 @@
             });
             qrTokenGenerator.makeCode(token);
         } catch (e) {}
+
+        // Show token text below QR for manual entry
+        const tokenEl = document.getElementById('pair-token-text');
+        if (tokenEl) {
+            tokenEl.textContent = token;
+            tokenEl.style.display = 'block';
+        }
     }
 
     async function checkPairing() {
@@ -1375,45 +1429,20 @@
         errEl.textContent = '';
         errEl.classList.remove('has-error');
 
-        if (!code || code.length !== 8 || !/^\d{8}$/.test(code)) {
-            errEl.textContent = 'الكود يجب أن يكون 8 أرقام بالضبط';
+        if (!code || !code.startsWith('SCR_')) {
+            errEl.textContent = 'الكود لازم يبدأ بـ SCR_';
             errEl.classList.add('has-error');
             return false;
         }
 
-        try {
-            const res = await fetch('/api/screen-pair', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                cache: 'no-store',
-                body: JSON.stringify({ screen_code: code })
-            });
-            const data = await res.json();
-
-            if (data.status === 'success') {
-                currentSession = data.session;
-                const secret = data.screen_secret || '';
-                if (!secret) {
-                    errEl.textContent = 'خطأ: السيرفر لم يرجّع الـ secret';
-                    errEl.classList.add('has-error');
-                    return false;
-                }
-                currentSecret = secret;
-                isPaired = true;
-                startDisplay();
-                return true;
-            } else {
-                errEl.textContent = data.message || 'فشل الربط';
-                errEl.classList.add('has-error');
-                return false;
-            }
-        } catch (e) {
-            errEl.textContent = 'تعذر الاتصال بالسيرفر';
-            errEl.classList.add('has-error');
-            return false;
-        }
+        // On the display side, manual entry isn't for pairing with a token —
+        // it's meant for admins. If someone lands here, show a hint.
+        errEl.textContent = 'استخدم QR من لوحة الأدمن بدلاً من هذا';
+        errEl.classList.add('has-error');
+        return false;
     }
 
+    /* ---------- DISPLAY START ---------- */
     function startDisplay() {
         stopTokenPolling();
         stopPolling();
@@ -1425,6 +1454,16 @@
         if (currentSession) {
             document.getElementById('subject-name').textContent = currentSession.subject_name || '';
             document.getElementById('session-title').textContent = currentSession.title || '';
+        }
+
+        // Update unpair button label
+        const unpairBtn = document.getElementById('unpair-btn');
+        if (unpairBtn) {
+            const span = unpairBtn.querySelector('span');
+            if (span) {
+                const isQuiz = currentSession && currentSession.is_quiz === true;
+                span.textContent = isQuiz ? 'إعادة تحميل' : 'تغيير الجلسة';
+            }
         }
 
         const canvas = document.getElementById('qr-canvas');
@@ -1440,13 +1479,34 @@
         startPolling();
     }
 
+    /* ---------- LIVE CODE FETCH (Attendance + Quiz) ---------- */
     async function fetchScreenCode() {
         if (!currentSecret) return;
+
+        const isQuiz = currentSession && currentSession.is_quiz === true;
+
         try {
-            const res = await fetch('/api/screen-live-code?secret=' + encodeURIComponent(currentSecret));
+            let url = '/api/screen-live-code?secret=' + encodeURIComponent(currentSecret);
+            if (isQuiz) url += '&is_quiz=1';
+
+            const res = await fetch(url);
             const data = await res.json();
 
             if (data.status === 'closed') {
+                setStatus(false);
+
+                // For quiz mode: stay on display, show closed status
+                if (isQuiz) {
+                    if (data.session_info) {
+                        const subEl = document.getElementById('subject-name');
+                        const titleEl = document.getElementById('session-title');
+                        if (subEl) subEl.textContent = data.session_info.subject_name || '';
+                        if (titleEl) titleEl.textContent = data.session_info.title || '';
+                    }
+                    return;
+                }
+
+                // For attendance: go back to pair screen
                 showPairScreen('انتهت الجلسة — اطلب كود جديد من الأدمن');
                 return;
             }
@@ -1463,42 +1523,53 @@
                 if (titleEl.textContent !== newTitle) titleEl.textContent = newTitle;
             }
 
-            const manualCode = data.manual_code || '------';
-            const manualEl = document.getElementById('manual-code');
-            if (manualEl.textContent !== manualCode) manualEl.textContent = manualCode;
-
-            const interval = data.manual_interval || 10;
-            const remaining = data.manual_remaining || 0;
-            const barEl = document.getElementById('timer-bar');
-            if (barEl) barEl.style.width = ((remaining / interval) * 100) + '%';
-
-            const qrInterval = data.qr_interval || 3;
-            const qrRemaining = (data.qr_remaining !== undefined) ? data.qr_remaining : 0;
-
-            const qrBarEl = document.getElementById('qr-timer-bar');
-            if (qrBarEl) {
-                const pct = Math.max(0, Math.min(100, (qrRemaining / qrInterval) * 100));
-                lastQrPct = pct;
-                qrBarEl.style.width = pct + '%';
-                qrBarEl.style.setProperty('--pct', pct);
-            }
-
-            const qrSecEl = document.getElementById('qr-seconds');
-            if (qrSecEl) {
-                const secs = Math.max(0, Math.ceil(qrRemaining));
-                if (qrSecEl.textContent !== String(secs)) {
-                    qrSecEl.textContent = secs;
-                }
-            }
-
-            const qrCode = data.qr_code;
-            if (qrCode && qrCode !== lastQrCode && qrGenerator) {
-                lastQrCode = qrCode;
-                try { qrGenerator.clear(); qrGenerator.makeCode(qrCode); } catch (e) {}
-            }
+            applyLiveCodes(data);
         } catch (e) { setStatus(false); }
     }
 
+    /* ---------- APPLY CODES (shared between quiz/attendance) ---------- */
+    function applyLiveCodes(data) {
+        /* Manual code */
+        const manualCode = data.manual_code || '------';
+        const manualEl = document.getElementById('manual-code');
+        if (manualEl.textContent !== manualCode) manualEl.textContent = manualCode;
+
+        /* Manual timer bar */
+        const interval = data.manual_interval || 10;
+        const remaining = data.manual_remaining || 0;
+        const barEl = document.getElementById('timer-bar');
+        if (barEl) barEl.style.width = ((remaining / interval) * 100) + '%';
+
+        /* QR timer bar */
+        const qrInterval = data.qr_interval || 3;
+        const qrRemaining = (data.qr_remaining !== undefined) ? data.qr_remaining : 0;
+
+        const qrBarEl = document.getElementById('qr-timer-bar');
+        if (qrBarEl) {
+            const pct = Math.max(0, Math.min(100, (qrRemaining / qrInterval) * 100));
+            lastQrPct = pct;
+            qrBarEl.style.width = pct + '%';
+            qrBarEl.style.setProperty('--pct', pct);
+        }
+
+        /* QR seconds */
+        const qrSecEl = document.getElementById('qr-seconds');
+        if (qrSecEl) {
+            const secs = Math.max(0, Math.ceil(qrRemaining));
+            if (qrSecEl.textContent !== String(secs)) {
+                qrSecEl.textContent = secs;
+            }
+        }
+
+        /* QR code */
+        const qrCode = data.qr_code;
+        if (qrCode && qrCode !== lastQrCode && qrGenerator) {
+            lastQrCode = qrCode;
+            try { qrGenerator.clear(); qrGenerator.makeCode(qrCode); } catch (e) {}
+        }
+    }
+
+    /* ---------- STATUS ---------- */
     function setStatus(isOpen) {
         const badge = document.getElementById('status-badge');
         if (!badge) return;
@@ -1525,6 +1596,27 @@
     }
 
     function unpairScreen() {
+        const isQuiz = currentSession && currentSession.is_quiz === true;
+
+        if (isQuiz) {
+            /* Quiz mode: only allow reload */
+            Swal.fire({
+                background: '#1a1f2c', color: '#fff',
+                icon: 'info',
+                title: 'وضع الامتحان',
+                html: '<p style="color:#8b93a7; font-size:13px;">الشاشة مرتبطة بالامتحان. لإيقاف العرض أوقف البث من لوحة الأدمن.</p>',
+                showCancelButton: true,
+                confirmButtonText: 'إعادة تحميل',
+                cancelButtonText: 'إغلاق',
+                confirmButtonColor: '#FFB300',
+                cancelButtonColor: '#374151'
+            }).then(r => {
+                if (r.isConfirmed) location.reload();
+            });
+            return;
+        }
+
+        /* Attendance mode: normal unpair */
         Swal.fire({
             background: '#1a1f2c', color: '#fff',
             icon: 'warning',
@@ -1542,6 +1634,9 @@
         });
     }
 
+    /* ============================================================
+       🚀 INIT
+       ============================================================ */
     document.addEventListener('DOMContentLoaded', () => {
         const pairBtn = document.getElementById('pair-btn');
         if (pairBtn) {
@@ -1561,9 +1656,13 @@
         const toggleBtn = document.getElementById('toggle-code-btn');
         if (toggleBtn) toggleBtn.addEventListener('click', toggleCodeSection);
 
+        // Always start with pair screen
         showPairScreen('');
     });
 
+    /* ============================================================
+       VISIBILITY
+       ============================================================ */
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
             stopPolling();

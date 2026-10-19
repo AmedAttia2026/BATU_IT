@@ -146,7 +146,7 @@ SCREEN_STEP_INTERVAL = 20
 SCREEN_GRACE_PERIOD  = 2.0
 
 TA_SESSION_AUTO_CLOSE_MINUTES = 15
-HEARTBEAT_GRACE_SEC = 30  # ⬅️ raised from 8 → 30 (transient disconnects tolerated)
+HEARTBEAT_GRACE_SEC = 30  # transient disconnects tolerated
 
 _SAFE_ERROR_MSG = "حدث خطأ، حاول لاحقاً"
 
@@ -1274,7 +1274,7 @@ def _student_can_access_quiz(student: dict, quiz: dict) -> bool:
 
 
 # ============================================================
-#  🎯 AUTO-GRADE HELPER (used by time expiry + violation fallback)
+#  🎯 AUTO-GRADE HELPER
 # ============================================================
 def _auto_grade_attempt(attempt, quiz):
     """

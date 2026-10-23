@@ -573,7 +573,7 @@ function renderFilteredSessionsTable(subId) {
 }
 
 /* =========================================================
-   🖥️ نافذة ربط الشاشة — QR Flow
+   🖥️ نافذة ربط الشاشة — QR + 8-char code
    ========================================================= */
 let _adminQrScanner = null;
 
@@ -629,25 +629,24 @@ async function openScreenCodeModal(sessionId, title, subName) {
                     min-height: 24px;
                 "></div>
 
-                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.08);">
-                    <p style="color:#6b7385; font-size:12px; margin: 0 0 8px;">
-                        أو استخدم الكود اليدوي (احتياطي)
-                    </p>
-                    <button type="button" onclick="showManualCodeFallback('${sessionId}')"
-                        style="
-                            background: transparent;
-                            border: 1px solid rgba(255,179,0,0.35);
-                            color: #FFB300;
-                            padding: 8px 16px;
-                            border-radius: 10px;
-                            font-size: 12px;
-                            font-weight: 800;
-                            font-family: 'Cairo', sans-serif;
-                            cursor: pointer;
-                        ">
-                        <i class="fas fa-keyboard"></i> إظهار الكود اليدوي
-                    </button>
+                <div style="display:flex;align-items:center;gap:10px;margin:20px 0;opacity:0.6;">
+                    <span style="flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent);"></span>
+                    <span style="color:#8b93a7;font-size:12px;font-weight:800;">أو</span>
+                    <span style="flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent);"></span>
                 </div>
+
+                <p style="color:#8b93a7;font-size:12px;text-align:center;margin:0 0 8px;font-weight:800;">
+                    اكتب الكود الظاهر على الشاشة (8 خانات)
+                </p>
+                <input type="text" id="sess-manual-code" placeholder="XXXXXXXX" maxlength="8"
+                    autocomplete="off" spellcheck="false"
+                    style="width:100%;padding:16px;background:rgba(0,0,0,0.55);border:2px solid rgba(255,179,0,0.45);border-radius:12px;color:#FFB300;font-family:'Plus Jakarta Sans',monospace;font-size:22px;font-weight:900;text-align:center;letter-spacing:5px;direction:ltr;outline:none;text-transform:uppercase;margin-bottom:10px;"
+                    oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8)"
+                    onkeypress="if(event.key==='Enter') submitSessionManualCode('${sessionId}')">
+                <button type="button" onclick="submitSessionManualCode('${sessionId}')"
+                    style="width:100%;padding:13px;border-radius:12px;border:none;background:linear-gradient(135deg,#FFB300,#FFD54F);color:#0a0e17;font-weight:900;font-size:13px;font-family:'Cairo',sans-serif;cursor:pointer;margin-bottom:12px;">
+                    <i class="fas fa-link"></i> ربط الشاشة
+                </button>
             </div>
         `,
         showConfirmButton: false,
@@ -810,86 +809,40 @@ async function stopAdminQrScan() {
     }
 }
 
-async function showManualCodeFallback(sessionId) {
-    await stopAdminQrScan();
-    Swal.close();
+/* =========================================================
+   ✅ NEW: ربط الشاشة بالكود اليدوي (8 خانات)
+   ========================================================= */
+window.submitSessionManualCode = async function(sessionId) {
+    const inp = document.getElementById('sess-manual-code');
+    const statusEl = document.getElementById('scan-status');
+    if (!inp) return;
 
-    let pollInterval = null;
+    const code = (inp.value || '').trim().toUpperCase();
+    if (code.length !== 8) {
+        if (statusEl) { statusEl.style.color = '#f87171'; statusEl.textContent = '❌ الكود لازم 8 خانات'; }
+        return;
+    }
 
-    const fetchCode = async () => {
-        try {
-            const res = await fetch(
-                `/api/session-screen-code?session_id=${encodeURIComponent(sessionId)}`,
-                { credentials: 'same-origin' }
-            );
-            const data = await res.json();
+    if (statusEl) { statusEl.style.color = '#22d3ee'; statusEl.textContent = '⏳ جاري الربط...'; }
 
-            const codeEl = document.getElementById('screen-code-display');
-            const barEl  = document.getElementById('screen-code-timer-bar');
-            const secEl  = document.getElementById('screen-code-seconds');
-
-            if (!data || data.status !== 'success') {
-                if (codeEl) codeEl.textContent = '------';
-                return;
-            }
-            if (codeEl) codeEl.textContent = data.code;
-            if (barEl)  barEl.style.width = ((data.remaining / data.interval) * 100) + '%';
-            if (secEl)  secEl.textContent = Math.ceil(data.remaining);
-        } catch (e) {}
-    };
-
-    await Swal.fire({
-        ...swalDark,
-        title: '🖥️ الكود اليدوي',
-        width: 520,
-        html: `
-            <div style="text-align:center; padding: 4px 0;">
-                <p style="color:#8b93a7; font-size:12.5px; margin: 0 0 4px;">
-                    اكتب الكود ده على شاشة العرض
-                </p>
-                <p style="color:#8b93a7; font-size:11.5px; margin: 0 0 16px;">
-                    <b style="color:#FFB300;">بسرعة قبل ما يتغير</b>
-                </p>
-                <div id="screen-code-display" style="
-                    font-family: 'Plus Jakarta Sans', monospace;
-                    font-size: 56px; font-weight: 900;
-                    letter-spacing: 14px;
-                    color: #FFB300;
-                    text-shadow: 0 0 34px rgba(255,179,0,0.65);
-                    padding: 20px;
-                    direction: ltr;
-                    background: linear-gradient(145deg, rgba(0,0,0,0.5), rgba(15,20,33,0.8));
-                    border: 1.5px solid rgba(255,179,0,0.45);
-                    border-radius: 18px;
-                    margin-bottom: 14px;
-                ">------</div>
-                <div style="width:100%; height:8px; background:rgba(255,255,255,0.08); border-radius:4px; overflow:hidden;">
-                    <div id="screen-code-timer-bar" style="
-                        height:100%;
-                        background: linear-gradient(90deg, #FFB300, #FFD54F);
-                        width: 100%;
-                        transition: width 0.2s linear;
-                        border-radius: 4px;
-                    "></div>
-                </div>
-                <div style="margin-top: 12px; font-size: 11.5px; color:#8b93a7;">
-                    المتبقي: <b id="screen-code-seconds" style="color:#FFB300;">20</b> ث
-                </div>
-            </div>
-        `,
-        showConfirmButton: false,
-        showCancelButton: true,
-        cancelButtonText: 'إغلاق',
-        cancelButtonColor: '#374151',
-        didOpen: () => {
-            fetchCode();
-            pollInterval = setInterval(fetchCode, 1000);
-        },
-        willClose: () => {
-            if (pollInterval) clearInterval(pollInterval);
+    try {
+        const res = await fetch('/api/screen-pair-by-code', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ code, session_id: sessionId })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+            if (statusEl) { statusEl.style.color = '#10B981'; statusEl.textContent = '🎉 تم ربط الشاشة بنجاح!'; }
+            setTimeout(() => Swal.close(), 1400);
+        } else {
+            if (statusEl) { statusEl.style.color = '#f87171'; statusEl.textContent = '❌ ' + (data.message || 'فشل الربط'); }
         }
-    });
-}
+    } catch(e) {
+        if (statusEl) { statusEl.style.color = '#f87171'; statusEl.textContent = '❌ تعذر الاتصال بالسيرفر'; }
+    }
+};
 
 /* =========================================================
    ✅ تعديل عنوان الجلسة
@@ -2390,7 +2343,7 @@ function canEditStaff(targetUser) {
         const targetSubs = targetUser.allowed_subjects || [];
         const hasCommon = targetSubs.some(s => mySubs.includes(s));
         const createdByHim = (targetUser.created_by === currentAdminUsername);
-        return hasCommon || createdByHim;
+        return hasCommon || createdByHe;
     }
     return false;
 }

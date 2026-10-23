@@ -23,8 +23,8 @@
         :root{
             --pad:   clamp(10px, 2.2vmin, 22px);
             --gap:   clamp(8px, 1.6vmin, 16px);
-            --qr:    min(680px, 92vw, 68vh);
-            --qr-p:  min(500px, 84vw, 52vh);
+            --qr:    min(680px, 92vw, 62vh);
+            --qr-p:  min(500px, 84vw, 46vh);
             --logo:  clamp(64px, 11vmin, 120px);
             --hero:  clamp(44px, 8vmin, 70px);
             --code:  clamp(34px, 6.5vmin, 68px);
@@ -104,7 +104,7 @@
             position: relative;
             width: var(--logo);
             height: var(--logo);
-            margin: 0 auto clamp(10px, 2vmin, 22px);
+            margin: 0 auto clamp(8px, 1.6vmin, 18px);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -146,7 +146,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            margin-bottom: clamp(10px, 2vmin, 22px);
+            margin-bottom: clamp(6px, 1.4vmin, 16px);
             width: 100%;
             max-width: 700px;
             flex-shrink: 0;
@@ -166,7 +166,7 @@
                 0 10px 22px rgba(255,179,0,0.28),
                 inset 0 3px 0 rgba(255,255,255,0.55),
                 inset 0 -5px 12px rgba(0,0,0,0.2);
-            margin-bottom: clamp(8px, 1.6vmin, 18px);
+            margin-bottom: clamp(6px, 1.2vmin, 14px);
             animation: nxHeroFloat 4s ease-in-out infinite;
         }
         @keyframes nxHeroFloat {
@@ -199,35 +199,6 @@
         @keyframes nxHeroIconScale {
             0%,100% { transform: scale(1); }
             50%     { transform: scale(1.08); }
-        }
-
-        .nx-hero-divider {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            opacity: 0.85;
-        }
-        .nx-hero-divider .line {
-            width: 50px;
-            height: 1.5px;
-            background: linear-gradient(90deg, transparent, #FFB300);
-            border-radius: 2px;
-        }
-        .nx-hero-divider .line:last-child {
-            background: linear-gradient(90deg, #FFB300, transparent);
-        }
-        .nx-hero-divider .diamond {
-            width: 8px;
-            height: 8px;
-            background: #FFB300;
-            transform: rotate(45deg);
-            border-radius: 1px;
-            box-shadow: 0 0 14px #FFB300, 0 0 28px rgba(255,179,0,0.6);
-            animation: nxDiamondPulse 2s ease-in-out infinite;
-        }
-        @keyframes nxDiamondPulse {
-            0%,100% { transform: rotate(45deg) scale(1); opacity: 1; }
-            50%     { transform: rotate(45deg) scale(1.25); opacity: 0.85; }
         }
 
         .nx-pair-qr-section {
@@ -280,36 +251,6 @@
             image-rendering: crisp-edges;
         }
 
-        /* SCR token text below QR for manual entry */
-        .pair-token-text {
-            margin-top: clamp(10px, 1.5vmin, 14px);
-            font-family: 'Plus Jakarta Sans', monospace;
-            font-size: clamp(11px, 1.5vmin, 13px);
-            color: #FFB300;
-            letter-spacing: 1.5px;
-            padding: 8px 16px;
-            background: rgba(255,179,0,0.08);
-            border: 1px dashed rgba(255,179,0,0.4);
-            border-radius: 10px;
-            user-select: all;
-            cursor: pointer;
-            font-weight: 900;
-            direction: ltr;
-            transition: all .2s ease;
-            max-width: 100%;
-            overflow-x: auto;
-            white-space: nowrap;
-        }
-        .pair-token-text:hover { background: rgba(255,179,0,0.15); }
-        .pair-token-text:active { transform: scale(0.98); }
-        .pair-token-hint {
-            margin-top: 4px;
-            font-size: 10px;
-            color: #8b93a7;
-            font-weight: 700;
-            letter-spacing: 0.3px;
-        }
-
         .nx-qr-corner {
             position: absolute;
             width: 22px;
@@ -329,112 +270,118 @@
             align-items: center;
             gap: 12px;
             width: 100%;
-            max-width: 320px;
-            opacity: 0.6;
+            max-width: 380px;
+            opacity: 0.75;
+            margin: 6px 0;
         }
         .nx-or-divider span {
             flex: 1;
             height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
         }
         .nx-or-divider b {
-            color: #8b93a7;
-            font-size: 12px;
-            font-weight: 800;
-        }
-
-        .nx-manual-toggle {
-            background: transparent;
-            border: 1px dashed rgba(255,179,0,0.4);
-            color: #FFB300;
-            padding: 10px 22px;
-            border-radius: 12px;
-            font-family: 'Cairo', sans-serif;
+            color: #FFD54F;
             font-size: 13px;
             font-weight: 800;
-            cursor: pointer;
-            transition: all 0.25s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .nx-manual-toggle:hover {
-            background: rgba(255,179,0,0.1);
-            border-color: #FFB300;
-            transform: translateY(-1px);
-        }
-
-        #pair-input {
-            width: 100%;
-            padding: 16px;
-            font-size: clamp(16px, 2.6vmin, 22px);
-            font-family: 'Plus Jakarta Sans', monospace;
-            letter-spacing: 3px;
-            text-align: center;
-            background: rgba(0,0,0,0.55);
-            border: 2px solid rgba(255,179,0,0.4);
-            border-radius: 16px;
-            color: #FFB300;
-            outline: none;
-            margin-bottom: 12px;
-            direction: ltr;
-            transition: all .3s ease;
-            font-weight: 900;
-        }
-        #pair-input::placeholder { color: rgba(255,179,0,0.22); letter-spacing: 1px; font-size: 14px; }
-        #pair-input:focus {
-            border-color: #FFB300;
-            box-shadow: 0 0 50px rgba(255,179,0,0.4);
-            transform: translateY(-2px);
-        }
-
-        #pair-btn {
-            width: 100%;
-            padding: 15px;
-            font-size: 15px;
             font-family: 'Cairo', sans-serif;
-            font-weight: 900;
-            background: linear-gradient(135deg, #FFB300, #FFD54F);
-            color: #0a0e17;
-            border: none;
-            border-radius: 14px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 14px 34px rgba(255,179,0,0.35);
-            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+
+        /* ✅ الكود الدوّار 8 خانات */
+        .pair-code-box {
+            width: 100%;
+            max-width: 520px;
+            text-align: center;
+            padding: clamp(16px, 2.2vmin, 24px) clamp(20px, 2.4vmin, 26px);
+            border-radius: 22px;
+            background: linear-gradient(145deg, rgba(255,179,0,0.10), rgba(124,58,237,0.05));
+            border: 1.5px solid rgba(255,179,0,0.45);
+            box-shadow:
+                0 0 45px rgba(255,179,0,0.20),
+                inset 0 1px 0 rgba(255,255,255,0.06);
             position: relative;
             overflow: hidden;
         }
-        #pair-btn::after {
+        .pair-code-box::before {
             content: "";
             position: absolute;
-            top: 0; left: -60%;
-            width: 60%; height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent);
-            transform: skewX(-25deg);
-            transition: left .75s ease;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #FFB300, #7C3AED, #06B6D4, #FFB300, transparent);
+            background-size: 200% 100%;
+            animation: nxShimmerLine 4s linear infinite;
         }
-        #pair-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 20px 44px rgba(255,179,0,0.5);
-            filter: brightness(1.08);
+        @keyframes nxShimmerLine {
+            0%   { background-position: -200% 0; }
+            100% { background-position:  200% 0; }
         }
-        #pair-btn:hover::after { left: 130%; }
 
-        #pair-error {
-            color: #f87171; font-size: 13px; font-weight: 700;
-            margin-top: 12px; min-height: 20px;
-            padding: 8px 16px;
-            border-radius: 12px;
-            background: rgba(239,68,68,0);
-            transition: all 0.3s ease;
+        .pair-code-text {
+            font-family: 'Plus Jakarta Sans', monospace;
+            font-size: clamp(36px, 6.5vmin, 58px);
+            font-weight: 900;
+            letter-spacing: clamp(8px, 1.4vmin, 16px);
+            direction: ltr;
+            color: #FFB300;
+            text-shadow:
+                0 0 30px rgba(255,179,0,0.75),
+                0 0 60px rgba(255,179,0,0.45);
+            padding-right: clamp(6px, 1.4vmin, 16px);
+            line-height: 1;
+            margin-bottom: 14px;
+            transition: all 0.25s ease;
+            min-height: 1em;
+        }
+        .pair-code-track {
             width: 100%;
+            height: 9px;
+            background: rgba(0,0,0,0.45);
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid rgba(255,179,0,0.35);
+            margin-bottom: 10px;
+            box-shadow: inset 0 2px 3px rgba(0,0,0,0.5);
         }
-        #pair-error.has-error {
-            background: rgba(239,68,68,0.1);
-            border: 1px solid rgba(239,68,68,0.3);
+        .pair-code-bar {
+            height: 100%;
+            width: 100%;
+            background: linear-gradient(90deg, #FFB300, #FFD54F, #7C3AED, #22D3EE, #FFD54F, #FFB300);
+            background-size: 300% 100%;
+            box-shadow: 0 0 16px rgba(255,179,0,0.75);
+            border-radius: 6px;
+            transition: width 0.2s linear;
+            animation: pairBarFlow 4s linear infinite;
+        }
+        @keyframes pairBarFlow {
+            0%   { background-position: 0% 0; }
+            100% { background-position: -300% 0; }
+        }
+        .pair-code-hint {
+            font-family: 'Cairo', sans-serif;
+            font-size: clamp(11.5px, 1.7vmin, 14px);
+            color: #c8d1e3;
+            font-weight: 800;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            letter-spacing: 0.2px;
+        }
+        .pair-code-hint b {
+            color: #FFD54F;
+            font-family: 'Plus Jakarta Sans', monospace;
+            font-weight: 900;
+            font-size: 1.2em;
+            text-shadow: 0 0 12px rgba(255,179,0,0.6);
+            min-width: 28px;
+            display: inline-block;
+        }
+        .pair-code-hint i {
+            color: #FFB300;
+            animation: nxSpin 2s linear infinite;
+            font-size: 0.9em;
         }
 
+        /* ===== شاشة العرض ===== */
         #display-screen {
             display: none;
             flex-direction: column;
@@ -675,7 +622,7 @@
             flex-direction: column;
             align-items: center;
             gap: 10px;
-            width: min(680px, 92vw, 68vh);
+            width: min(680px, 92vw, 62vh);
             margin-top: 4px;
         }
         #qr-timer-track {
@@ -883,12 +830,10 @@
 
         @media (max-height: 640px) {
             .nx-hero-icon { display: none; }
-            .nx-hero-divider { display: none; }
             .nx-hero { margin-bottom: 6px; }
             .nx-logo-wrap { width: 56px; height: 56px; margin-bottom: 6px; }
             .nx-logo-core { width: 46px; height: 46px; font-size: 12px; }
             .nx-or-divider { display: none; }
-            .nx-manual-toggle { padding: 8px 16px; font-size: 12px; }
             .bottom-actions { bottom: calc(8px + var(--safe-bottom)); gap: 8px; }
             .disp-btn { padding: 8px 12px; font-size: 11px; }
             .qr-timer-block { gap: 7px; }
@@ -955,12 +900,6 @@
             <div class="nx-hero-icon">
                 <i class="fas fa-desktop"></i>
             </div>
-
-            <div class="nx-hero-divider">
-                <span class="line"></span>
-                <span class="diamond"></span>
-                <span class="line"></span>
-            </div>
         </div>
 
         <div class="nx-pair-qr-section">
@@ -972,25 +911,24 @@
                 <div class="nx-qr-corner nx-qr-br"></div>
             </div>
 
-            <!-- SCR Token text for manual entry -->
-            <div class="pair-token-text" id="pair-token-text" onclick="copyToken()">SCR_...</div>
-            <div class="pair-token-hint">👆 اضغط للنسخ — استخدمه في لوحة الأدمن</div>
-
             <div class="nx-or-divider">
                 <span></span>
-                <b>أو</b>
+                <b>أو اكتب هذا الكود</b>
                 <span></span>
             </div>
 
-            <button type="button" id="show-manual-btn" class="nx-manual-toggle" onclick="toggleManualEntry()">
-                <i class="fas fa-keyboard"></i> إدخال الكود يدوياً
-            </button>
-
-            <div id="manual-entry-box" style="display:none; width:100%; margin-top:12px;">
-                <input type="text" id="pair-input" maxlength="24"
-                       placeholder="SCR_xxxxxxxxxxxxxxxx" autocomplete="off">
-                <button id="pair-btn">ربط الشاشة</button>
-                <div id="pair-error"></div>
+            <!-- ✅ الكود الدوّار 8 خانات -->
+            <div class="pair-code-box">
+                <div class="pair-code-text" id="pair-code-text">--------</div>
+                <div class="pair-code-track">
+                    <div class="pair-code-bar" id="pair-code-bar"></div>
+                </div>
+                <div class="pair-code-hint">
+                    <i class="fas fa-sync-alt"></i>
+                    <span>يتجدد بعد</span>
+                    <b id="pair-code-seconds">20</b>
+                    <span>ثانية</span>
+                </div>
             </div>
         </div>
     </div>
@@ -1044,7 +982,7 @@
 
 <script>
     /* ============================================================
-       🖥️ Display Screen Logic — v12 (Pairing Only, No URL params)
+       🖥️ Display Screen Logic — v13 (8-char pair code)
        ============================================================ */
 
     /* ---------- FULLSCREEN ---------- */
@@ -1177,34 +1115,9 @@
     let qrTokenGenerator = null;
     let tokenPollInterval = null;
     let qrWatchdogInterval = null;
-    let manualModeVisible = false;
 
     let qrIsFullscreen = false;
     let lastQrPct = 100;
-
-    /* ---------- COPY TOKEN HELPER ---------- */
-    window.copyToken = function() {
-        if (!currentToken) return;
-        try {
-            navigator.clipboard.writeText(currentToken).then(() => {
-                const el = document.getElementById('pair-token-text');
-                if (el) {
-                    const originalText = el.textContent;
-                    el.textContent = '✅ تم النسخ!';
-                    setTimeout(() => { el.textContent = originalText; }, 1500);
-                }
-            }).catch(() => {
-                // Fallback: select text
-                const el = document.getElementById('pair-token-text');
-                if (el) {
-                    const range = document.createRange();
-                    range.selectNode(el);
-                    window.getSelection().removeAllRanges();
-                    window.getSelection().addRange(range);
-                }
-            });
-        } catch(e) {}
-    };
 
     /* ---------- QR FULLSCREEN ---------- */
     function updateQrFullscreenUI() {
@@ -1310,12 +1223,26 @@
             });
             qrTokenGenerator.makeCode(token);
         } catch (e) {}
+    }
 
-        // Show token text below QR for manual entry
-        const tokenEl = document.getElementById('pair-token-text');
-        if (tokenEl) {
-            tokenEl.textContent = token;
-            tokenEl.style.display = 'block';
+    /* ---------- ✅ NEW: PAIR CODE UPDATE ---------- */
+    function updatePairCode(data) {
+        const codeEl = document.getElementById('pair-code-text');
+        if (codeEl && data.pair_code && codeEl.textContent !== data.pair_code) {
+            codeEl.textContent = data.pair_code;
+            codeEl.style.transform = 'scale(1.06)';
+            setTimeout(() => { codeEl.style.transform = 'scale(1)'; }, 180);
+        }
+
+        const barEl = document.getElementById('pair-code-bar');
+        if (barEl && data.pair_interval) {
+            const pct = Math.max(0, Math.min(100, (data.pair_remaining / data.pair_interval) * 100));
+            barEl.style.width = pct + '%';
+        }
+
+        const secEl = document.getElementById('pair-code-seconds');
+        if (secEl && data.pair_remaining !== undefined) {
+            secEl.textContent = Math.max(0, Math.ceil(data.pair_remaining));
         }
     }
 
@@ -1334,6 +1261,8 @@
                 startDisplay();
             } else if (data.status === 'expired') {
                 await requestNewToken();
+            } else if (data.status === 'waiting' && data.pair_code) {
+                updatePairCode(data);
             }
         } catch (e) {}
     }
@@ -1341,7 +1270,7 @@
     function startTokenPolling() {
         stopTokenPolling();
         checkPairing();
-        tokenPollInterval = setInterval(checkPairing, 1500);
+        tokenPollInterval = setInterval(checkPairing, 1200);
     }
 
     function stopTokenPolling() {
@@ -1365,24 +1294,6 @@
         if (qrWatchdogInterval) { clearInterval(qrWatchdogInterval); qrWatchdogInterval = null; }
     }
 
-    function toggleManualEntry() {
-        manualModeVisible = !manualModeVisible;
-        const box = document.getElementById('manual-entry-box');
-        const btn = document.getElementById('show-manual-btn');
-        if (box) box.style.display = manualModeVisible ? 'block' : 'none';
-        if (btn) {
-            btn.innerHTML = manualModeVisible
-                ? '<i class="fas fa-times"></i> إلغاء الإدخال اليدوي'
-                : '<i class="fas fa-keyboard"></i> إدخال الكود يدوياً';
-        }
-        if (manualModeVisible) {
-            setTimeout(() => {
-                const input = document.getElementById('pair-input');
-                if (input) input.focus();
-            }, 100);
-        }
-    }
-
     function showPairScreen(message) {
         stopPolling();
         stopTokenPolling();
@@ -1399,47 +1310,33 @@
         currentToken = null;
         lastQrCode = null;
         codeVisible = false;
-        manualModeVisible = false;
 
         document.getElementById('display-screen').style.display = 'none';
         document.getElementById('pair-screen').style.display = 'flex';
 
-        const box = document.getElementById('manual-entry-box');
-        const btn = document.getElementById('show-manual-btn');
-        if (box) box.style.display = 'none';
-        if (btn) btn.innerHTML = '<i class="fas fa-keyboard"></i> إدخال الكود يدوياً';
-
-        const inputEl = document.getElementById('pair-input');
-        if (inputEl) inputEl.value = '';
-
-        const errEl = document.getElementById('pair-error');
-        if (errEl) {
-            errEl.textContent = message || '';
-            errEl.classList.toggle('has-error', !!message);
-        }
+        // reset pair code display
+        const codeEl = document.getElementById('pair-code-text');
+        if (codeEl) codeEl.textContent = '--------';
+        const barEl = document.getElementById('pair-code-bar');
+        if (barEl) barEl.style.width = '100%';
+        const secEl = document.getElementById('pair-code-seconds');
+        if (secEl) secEl.textContent = '20';
 
         qrTokenGenerator = null;
         requestNewToken();
         startTokenPolling();
         startQrWatchdog();
-    }
 
-    async function pairScreen(code) {
-        const errEl = document.getElementById('pair-error');
-        errEl.textContent = '';
-        errEl.classList.remove('has-error');
-
-        if (!code || !code.startsWith('SCR_')) {
-            errEl.textContent = 'الكود لازم يبدأ بـ SCR_';
-            errEl.classList.add('has-error');
-            return false;
+        if (message) {
+            Swal.fire({
+                background: '#1a1f2c', color: '#fff',
+                icon: 'info',
+                title: 'الشاشة',
+                text: message,
+                confirmButtonText: 'حسناً',
+                confirmButtonColor: '#FFB300'
+            });
         }
-
-        // On the display side, manual entry isn't for pairing with a token —
-        // it's meant for admins. If someone lands here, show a hint.
-        errEl.textContent = 'استخدم QR من لوحة الأدمن بدلاً من هذا';
-        errEl.classList.add('has-error');
-        return false;
     }
 
     /* ---------- DISPLAY START ---------- */
@@ -1456,7 +1353,6 @@
             document.getElementById('session-title').textContent = currentSession.title || '';
         }
 
-        // Update unpair button label
         const unpairBtn = document.getElementById('unpair-btn');
         if (unpairBtn) {
             const span = unpairBtn.querySelector('span');
@@ -1495,7 +1391,6 @@
             if (data.status === 'closed') {
                 setStatus(false);
 
-                // For quiz mode: stay on display, show closed status
                 if (isQuiz) {
                     if (data.session_info) {
                         const subEl = document.getElementById('subject-name');
@@ -1506,7 +1401,6 @@
                     return;
                 }
 
-                // For attendance: go back to pair screen
                 showPairScreen('انتهت الجلسة — اطلب كود جديد من الأدمن');
                 return;
             }
@@ -1527,7 +1421,7 @@
         } catch (e) { setStatus(false); }
     }
 
-    /* ---------- APPLY CODES (shared between quiz/attendance) ---------- */
+    /* ---------- APPLY CODES ---------- */
     function applyLiveCodes(data) {
         /* Manual code */
         const manualCode = data.manual_code || '------';
@@ -1599,7 +1493,6 @@
         const isQuiz = currentSession && currentSession.is_quiz === true;
 
         if (isQuiz) {
-            /* Quiz mode: only allow reload */
             Swal.fire({
                 background: '#1a1f2c', color: '#fff',
                 icon: 'info',
@@ -1616,7 +1509,6 @@
             return;
         }
 
-        /* Attendance mode: normal unpair */
         Swal.fire({
             background: '#1a1f2c', color: '#fff',
             icon: 'warning',
@@ -1638,21 +1530,6 @@
        🚀 INIT
        ============================================================ */
     document.addEventListener('DOMContentLoaded', () => {
-        const pairBtn = document.getElementById('pair-btn');
-        if (pairBtn) {
-            pairBtn.addEventListener('click', async () => {
-                const code = document.getElementById('pair-input').value.trim();
-                await pairScreen(code);
-            });
-        }
-
-        const pairInput = document.getElementById('pair-input');
-        if (pairInput) {
-            pairInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') document.getElementById('pair-btn').click();
-            });
-        }
-
         const toggleBtn = document.getElementById('toggle-code-btn');
         if (toggleBtn) toggleBtn.addEventListener('click', toggleCodeSection);
 

@@ -145,6 +145,10 @@ MANUAL_GRACE_PERIOD  = 2.0
 SCREEN_STEP_INTERVAL = 20
 SCREEN_GRACE_PERIOD  = 2.0
 
+# ✅ NEW: rotating pairing code (8 chars, changes every 20s)
+SCREEN_PAIR_STEP_INTERVAL = 20
+SCREEN_PAIR_GRACE         = 5.0
+
 TA_SESSION_AUTO_CLOSE_MINUTES = 15
 HEARTBEAT_GRACE_SEC = 30  # transient disconnects tolerated
 
@@ -248,6 +252,34 @@ def verify_screen_code(user_code: str, secret: str) -> bool:
         return True
     elapsed = now - (current_step * SCREEN_STEP_INTERVAL)
     if elapsed < SCREEN_GRACE_PERIOD and _safe_eq(clean, get_screen_code(secret, current_step - 1)):
+        return True
+    return False
+
+
+# ============================================================
+#  ✅ NEW: rotating 8-char pairing code (A-Z + 2-9)
+# ============================================================
+def _get_pair_code(token: str, step: int) -> str:
+    key = SCREEN_SALT + token.encode('utf-8')
+    digest = hmac.new(key, str(step).encode('utf-8'), hashlib.sha256).digest()
+    num = int.from_bytes(digest[:5], 'big')
+    code = ""
+    for _ in range(8):
+        code += BASE32_CHARS[num % len(BASE32_CHARS)]
+        num //= len(BASE32_CHARS)
+    return code
+
+
+def _verify_pair_code(user_code: str, token: str) -> bool:
+    clean = (user_code or '').strip().upper()
+    if not clean or len(clean) != 8:
+        return False
+    now = time.time()
+    current_step = int(now // SCREEN_PAIR_STEP_INTERVAL)
+    if _safe_eq(clean, _get_pair_code(token, current_step)):
+        return True
+    elapsed = now - (current_step * SCREEN_PAIR_STEP_INTERVAL)
+    if elapsed < SCREEN_PAIR_GRACE and _safe_eq(clean, _get_pair_code(token, current_step - 1)):
         return True
     return False
 
@@ -654,10 +686,24 @@ def screen_check_pair():
     if not token or token not in _screen_pending:
         return jsonify({"status": "expired"})
     data = _screen_pending[token]
+
     if data.get('session_id'):
         return jsonify({"status": "paired", "session_id": data['session_id'],
-                        "screen_secret": data['secret'], "session_info": data['session_info']})
-    return jsonify({"status": "waiting"})
+                        "screen_secret": data['secret'],
+                        "session_info": data['session_info']})
+
+    # ✅ NEW: return the rotating 8-char pair code
+    now = time.time()
+    current_step = int(now // SCREEN_PAIR_STEP_INTERVAL)
+    remaining = SCREEN_PAIR_STEP_INTERVAL - (now - (current_step * SCREEN_PAIR_STEP_INTERVAL))
+    code = _get_pair_code(token, current_step)
+
+    return jsonify({
+        "status": "waiting",
+        "pair_code": code,
+        "pair_remaining": round(remaining, 2),
+        "pair_interval": SCREEN_PAIR_STEP_INTERVAL
+    })
 
 
 @app.route('/api/screen-pair-token', methods=['POST'])
@@ -689,6 +735,58 @@ def screen_pair_token():
     return jsonify({"status": "success", "message": "تم ربط الشاشة بالجلسة!"})
 
 
+# ============================================================
+#  ✅ NEW: pair screen by 8-char code (Attendance)
+# ============================================================
+@app.route('/api/screen-pair-by-code', methods=['POST'])
+@limiter.limit("30 per minute")
+def screen_pair_by_code():
+    if not _is_admin():
+        return jsonify({"status": "unauthorized"}), 401
+
+    data = request.get_json(force=True, silent=True) or {}
+    code = _clean_str(data.get('code'), 12).upper()
+    session_id = _clean_str(data.get('session_id'), 64)
+
+    if len(code) != 8:
+        return jsonify({"status": "error", "message": "الكود لازم 8 خانات"}), 400
+    if not _can_access_session(session['admin'], session_id):
+        return jsonify({"status": "error", "message": "غير مصرح"}), 403
+
+    sess = sessions_col.find_one({"session_id": session_id, "is_open": True})
+    if not sess:
+        return jsonify({"status": "error", "message": "الجلسة غير موجودة أو مغلقة"}), 404
+
+    matched_token = None
+    now = time.time()
+    for token, info in list(_screen_pending.items()):
+        if info.get('session_id'):
+            continue
+        if now - info.get('created', 0) > 600:
+            continue
+        if _verify_pair_code(code, token):
+            matched_token = token
+            break
+
+    if not matched_token:
+        return jsonify({"status": "error", "message": "الكود انتهت صلاحيته أو غير صحيح"}), 404
+
+    secret = sess.get('screen_secret')
+    if not secret:
+        secret = generate_screen_secret()
+        sessions_col.update_one({"session_id": session_id}, {"$set": {"screen_secret": secret}})
+
+    _screen_pending[matched_token]['session_id'] = session_id
+    _screen_pending[matched_token]['secret'] = secret
+    _screen_pending[matched_token]['session_info'] = {
+        "subject_name": sess.get('subject_name', ''),
+        "title": sess.get('title', ''),
+        "type": sess.get('type', 'Lecture')
+    }
+
+    return jsonify({"status": "success", "message": "تم ربط الشاشة بالجلسة!"})
+
+
 @app.route('/api/screen-pair', methods=['POST'])
 @limiter.limit("20 per minute")
 def screen_pair():
@@ -712,7 +810,7 @@ def screen_pair():
 
 
 # ============================================================
-#  🖥️ screen-live-code (مع دعم الكويزات)
+#  🖥️ screen-live-code (with quiz support)
 # ============================================================
 @app.route('/api/screen-live-code')
 @limiter.limit("300 per minute")
@@ -1537,6 +1635,56 @@ def api_quiz_screen_pair_token():
     _screen_pending[token]['session_id'] = quiz_id
     _screen_pending[token]['secret'] = quiz_id
     _screen_pending[token]['session_info'] = {
+        "subject_name": quiz.get('subject_name', ''),
+        "title": quiz.get('title', ''),
+        "type": "Quiz",
+        "is_quiz": True,
+        "quiz_id": quiz_id
+    }
+
+    return jsonify({"status": "success", "message": "تم ربط الشاشة بالامتحان!"})
+
+
+# ============================================================
+#  ✅ NEW: pair quiz screen by 8-char code
+# ============================================================
+@app.route('/api/quiz-screen-pair-by-code', methods=['POST'])
+@limiter.limit("30 per minute")
+def api_quiz_screen_pair_by_code():
+    if not _is_admin():
+        return jsonify({"status": "unauthorized"}), 401
+
+    data = request.get_json(force=True, silent=True) or {}
+    code = _clean_str(data.get('code'), 12).upper()
+    quiz_id = _clean_str(data.get('quiz_id'), 60)
+
+    if len(code) != 8:
+        return jsonify({"status": "error", "message": "الكود لازم 8 خانات"}), 400
+
+    quiz = quizzes_col.find_one({"id": quiz_id})
+    if not quiz or not _quiz_can_manage(session['admin'], quiz):
+        return jsonify({"status": "error", "message": "غير مصرح"}), 403
+
+    if not quiz.get('broadcast_active'):
+        return jsonify({"status": "error", "message": "يجب بدء البث أولاً"}), 400
+
+    matched_token = None
+    now = time.time()
+    for token, info in list(_screen_pending.items()):
+        if info.get('session_id'):
+            continue
+        if now - info.get('created', 0) > 600:
+            continue
+        if _verify_pair_code(code, token):
+            matched_token = token
+            break
+
+    if not matched_token:
+        return jsonify({"status": "error", "message": "الكود انتهت صلاحيته أو غير صحيح"}), 404
+
+    _screen_pending[matched_token]['session_id'] = quiz_id
+    _screen_pending[matched_token]['secret'] = quiz_id
+    _screen_pending[matched_token]['session_info'] = {
         "subject_name": quiz.get('subject_name', ''),
         "title": quiz.get('title', ''),
         "type": "Quiz",
